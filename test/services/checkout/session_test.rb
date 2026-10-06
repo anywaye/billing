@@ -199,7 +199,7 @@ class CheckoutSessionTest < ActiveSupport::TestCase
       account_id: @account, customer: @customer, plan: @plan,
       processor_subscription_id: "sub_FAKEexisting0000000", status: "active"
     )
-    before = [live.status, live.plan_id, live.customer_id, live.processor_subscription_id, live.updated_at]
+    before = [ live.status, live.plan_id, live.customer_id, live.processor_subscription_id, live.updated_at ]
 
     outcome = Checkout::Session.new(customer: @customer, plan: @plan).complete
 
@@ -299,7 +299,7 @@ class CheckoutSessionTest < ActiveSupport::TestCase
     ]
 
     outcomes.each { |outcome| assert_kind_of Checkout::Session::Outcome, outcome }
-    assert_equal [false, false, true], outcomes.map(&:completed?)
+    assert_equal [ false, false, true ], outcomes.map(&:completed?)
   end
 
   private

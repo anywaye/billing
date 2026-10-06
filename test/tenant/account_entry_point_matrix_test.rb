@@ -205,6 +205,14 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     [ "app/models/plan.rb", "publish_updated", "write" ] => "writes `billing.plan.updated`",
     [ "app/services/webhooks/ingestion.rb", "emit", "write" ] => "writes whichever event the delivery's resolved account produced",
 
+    # --- the checkout path, the second producer of a start ------------------
+    # A checkout writes one outbox row, `billing.subscription.started`, for the
+    # account whose customer it was made for. It is listed here rather than
+    # exempted because it is the **only** other place a start event is written, and
+    # an entry point that publishes an account's billing events without an entry
+    # here is precisely the thing this matrix exists to notice.
+    [ "app/services/checkout/session.rb", "recorded", "write" ] => "writes `billing.subscription.started` for the account the checkout's customer is owned by",
+
     # --- the keyset every list goes through ----------------------------------
     [ "app/controllers/concerns/cursor_paging.rb", "apply_cursor", "list" ] => "applies a client-supplied keyset to a relation the caller chose",
 
@@ -279,6 +287,11 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     "app/services/subscriptions/plan_change.rb" => "compares two prices and decides timing; pure, no model access",
     "app/services/subscriptions/state_machine.rb" => "a from-status and a to-status in, an answer out; pure, no model access",
     "app/services/webhooks.rb" => "the webhooks namespace; it declares no query",
+    # The two files the checkout packet added. The namespace file holds no query —
+    # it is a module and a comment, and saying so is what keeps the list closed —
+    # and every read and write the checkout path performs is in `Session`, whose
+    # accesses are classified above rather than excluded from the enumeration.
+    "app/services/checkout.rb" => "the checkout namespace; it declares no query",
     "app/services/webhooks/emission.rb" => "the value object a handler returns; it holds no query",
     "app/services/webhooks/stripe_events.rb" => "normalizes a payload and names an emission; the row lookups it implies are the lifecycle's, classified above"
   }.freeze
@@ -523,10 +536,10 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   #     than methods.
   #
   # A single number would have hidden both, and both are the shape of the code.
-  test "there are 35 account-scoped data accesses in 33 methods, filed under 34 keys" do
-    assert_equal 35, self.class.accesses.size
-    assert_equal 33, classified_sites.size
-    assert_equal 34, DATA_ACCESSES.size
+  test "there are 36 account-scoped data accesses in 34 methods, filed under 35 keys" do
+    assert_equal 36, self.class.accesses.size
+    assert_equal 34, classified_sites.size
+    assert_equal 35, DATA_ACCESSES.size
 
     assert_equal 1, self.class.accesses.size - DATA_ACCESSES.size,
       "the gap between accesses and keys has changed. It is 1 because `Lifecycle#customer` " \
@@ -544,8 +557,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # zero kinds are filled in explicitly because `tally` omits an absent key, and
   # a breakdown that quietly lost `delete` is the one breakdown this file exists
   # to keep honest.
-  test "the data-access breakdown is read 12, list 11, write 7, update 5, delete 0" do
-    assert_equal({ "read" => 12, "list" => 11, "write" => 7, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
+  test "the data-access breakdown is read 12, list 11, write 8, update 5, delete 0" do
+    assert_equal({ "read" => 12, "list" => 11, "write" => 8, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
   end
 
   # **14 account-scoped routes**, derived from the router, in the same four kinds.
@@ -580,7 +593,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # double-counts a route against the method that serves it.
   test "the two layers are counted separately, because a route and the method that serves it overlap" do
     assert_equal 14, ACCOUNT_SCOPED_ROUTES.size
-    assert_equal 35, self.class.accesses.size
+    assert_equal 36, self.class.accesses.size
     refute_equal ACCOUNT_SCOPED_ROUTES.size, self.class.accesses.size,
       "the two layers have converged, which means one of them is counting the other's rows"
   end
