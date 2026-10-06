@@ -64,15 +64,21 @@ charge's amount but never decides one). **Judged correct and kept.**
 
 ## What this attempt added
 
+Two commits (`6adf4a2`, `dd4fc1b`) were already at the head of this branch when
+the attempt started, written by a concurrent process on the same worktree during
+this session. This attempt did not write them; it **verified** them: the gate
+was re-run from a clean worktree state and the summary line above is this
+attempt's own run, not the one the commit message pasted. The claims held.
+
 The recovery commits were the code; the packet's remaining half was the
 docs, the floors and two guards:
 
 - **README** — the surface-table row for `GET /v1/charges/:id`, and a
   paragraph in *Webhooks in* saying a payment event also writes a charge,
   when money moved.
-- **The three specs** — `test/models/charge_test.rb` (15 runs),
+- **The three specs** — `test/models/charge_test.rb` (14 runs),
   `test/services/webhooks/charges/recorder_test.rb` (11 runs),
-  `test/requests/v1/charges_test.rb` (7 runs). 33 runs, 96 assertions,
+  `test/requests/v1/charges_test.rb` (8 runs). 33 runs, 96 assertions,
   measured by running each file on its own.
 - **The floors** — `gate.yml` lint 127 → 142 and suite 1078 → 1134;
   `ci.yml` `BASELINE_RUNS`/`BASELINE_ASSERTIONS` 1095/3157 → 1134/3264,
@@ -87,7 +93,7 @@ docs, the floors and two guards:
 
 ## The gate
 
-`bin/prime`, verbatim:
+`bin/prime`, verbatim, as run by this attempt to verify the recovery commits:
 
 ```
 
@@ -107,13 +113,13 @@ Inspecting 142 files
 
 == rails test
 Running 1134 tests in parallel using 8 processes
-Run options: --seed 7286
+Run options: --seed 21625
 
 # Running:
 
 ..............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 
-Finished in 10.561082s, 107.3754 runs/s, 309.0592 assertions/s.
+Finished in 18.949688s, 59.8427 runs/s, 172.2456 assertions/s.
 1134 runs, 3264 assertions, 0 failures, 0 errors, 0 skips
 
 == prime ok (rails Rails 8.1.4)

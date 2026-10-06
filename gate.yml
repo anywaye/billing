@@ -276,6 +276,12 @@ gate:
       # `authenticates_principal.rb`), two in `test/authentication/`, and
       # `test/support/identity_helpers.rb`. Measured by running
       # `bundle exec rubocop --parallel` on the stashed tree and on this one.
+      #
+      # 127 -> 136 is the checkout packet's nine new `.rb` files, and 136 -> 142
+      # is the receipts packet's six: `app/models/charge.rb`,
+      # `app/services/webhooks/charges/recorder.rb`,
+      # `app/controllers/v1/charges_controller.rb`, and the three specs. Same
+      # measurement, same command.
       minimum: 142
     # ---------------------------------------------------------------------
     # The suite. THE load-bearing proof, and the only line that cannot appear
