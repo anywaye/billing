@@ -281,8 +281,19 @@ env:
   # than a silent narrowing of the boundary. Both guards this packet added were
   # wrong on first write and were caught by mutation, not by review; see
   # CHANGELOG.md.
-  BASELINE_RUNS: '1078'
-  BASELINE_ASSERTIONS: '3082'
+  #   test/services/checkout/session_test.rb  --  /  --   16 /  68   +16 /  +68
+  #   test/coverage/money_path_inventory_test 20  /  35   21 /  42     +1 /   +7
+  #                                          ----  ----   ----  ----   ----  ----
+  #                                          1078 / 3082 1095 / 3157   +17 /  +75
+  #
+  # **The checkout row was measured WITHOUT `core` on disk**, so it is a delta and
+  # not a total: `test/contract/` skips 19 tests and ~284 assertions without a core
+  # checkout, and those are counted on both sides of the table above or on neither.
+  # The delta is exact — the two files were run on their own before and after — but
+  # the total is `gate`'s to confirm, and a `gate` failure naming a different pair
+  # of numbers is this commit being wrong about arithmetic, not a lost test.
+  BASELINE_RUNS: '1095'
+  BASELINE_ASSERTIONS: '3157'
 
 jobs:
   # ------------------------------------------------------------------ shared

@@ -47,7 +47,15 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
     "app/models/plan.rb" =>
       "a plan is a name, a slug, a price and an interval, and the price is one attribute of four",
     "app/services/webhooks/stripe_events.rb" =>
-      "it normalizes a processor payload; the amount is one field of a subscription"
+      "it normalizes a processor payload; the amount is one field of a subscription",
+    # The checkout path reads `processor_price_id` — the **processor's** id for a
+    # price — and nothing else monetary. It is in this list because the word is in
+    # the column name, not because it decides an amount: the checkout sends no
+    # amount to anybody, which is the rule `AGENTS.md` (Money) states and the
+    # reason the reason column exists. A per-unit quantity is multiplied at the
+    # processor.
+    "app/services/checkout/session.rb" =>
+      "it reads a plan's `processor_price_id` to subscribe at the processor and never computes an amount; the price the customer is charged is the processor's, so no money decision happens here"
   }.freeze
 
   # What each mixed file does with money, and the proof that it is reached and
@@ -56,7 +64,12 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
     "app/controllers/v1/subscriptions_controller.rb" => [ "Subscription#price, as serialized" ],
     "app/lib/money_params.rb" => %w[MoneyParams.parse],
     "app/models/plan.rb" => %w[Plan#price Plan#price=],
-    "app/services/webhooks/stripe_events.rb" => %w[Webhooks::StripeEvents.money]
+    "app/services/webhooks/stripe_events.rb" => %w[Webhooks::StripeEvents.money],
+    # Reached and correct behaviourally, not just named: the checkout's negative
+    # specs assert that a plan with no `processor_price_id` is refused rather than
+    # given a price this service would have had to invent. See
+    # `test/services/checkout/session_test.rb`.
+    "app/services/checkout/session.rb" => [ "Checkout::Session#delivery" ]
   }.freeze
 
   test "the gate's list and this list are the same list" do
@@ -139,6 +152,33 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
 
         assert_equal({ "amount_minor" => 1900, "currency" => "USD" }, shape)
         assert_instance_of Integer, shape.fetch("amount_minor")
+      when "Checkout::Session#delivery"
+        # The checkout builds the delivery a webhook would carry, and asserts here
+        # what it **does not** contain: an amount. The price crosses as the
+        # processor's own id for it (`price_id`), never as a number, because the
+        # amount a customer is charged is the processor's to decide (`AGENTS.md`,
+        # Money). So the proof that money survives this file as minor units is that
+        # no minor-unit field leaves it at all, and that the plan's own price is
+        # still an integer pair when the session reads it back.
+        customer = Customer.new(owner_type: "Account", owner_id: "11111111-1111-4111-8111-111111111111", processor: "stripe")
+        plan = Plan.new(name: "Pro", slug: "pro", price: Money.new(1900, "USD"), interval: "month",
+          processor_price_id: "price_FAKEcheckout000000")
+        session = Checkout::Session.new(customer: customer, plan: plan, quantity: 3)
+
+        pay_subscription = Pay::Subscription.new(
+          processor_id: "sub_FAKEcheckout0000", status: "active", name: Checkout::Session::PRODUCT_NAME,
+          processor_plan: "price_FAKEcheckout000000", quantity: 3
+        )
+        delivery = session.send(:delivery, pay_subscription)
+
+        assert_equal "price_FAKEcheckout000000", delivery.fetch("price_id")
+        assert_empty delivery.keys.grep(/amount|minor|total/)
+        # The per-seat quantity is an Integer count of seats, not a multiplied
+        # amount: nothing in this file computes one.
+        assert_equal 3, delivery.fetch("quantity")
+        assert_instance_of Integer, delivery.fetch("quantity")
+        assert_equal Money.new(1900, "USD"), plan.price
+        assert_instance_of Integer, plan.price.minor_units
       else
         raise "no assertion is defined for the entry point #{entry_point.inspect}"
       end
