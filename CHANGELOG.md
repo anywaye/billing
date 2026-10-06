@@ -8,6 +8,67 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **A checkout path, end to end, on `pay`'s FakeProcessor.** billing could model a
+  subscription and receive the webhook that records one, but nothing a subscriber
+  could actually *do* to start paying: no session, no completion, no positive
+  path at all. The `pay` gem is added for one reason and it is in the `Gemfile`
+  comment — FakeProcessor is a processor whose API is the database, so a checkout
+  can be exercised with no network, no keys and no Stripe account. A checkout
+  path whose only proof is a Stripe test key is a checkout path nobody can run in
+  CI.
+
+  - **`Checkout::Session#complete` returns an `Outcome` on every path and raises
+    for no business refusal.** The negative case is the one this packet is really
+    about — a declined checkout that half-applied leaves an account holding an
+    `active` subscription it never paid for, and an active subscription *grants
+    entitlements* — and an exception is the easiest way to lose it, because
+    "the caller forgot to rescue" and "the caller handled it" are indistinguishable
+    from a return value. `app/services/checkout.rb` deliberately contains no class.
+  - **The processor is asked first and the row is written second.** On the failure
+    path **nothing was ever written**, so there is nothing to roll back; a rollback
+    is a claim that nothing was written, which is what a crash or a later
+    `after_commit` can make false. The negative specs assert the subscription did
+    not move rather than that it moved back.
+  - **`Subscriptions::Lifecycle` is still the only writer of a `Subscription`.**
+    Completion builds the same normalised delivery a webhook would carry and hands
+    it to the lifecycle, so there is one state machine, one `Refused` vocabulary
+    and one answer to "what is this subscription's status". A checkout that wrote
+    the row itself would grant entitlements the moment the *request* was accepted.
+  - **`current_period_start`/`_end` are absent rather than guessed.**
+    `FakeProcessor` publishes no period, and deriving one from `Plan#interval`
+    would be this service inventing a billing period. No amount is computed to
+    send to a processor, per `AGENTS.md`.
+  - **Per-seat pricing rides through `quantity`**, and `pay` 12.2 is the Gemfile
+    floor because it is the first line whose `FakeProcessor#subscribe` accepts a
+    quantity at all. A trial of **zero** days does not become a trial:
+    `FakeProcessor` tests `trial_period_days` for truthiness and `0` is truthy in
+    Ruby, so the option is only passed when positive.
+
+- **`pay`'s own migration created `pay_customers.owner_id` as a bigint.** The gem
+  reads its key type from a Rails *generator* option this service never set, so it
+  fell back to `:bigint` — and every uuid owner was cast to `owner_id = 0`, all of
+  them onto one row. Measured, not reasoned: `Pay::Customer.pluck(:id, :owner_id)`
+  returned `[[29, "Customer", 0]]`. Every subscriber would have shared one
+  processor customer, and the first checkout of the second would have billed the
+  first's card, with nothing raising. `20261006030000_pay_owner_ids_are_uuids`
+  fixes both owner columns rather than setting the generator option, which would
+  change key types for every generated migration in the service.
+
+- **`app/services/checkout/session.rb` is in `MIXED_MONEY_FILES`.** The inventory
+  test puts it there: the word is in the column name `processor_price_id`, not in
+  a decision about an amount. Its entry point is asserted behaviourally — the
+  delivery carries no amount field at all, and the per-seat quantity is an
+  `Integer` count rather than a multiplied price.
+
+### Fixed
+
+- **`test/tenant/account_entry_point_matrix_test.rb` counts.** `Checkout::Session#recorded`
+  is the second writer of an account's subscription events and is classified with
+  its kind and what it touches; the derived counts move to 36 accesses in 34
+  methods under 35 keys, writes 7 → 8.
+
+### Added
+
 - **`/v1` requires an identity JWT, and every customer and subscription query is
   scoped by the account in it.** billing was the last purchasable service whose
   client surface answered every caller: `GET /v1/customers` returned every row,
