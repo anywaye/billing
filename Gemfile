@@ -41,6 +41,21 @@ gem "image_processing", "~> 1.2"
 # forged amount must never be believed.
 gem "stripe", "~> 19.6"
 
+# Payments. `pay` is the "several processors behind one interface" abstraction:
+# one set of tables (`pay_customers`, `pay_subscriptions`, `pay_charges`) and one
+# API, with a processor behind it. billing already has a hand-rolled Stripe client
+# for exactly three requests; this packet does NOT replace it, and adds no live
+# processor. What it adds is a checkout path that can be exercised end to end with
+# no network and no keys, because `pay` ships `Pay::FakeProcessor` — a processor
+# whose "API" is the database. A checkout path whose only proof is a Stripe test
+# key is a checkout path nobody can run in CI.
+#
+# `pay` 12.x is the floor and it is a real constraint, not a preference: it is the
+# first line whose FakeProcessor `subscribe` accepts a `quantity`, which is what
+# per-seat pricing needs. See `Checkout::Session` for what this packet did and did
+# not build on top of it.
+gem "pay", "~> 12.2"
+
 # Identity's access tokens. billing is the first service in the fleet to verify
 # them, and it verifies them with this gem rather than by hand for the reason the
 # stripe gem is above: RS256 signature checking is the one place a forged amount
