@@ -36,8 +36,14 @@ class CreateCharges < ActiveRecord::Migration[8.1]
 
     # The currency, inline rather than read from the model, so this migration
     # still means what it meant the day it ran.
+    #
+    # `^…$` and not `\A…\z`: PostgreSQL's `~` is a POSIX regex, where `\A` and
+    # `\z` are invalid escapes — the constraint parses at creation and raises
+    # `invalid regular expression` on the first insert. The anchors are the
+    # POSIX pair, and they are load-bearing: `~` is a substring match, so
+    # without them `USDT` would satisfy a three-letter pattern.
     add_check_constraint :charges,
-      "currency::text ~ '\\A[A-Z]{3}\\z'::text",
+      "currency::text ~ '^[A-Z]{3}$'::text",
       name: "charges_currency_is_iso_4217"
 
     add_check_constraint :charges,

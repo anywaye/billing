@@ -59,7 +59,7 @@ module Webhooks
         ::Charge.create!(
           account_id: account_id,
           customer_id: customer.id,
-          subscription_id: resolved_subscription_id,
+          subscription_id: resolved_subscription&.id,
           processor_charge_id: processor_charge_id,
           amount: amount,
           currency: currency,
@@ -211,6 +211,21 @@ module Webhooks
         def checkout_label
           session_id = data["checkout_session_id"]
           session_id.presence && "Checkout #{session_id}"
+        end
+
+        # The processor's own id for the payment, which is what the UNIQUE index
+        # dedupes a redelivery on and what a receipt cites.
+        #
+        # An invoice carries the charge object's id (`ch_…`). A one-time Checkout
+        # session does not: the charge is created by the processor after the
+        # session completes, and the session payload's only identifier for the
+        # payment is the payment intent. So the intent is what is recorded there —
+        # it is the processor's own unique id for that payment, no two payments
+        # share one, and a redelivery of the same event carries the same value,
+        # which is the property the index needs. The column is named for the
+        # common case and holds the processor's id in both.
+        def processor_charge_id
+          payload.dig("data", "object", "charge") || data["payment_intent_id"]
         end
     end
   end

@@ -29,7 +29,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_040000) do
     t.index ["processor_charge_id"], name: "index_charges_on_processor_charge_id", unique: true
     t.index ["subscription_id"], name: "index_charges_on_subscription_id"
     t.check_constraint "amount >= 0", name: "charges_amount_not_negative"
-    t.check_constraint "currency::text ~ '\\A[A-Z]{3}\\z'::text", name: "charges_currency_is_iso_4217"
+    t.check_constraint "currency::text ~ '^[A-Z]{3}$'::text", name: "charges_currency_is_iso_4217"
   end
 
   create_table "customers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
