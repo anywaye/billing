@@ -140,6 +140,7 @@ coverage along with `money.rb`; see [Tests](#tests).
 | `POST /v1/subscriptions/:id/cancel` | ask the processor to cancel |
 | `POST /v1/subscriptions/:id/change_plan` | ask the processor to move it |
 | `GET /v1/subscriptions/:id/entitlements` | what the plan grants, right now |
+| `GET /v1/charges/:id` | the receipt for one charge, as HTML, scoped by the token's account |
 
 The plans asymmetry is deliberate: a slug can be changed by the very request
 being made, and a mutable handle is not a safe thing to address a mutation by.
@@ -387,6 +388,14 @@ event and the receipt commit or roll back together. The handler is handed the
 processor's own event time as well as the payload, so the event's `time` and the
 payload's `started_at` are one instant read once rather than two readings that
 could drift.
+
+**A payment event also writes a charge, when money moved.** `Webhooks::Charges::Recorder`
+is the only writer of the `charges` table, and it runs in the same transaction for
+the same reason: a receipt committed separately from the `billing.payment.succeeded`
+event that describes it is a receipt a consumer was never told about. The
+processor's own `paid` and `amount` are the only things consulted — a failed, zero
+or negative settlement records nothing, and the event is still published. The
+receipt is read back through `GET /v1/charges/:id`, scoped by the token's account.
 
 Nothing here is token-authenticated, and nothing here may become so — the sender
 is a processor, not a cafaye client. A `Bearer` on this path would be a second,

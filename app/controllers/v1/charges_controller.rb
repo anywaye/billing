@@ -64,7 +64,13 @@ module V1
       charge = Charge.for_account(current_account_id).find_by(id: uuid_param!(params[:id]))
       raise ActiveRecord::RecordNotFound unless charge
 
-      render html: receipt_html(charge), content_type: "text/html"
+      # `html_safe` on the finished document, and that is the load-bearing half
+      # of the escaping rule. `render html:` escapes its argument by default, so
+      # an unmarked string would arrive as `&lt;!DOCTYPE html&gt;` — a receipt
+      # that renders as source code. The values were escaped on the way in, the
+      # document is safe to mark, and the two facts are asserted together by the
+      # spec that puts a `<script>` in the description and reads it back escaped.
+      render html: receipt_html(charge).html_safe, content_type: "text/html"
     end
 
     private

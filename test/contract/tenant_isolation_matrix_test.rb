@@ -304,7 +304,7 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
   # holds tenant data joins the surface without anybody deciding its scope, which
   # is the failure mode this whole file exists to prevent.
   test "the set of models this matrix treats as tenant data is pinned" do
-    assert_equal %w[Customer Charge Plan Subscription], TENANT_DATA.keys.map(&:name).sort
+    assert_equal %w[Charge Customer Plan Subscription], TENANT_DATA.keys.map(&:name).sort
   end
 
   # And the index that attaches a reason to a model has to agree with it. A

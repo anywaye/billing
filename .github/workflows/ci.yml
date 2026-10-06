@@ -286,14 +286,28 @@ env:
   #                                          ----  ----   ----  ----   ----  ----
   #                                          1078 / 3082 1095 / 3157   +17 /  +75
   #
+  # 1095/3157 -> 1134/3264. **The receipts packet**: a `Charge` model, a webhook
+  # recorder, and the receipt route. Three new test files, measured by running
+  # each on its own:
+  #
+  #   file                                    before       after       delta
+  #   test/models/charge_test.rb              --  /  --    15 /  46   +15 /  +46
+  #   test/services/webhooks/charges/         --  /  --    11 /  28   +11 /  +28
+  #     recorder_test.rb
+  #   test/requests/v1/charges_test.rb        --  /  --     7 /  22    +7 /  +22
+  #   (contract-test edits from the recovery  --  /  --    --  /  --    +6 /  +11
+  #    commits, measured in the full suite)
+  #                                          ----  ----   ----  ----   ----  ----
+  #                                          1095 / 3157 1134 / 3264  +39 / +107
+  #
   # **The checkout row was measured WITHOUT `core` on disk**, so it is a delta and
   # not a total: `test/contract/` skips 19 tests and ~284 assertions without a core
   # checkout, and those are counted on both sides of the table above or on neither.
   # The delta is exact — the two files were run on their own before and after — but
   # the total is `gate`'s to confirm, and a `gate` failure naming a different pair
   # of numbers is this commit being wrong about arithmetic, not a lost test.
-  BASELINE_RUNS: '1095'
-  BASELINE_ASSERTIONS: '3157'
+  BASELINE_RUNS: '1134'
+  BASELINE_ASSERTIONS: '3264'
 
 jobs:
   # ------------------------------------------------------------------ shared

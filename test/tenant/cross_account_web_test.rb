@@ -479,7 +479,13 @@ class TenantCrossAccountWebTest < ActionDispatch::IntegrationTest
       "`Subscription.for_account`, `Customer.for_account` or `Charge.for_account` has been " \
       "renamed or removed, which means the rewritten tests above are asserting a boundary the " \
       "code no longer has. Measured: 3 named scopes + 3 inline `where`/`find_by` constraints."
-    assert_empty app_sources.select { |_path, source| source.match?(/\.for_account\b/) }.map { |path, _source| path } - %w[
+    # Comment lines are dropped before the scan, for the reason the 403 scan above
+    # gives: a file explaining that it does *not* call `Customer.for_account` is
+    # not an account-scoped entry point, and a scanner whose only remedy is
+    # deleting the explanation is backwards.
+    assert_empty app_sources.select { |_path, source|
+      source.lines.reject { |line| line.strip.start_with?("#") }.any? { |line| line.match?(/\.for_account\b/) }
+    }.map { |path, _source| path } - %w[
       app/models/charge.rb
       app/models/customer.rb
       app/models/subscription.rb

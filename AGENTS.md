@@ -249,6 +249,27 @@ repository.** No new dependency — the `stripe` gem was already here, for
     `REPORT-billing-21-authorization.md` and in `CHANGELOG.md`. Read that before
     writing a guard here — the first draft of either passed.
 
+- **billing-receipts-01** is the charge and the receipt: what a customer was
+  charged, and the page that shows it. `+39 runs / +107 assertions`,
+  `1134 runs / 3264 assertions`, and seven files under `app/`, `openapi/`,
+  `test/` and the three documents. Three things in it are worth knowing before
+  you touch the delivery path:
+
+  * **A charge is recorded when money moved, and never when it did not.** The
+    recorder is hooked into `payment_emission`, inside the ingestion transaction,
+    so a charge and its event commit together. The processor's own `paid` and
+    `amount` are the only things consulted: a failed payment, a zero-amount
+    settlement, a negative one and a payment for an unknown customer all record
+    nothing, and the event is still published.
+  * **`processor_charge_id` is UNIQUE**, and that index is the resolution
+    mechanism for a redelivery. A one-time Checkout payment carries no charge
+    object, so the payment intent is recorded there.
+  * **The receipt is HTML, and every interpolated value is escaped.** The
+    description is the processor's own text — an invoice line item's description
+    — and a price named `<script>` at the processor must not execute in a page
+    served from this origin. The document is marked `html_safe` only after the
+    values are escaped, because `render html:` escapes its argument by default.
+
 There are no invoices, no usage metering, no prepaid credit and no publisher
 loop yet. Do not read their absence as something to fix in a side patch; those
 are later packets with their own briefs.
@@ -618,6 +639,35 @@ deletion-arriving-before-its-creation rule. The model's
 `account_is_the_customers_owner` cannot do this job — after a reassignment the new
 account genuinely belongs to the new customer, so that rule passes. See
 `REPORT-billing-13-fixes.md`.
+
+## Charges and receipts
+
+A `Charge` is billing's own record of a payment, distinct from `Pay::Charge` (the
+processor's record). The rule the whole surface turns on: **a charge is recorded
+when a payment succeeds, and never when it fails or is pending.** The processor
+says so on a signed webhook, and the `charges` table is the record of what it
+said. There is no code path that writes a charge from a cafaye request.
+
+- **`Webhooks::Charges::Recorder` is the only writer of a `Charge`.** It is
+  called from `payment_emission`, inside the ingestion transaction, so a charge
+  and the `billing.payment.succeeded` event that describes it commit together.
+  It screens the payload rather than raising: a failed payment, a zero-amount
+  settlement, a negative one and a payment for an unknown customer all record
+  nothing, and the event is still published. Integrity failures propagate so the
+  ingestion layer classifies them as `ignored:duplicate_delivery`.
+- **`processor_charge_id` is UNIQUE**, and that index is the resolution mechanism
+  for a redelivery. A one-time Checkout payment carries no charge object, so the
+  payment intent is recorded there — it is the processor's own unique id for
+  that payment.
+- **`GET /v1/charges/{id}` renders the receipt as a self-contained HTML
+  document**, scoped by the token's account. A cross-tenant read is a 404 — the
+  same answer a uuid naming nothing gets. Every interpolated value is
+  HTML-escaped without exception, because the description is the processor's own
+  text and a price named `<script>` must not execute in a page served from this
+  origin. The document is marked `html_safe` only after the values are escaped.
+- **`account_id` is denormalised onto the charge** at recording time, from the
+  resolved subscription or customer, so the receipt route can scope by it
+  without a join — the same reason `subscriptions.account_id` is denormalised.
 
 ## Webhooks in
 
