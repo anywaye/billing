@@ -10,9 +10,27 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_030000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_06_040000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "charges", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "account_id", null: false
+    t.uuid "customer_id", null: false
+    t.uuid "subscription_id"
+    t.string "processor_charge_id", null: false
+    t.integer "amount", null: false
+    t.string "currency", limit: 3, null: false
+    t.text "description", null: false
+    t.timestamptz "paid_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["customer_id"], name: "index_charges_on_customer_id"
+    t.index ["processor_charge_id"], name: "index_charges_on_processor_charge_id", unique: true
+    t.index ["subscription_id"], name: "index_charges_on_subscription_id"
+    t.check_constraint "amount >= 0", name: "charges_amount_not_negative"
+    t.check_constraint "currency::text ~ '^[A-Z]{3}$'::text", name: "charges_currency_is_iso_4217"
+  end
 
   create_table "customers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "owner_type", null: false
@@ -210,6 +228,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_030000) do
     t.check_constraint "status::text = ANY (ARRAY['trialing'::text, 'active'::text, 'past_due'::text, 'canceled'::text, 'unpaid'::text])", name: "subscriptions_status_known"
   end
 
+  add_foreign_key "charges", "customers"
+  add_foreign_key "charges", "subscriptions"
   add_foreign_key "pay_charges", "pay_customers", column: "customer_id"
   add_foreign_key "pay_charges", "pay_subscriptions", column: "subscription_id"
   add_foreign_key "pay_payment_methods", "pay_customers", column: "customer_id"

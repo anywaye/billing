@@ -55,7 +55,15 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
     # reason the reason column exists. A per-unit quantity is multiplied at the
     # processor.
     "app/services/checkout/session.rb" =>
-      "it reads a plan's `processor_price_id` to subscribe at the processor and never computes an amount; the price the customer is charged is the processor's, so no money decision happens here"
+      "it reads a plan's `processor_price_id` to subscribe at the processor and never computes an amount; the price the customer is charged is the processor's, so no money decision happens here",
+    # The receipt route formats a charge's amount for a person to read. It is in
+    # this list and not the gate's because the amount is **read out and displayed**,
+    # never decided: which way a price is priced lives in the plan, and the charge
+    # records what the processor said. The formatting is still money code — minor
+    # units in, a number with the currency's own exponent out — so it is asserted
+    # behaviourally below rather than by being in the gate's list.
+    "app/controllers/v1/charges_controller.rb" =>
+      "it renders a receipt for a charge; the one amount it touches is the charge's, formatted with the currency's own exponent for a person to read and never decided"
   }.freeze
 
   # What each mixed file does with money, and the proof that it is reached and
@@ -69,7 +77,8 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
     # specs assert that a plan with no `processor_price_id` is refused rather than
     # given a price this service would have had to invent. See
     # `test/services/checkout/session_test.rb`.
-    "app/services/checkout/session.rb" => [ "Checkout::Session#delivery" ]
+    "app/services/checkout/session.rb" => [ "Checkout::Session#delivery" ],
+    "app/controllers/v1/charges_controller.rb" => [ "V1::ChargesController#formatted_amount" ]
   }.freeze
 
   test "the gate's list and this list are the same list" do
@@ -179,6 +188,16 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
         assert_instance_of Integer, delivery.fetch("quantity")
         assert_equal Money.new(1900, "USD"), plan.price
         assert_instance_of Integer, plan.price.minor_units
+      when "V1::ChargesController#formatted_amount"
+        # The receipt's amount line: integer minor units in, a number with the
+        # currency's own exponent and the currency spelled out beside it. The
+        # zero-decimal case is the one that catches a hardcoded two places — a
+        # yen receipt with a decimal point it has no minor unit for is the kind
+        # of small wrongness only the customer notices.
+        controller = V1::ChargesController.new
+
+        assert_equal "19.00 USD", controller.send(:formatted_amount, Charge.new(amount: 1900, currency: "USD"))
+        assert_equal "1900 JPY", controller.send(:formatted_amount, Charge.new(amount: 1900, currency: "JPY"))
       else
         raise "no assertion is defined for the entry point #{entry_point.inspect}"
       end

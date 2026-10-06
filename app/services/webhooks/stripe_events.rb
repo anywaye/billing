@@ -227,7 +227,7 @@ module Webhooks
       handler = if Subscriptions::Lifecycle::TYPES.include?(type)
         ->(payload, event_time) { subscription_emission(type, payload, event_time) }
       else
-        ->(payload, _event_time) { payment_emission(type, payload) }
+        ->(payload, event_time) { payment_emission(type, payload, event_time) }
       end
 
       [ type, handler ]
@@ -245,8 +245,21 @@ module Webhooks
       raise Ignored, e.reason
     end
 
-    def self.payment_emission(type, payload)
+    # A payment emission is a **mapping and a write**, in that order, and the
+    # write is why this method still takes the raw payload after normalization
+    # has already happened.
+    #
+    # `Subscriptions::Lifecycle` is the precedent for a handler that writes: the
+    # handler is inside `Webhooks::Ingestion#emit`'s transaction, so a charge and
+    # the `billing.payment.succeeded` event that describes it commit together or
+    # not at all. That ordering is load-bearing and it is the reason the charge is
+    # recorded here rather than by an `after_create` on the outbox row: a receipt
+    # committed separately from the event is a receipt a consumer was never told
+    # about, and a consumer reconciling events against receipts would be
+    # permanently short one row with nothing to say which.
+    def self.payment_emission(type, payload, event_time)
       data = normalize(payload)
+      Charges::Recorder.new(data: data, payload: payload, event_time: event_time).record
 
       Emission.new(event_type: event_type_for(type, data), subject: subject_for(data), data: data)
     end

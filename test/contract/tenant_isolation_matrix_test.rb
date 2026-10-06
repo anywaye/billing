@@ -110,6 +110,10 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
     # cancelling one is the operation this whole matrix exists to keep honest, and
     # `account_id` is a column on the row rather than a join.
     Subscription => "a subscription is billed to `account_id` and grants entitlements",
+    # A charge is the receipt for a payment to an account, and `account_id` is
+    # denormalised onto it at recording time for the same reason a subscription's
+    # is: the receipt route scopes by it without a join.
+    Charge => "a charge is billed to `account_id`, denormalised from the resolved customer or subscription at recording time",
     # A plan is the catalogue every account buys from, and carries **no account at all**.
     Plan => "a plan is the catalogue of what an account may buy, and has no `account_id`"
   }.freeze
@@ -119,6 +123,7 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
   # sentence goes with which model.
   TENANT_MODEL_BY_NAME = {
     "Customer" => Customer,
+    "Charge" => Charge,
     "Plan" => Plan,
     "Subscription" => Subscription
   }.freeze
@@ -162,7 +167,12 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
     # the scope cannot be the one somebody forgot.
     [ "POST", "/v1/subscriptions/:id/cancel" ] => [ SCOPED, "cancels a subscription resolved inside `Subscription.for_account`; another account's is a 404 before the processor is called" ],
     [ "POST", "/v1/subscriptions/:id/change_plan" ] => [ SCOPED, "moves a subscription resolved inside `Subscription.for_account`" ],
-    [ "GET", "/v1/subscriptions/:id/entitlements" ] => [ SCOPED, "reads entitlements for a subscription resolved inside `Subscription.for_account`" ]
+    [ "GET", "/v1/subscriptions/:id/entitlements" ] => [ SCOPED, "reads entitlements for a subscription resolved inside `Subscription.for_account`" ],
+
+    # The receipt for one charge. A charge is billed to an account and the route
+    # resolves it inside `Charge.for_account`, so another account's uuid is a
+    # 404 — the same answer a uuid naming nothing gets.
+    [ "GET", "/v1/charges/:id" ] => [ SCOPED, "resolves a charge by its uuid inside `Charge.for_account`; another account's is a 404" ]
   }.freeze
 
   # Every served `/v1` operation that is **not** account-scoped, with the reason.
@@ -229,7 +239,7 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
   # failure names the verdict that changed instead of reporting a number that moved.
   # A floor or a count would accept the table silently losing its most dangerous rows; a
   # set comparison cannot, because the removal *is* the change.
-  test "no tenant-data operation is unscoped: the ten tenant routes carry a scope and the four plans are shared catalogue" do
+  test "no tenant-data operation is unscoped: the eleven tenant routes carry a scope and the four plans are shared catalogue" do
     verdicts = ACCOUNT_SCOPED.values.map(&:first).uniq.sort
 
     assert_equal [ CATALOGUE, SCOPED ], verdicts,
@@ -239,15 +249,15 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
       "commit that changes the code, or this test is a claim about code that does not exist."
   end
 
-  # **The four customer and subscription operations per group are `SCOPED`, pinned by
+  # **The customer, subscription and charge operations are `SCOPED`, pinned by
   # count.** The set assertion above says "some are scoped and none are unscoped", which a
-  # table could satisfy by scoping one route and leaving thirteen open. These are the
+  # table could satisfy by scoping one route and leaving the rest open. These are the
   # counts that make the set assertion mean what it says.
-  test "ten of the fourteen are scoped: every customer and subscription operation, and none of the four plan operations" do
+  test "eleven of the fifteen are scoped: every customer, subscription and charge operation, and none of the four plan operations" do
     scoped = ACCOUNT_SCOPED.select { |_operation, (verdict, _reason)| verdict == SCOPED }.keys
     catalogue = ACCOUNT_SCOPED.select { |_operation, (verdict, _reason)| verdict == CATALOGUE }.keys
 
-    assert_equal 10, scoped.size, "the scoped set is #{names(scoped)}"
+    assert_equal 11, scoped.size, "the scoped set is #{names(scoped)}"
     assert_equal 4, catalogue.size, "the catalogue set is #{names(catalogue)}"
     assert_empty scoped.grep(%r{/v1/plans}),
       "a plan operation is recorded as scoped. A plan has no `account_id` column, so there is " \
@@ -294,7 +304,7 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
   # holds tenant data joins the surface without anybody deciding its scope, which
   # is the failure mode this whole file exists to prevent.
   test "the set of models this matrix treats as tenant data is pinned" do
-    assert_equal %w[Customer Plan Subscription], TENANT_DATA.keys.map(&:name).sort
+    assert_equal %w[Charge Customer Plan Subscription], TENANT_DATA.keys.map(&:name).sort
   end
 
   # And the index that attaches a reason to a model has to agree with it. A

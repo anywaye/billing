@@ -47,6 +47,11 @@ Rails.application.routes.draw do
     post "subscriptions/:id/cancel", to: "subscriptions#cancel"
     post "subscriptions/:id/change_plan", to: "subscriptions#change_plan"
     get "subscriptions/:id/entitlements", to: "subscriptions#entitlements"
+
+    # Charges: what a customer was charged, for the receipt. Read by id, scoped
+    # by the token's account — a cross-tenant read is a 404, the same answer a
+    # uuid naming nothing gets.
+    get "charges/:id", to: "charges#show"
   end
 
   # Processor webhooks. Each processor gets its own path, its own signature

@@ -8,6 +8,28 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **Charges and receipts: what a customer was charged, and the page that shows
+  it.** A user who pays could not see what they paid for — there was no `Charge`
+  model, no receipt, no route. This packet adds the record and the read path.
+
+  - **`Charge` records a settled payment, and never a failed or pending one.**
+    The recorder is hooked into `Webhooks::StripeEvents.payment_emission`, inside
+    the ingestion transaction, so a charge and the `billing.payment.succeeded`
+    event that describes it commit together. The processor's own `paid` and
+    `amount` are the only things consulted: a failed payment, a zero-amount
+    settlement and a negative one all record nothing.
+  - **`GET /v1/charges/{id}` renders the receipt as a self-contained HTML
+    document**, scoped by the token's account — a cross-tenant read is a 404,
+    byte for byte the answer a uuid naming nothing gets. Every interpolated
+    value is HTML-escaped without exception, because the description is the
+    processor's own text and a price named `<script>` must not execute in a page
+    served from this origin.
+  - **`processor_charge_id` is UNIQUE**, and that index is the resolution
+    mechanism for a redelivery: two rows for one processor charge would be two
+    answers to one question, and a customer would be charged twice on paper. A
+    one-time Checkout payment carries no charge object, so the payment intent is
+    recorded there — it is the processor's own unique id for that payment.
+
 - **A checkout path, end to end, on `pay`'s FakeProcessor.** billing could model a
   subscription and receive the webhook that records one, but nothing a subscriber
   could actually *do* to start paying: no session, no completion, no positive

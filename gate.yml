@@ -276,7 +276,13 @@ gate:
       # `authenticates_principal.rb`), two in `test/authentication/`, and
       # `test/support/identity_helpers.rb`. Measured by running
       # `bundle exec rubocop --parallel` on the stashed tree and on this one.
-      minimum: 127
+      #
+      # 127 -> 136 is the checkout packet's nine new `.rb` files, and 136 -> 142
+      # is the receipts packet's six: `app/models/charge.rb`,
+      # `app/services/webhooks/charges/recorder.rb`,
+      # `app/controllers/v1/charges_controller.rb`, and the three specs. Same
+      # measurement, same command.
+      minimum: 142
     # ---------------------------------------------------------------------
     # The suite. THE load-bearing proof, and the only line that cannot appear
     # unless the suite ran to the end and every assertion in it passed.
@@ -372,7 +378,7 @@ gate:
       # suite that quietly lost the assertions saying `/v1` was open — and that
       # is the direction this packet moved, so a decrease here is the honest
       # reading rather than a suspicious one.
-      minimum: 1078
+      minimum: 1134
     # ---------------------------------------------------------------------
     # The gate reached its own last line. With the five above it, the step
     # markers bracket the run: the toolchain was pinned, the bundle resolved, a
