@@ -24,9 +24,9 @@ require "test_helper"
 #
 # ## Two layers, two numbers, and why they are not added together
 #
-# A **route** is a caller-facing operation on the HTTP surface: 14 of them. A
+# A **route** is a caller-facing operation on the HTTP surface: 15 of them. A
 # **data access** is one place in `app/` that reads or writes a tenant's row:
-# 35 of them, in 33 methods. The two layers overlap — a route is served by a
+# 44 of them, in 41 methods. The two layers overlap — a route is served by a
 # controller method that performs a data access — and they are counted separately
 # on purpose. Adding them would produce one larger number that means nothing,
 # and the two answer different questions: the route count is "how much of the
@@ -54,17 +54,19 @@ require "test_helper"
 # ## What "account-scoped" means here
 #
 # A data access is account-scoped when it reads or writes a row that belongs to an
-# account. Two columns decide it: `Subscription#account_id`, and `Customer#owner_id`
-# when the owner is an `Account`. `Plan` is in the set because it is the catalogue
-# every account buys from, and because the contract matrix already treats it as
-# tenant data — the same three models, re-pinned here so neither file drifts alone.
+# account. Two columns decide it: `Subscription#account_id` and `Charge#account_id`,
+# and `Customer#owner_id` when the owner is an `Account`. `Plan` is in the set
+# because it is the catalogue every account buys from, and because the contract
+# matrix already treats it as tenant data — the same four models, re-pinned here
+# so neither file drifts alone.
 #
-# Nine of the 35 are **declarations** rather than executed resolutions: the two
-# `belongs_to` on `Subscription`, the seven `scope`s on `Subscription`, `Customer`
-# and `OutboxEvent`. They are counted, because an association and a scope are both
-# queries and leaving a category out of an enumeration is how the enumeration stops
-# being one — but they are counted as declarations, so a reader who wants only the
-# places a request actually reaches a row has **26** and not 35.
+# Twelve of the 44 are **declarations** rather than executed resolutions: the two
+# `belongs_to` on `Subscription` and the two on `Charge`, the eight `scope`s on
+# `Subscription`, `Customer`, `Charge` and `OutboxEvent`. They are counted,
+# because an association and a scope are both queries and leaving a category out
+# of an enumeration is how the enumeration stops being one — but they are counted
+# as declarations, so a reader who wants only the places a request actually
+# reaches a row has **32** and not 44.
 #
 # A declaration is counted only when the class declaring it holds tenant data:
 # `Customer`, `Plan`, `Subscription` (an `account_id` column) or `OutboxEvent` (an
@@ -86,9 +88,9 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   KINDS = %w[read list write update delete].freeze
 
   # The models whose rows belong to an account. Pinned, and asserted to be the
-  # three the contract matrix pins, so a reader can check the two files agree
+  # four the contract matrix pins, so a reader can check the two files agree
   # without opening both.
-  TENANT_MODELS = %w[Customer Plan Subscription].freeze
+  TENANT_MODELS = %w[Customer Charge Plan Subscription].freeze
 
   # The models whose rows **carry** an account without having an account column.
   #
@@ -142,7 +144,12 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # why both resolve through the same scoped `subscription_record` as the read.
     [ "POST", "/v1/subscriptions/:id/cancel" ] => [ "update", "cancels a subscription resolved inside `for_account`" ],
     [ "POST", "/v1/subscriptions/:id/change_plan" ] => [ "update", "moves a subscription resolved inside `for_account` onto another plan" ],
-    [ "GET", "/v1/subscriptions/:id/entitlements" ] => [ "read", "reads entitlements for a subscription resolved inside `for_account`" ]
+    [ "GET", "/v1/subscriptions/:id/entitlements" ] => [ "read", "reads entitlements for a subscription resolved inside `for_account`" ],
+
+    # The receipt for one charge. A charge is billed to an account and the route
+    # resolves it inside `Charge.for_account`, so another account's uuid is a 404 —
+    # the same answer a uuid naming nothing gets.
+    [ "GET", "/v1/charges/:id" ] => [ "read", "resolves a charge by its uuid inside `for_account`; another account's is a 404" ]
   }.freeze
 
   # The one `/v1` operation that is served and is **not** account-scoped.
@@ -212,6 +219,19 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # an entry point that publishes an account's billing events without an entry
     # here is precisely the thing this matrix exists to notice.
     [ "app/services/checkout/session.rb", "recorded", "write" ] => "writes `billing.subscription.started` for the account the checkout's customer is owned by",
+
+    # --- the charges packet: the receipt for a payment -----------------------
+    # A charge is recorded when a payment succeeds and read by the receipt route.
+    # The model's two joins and its account scope are declarations, counted for
+    # the reason the nine above are; the recorder's lookups and write are the
+    # places a delivery actually reaches a tenant's row.
+    [ "app/models/charge.rb", "belongs_to :customer", "read" ] => "declares the join to the account-scoped customer the charge is billed to",
+    [ "app/models/charge.rb", "belongs_to :subscription", "read" ] => "declares the join to the subscription the charge is for, which is absent for a one-time checkout",
+    [ "app/models/charge.rb", "scope :for_account", "list" ] => "resolves one account's charges by `account_id`, the tenancy key the receipt route reads through",
+    [ "app/services/webhooks/charges/recorder.rb", "find_customer", "read" ] => "resolves the cafaye customer a payment is for, by cafaye id or by processor id",
+    [ "app/services/webhooks/charges/recorder.rb", "resolved_subscription", "read" ] => "resolves the subscription a payment is for, by the processor's subscription id",
+    [ "app/services/webhooks/charges/recorder.rb", "record", "write" ] => "writes the charge a settled payment is the receipt for",
+    [ "app/controllers/v1/charges_controller.rb", "show", "read" ] => "resolves a charge by its uuid inside `for_account`; another account's is a 404",
 
     # --- the keyset every list goes through ----------------------------------
     [ "app/controllers/concerns/cursor_paging.rb", "apply_cursor", "list" ] => "applies a client-supplied keyset to a relation the caller chose",
@@ -324,9 +344,9 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # `where` would also match a hash condition on a model scope, which is not a
   # separate entry point — it is a predicate on one already listed.
   #
-  # `belongs_to` is counted as a **declared** join. The two in `Subscription` are
-  # the only ones, and the method name is the whole declaration because a
-  # `belongs_to` is not inside a `def`.
+  # `belongs_to` is counted as a **declared** join. The two in `Subscription` and
+  # the two in `Charge` are the only ones, and the method name is the whole
+  # declaration because a `belongs_to` is not inside a `def`.
   #
   # `scope` is counted for the same reason, and is the shape account scoping is
   # most likely to arrive in — `scope :for_account, ->(id) { where(account_id: id) }`
@@ -357,14 +377,14 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   #   * `Customer.for_account(id)` on its own is a **list** — a relation, which is
   #     what `paginate` is handed.
   ACCESS_EXPRESSIONS = [
-    [ "read",   /\b(?:Customer|Plan|Subscription)\.for_account\([^)]*\)\s*\.\s*(?:find|find_by|find_by!)\(/ ],
-    [ "read",   /\b(?:Customer|Plan|Subscription)\.(?:find|find_by|find_by!)\(/ ],
+    [ "read",   /\b(?:Customer|Charge|Plan|Subscription)\.for_account\([^)]*\)\s*\.\s*(?:find|find_by|find_by!)\(/ ],
+    [ "read",   /\b(?:Customer|Charge|Plan|Subscription)\.(?:find|find_by|find_by!)\(/ ],
     [ "read",   /\bbelongs_to\s+:[a-z_]/ ],
-    [ "list",   /\b(?:Customer|Plan|Subscription)\.for_account\(/ ],
-    [ "list",   /\b(?:Customer|Plan|Subscription)\.all\b/ ],
+    [ "list",   /\b(?:Customer|Charge|Plan|Subscription)\.for_account\(/ ],
+    [ "list",   /\b(?:Customer|Charge|Plan|Subscription)\.all\b/ ],
     [ "list",   /\bscope\s+:[a-z_]+,\s*->/ ],
     [ "list",   /\bscope\.where\(/ ],
-    [ "write",  /\b(?:Customer|Plan|Subscription)\.new\b/ ],
+    [ "write",  /\b(?:Customer|Charge|Plan|Subscription)\.(?:new\b|create!)/ ],
     [ "write",  /\bOutboxEvent\.publish!/ ],
     [ "update", /\bassign_attributes\b/ ],
     [ "update", /\bprocessor\.(?:cancel_subscription|apply_plan_change)\(/ ]
@@ -504,7 +524,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
 
   # --- the counts the report quotes ------------------------------------------
 
-  # **35 data accesses, in 33 methods, filed under 34 keys.** All three numbers
+  # **44 data accesses, in 41 methods, filed under 42 keys.** All three numbers
   # are asserted, and neither gap between them is a rounding of the one above.
   #
   # billing-13's 33 became 35 and **both of the new ones are the account scopes
@@ -524,27 +544,40 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # whose total drops when the tenant boundary is fixed is a matrix that can no longer
   # notice it moving again.
   #
-  # Two methods still do two things, for two different reasons:
+  # The charges packet's 36 became 44, and the eight are the whole of that surface:
+  # `Charge`'s two joins and its account scope (declarations, counted for the reason
+  # the nine above are), the recorder's three lookups and its write, and the receipt
+  # route's read. **The scanner had to learn `Charge` to see any of them** — its
+  # patterns name the tenant models explicitly, so a fourth tenant model was
+  # invisible until it was added to the alternation, and the matrix's first draft
+  # of this packet shipped a recorder whose `Customer.find_by` and
+  # `Subscription.find_by` were unclassified accesses in `app/`. A data access
+  # the enumeration cannot see is the failure this file exists to prevent.
+  #
+  # Three methods now do two things, for three different reasons:
   #
   #   * `Subscriptions::Lifecycle#customer` performs **two lookups** —
   #     `Customer.find_by(id: cafaye_customer_id)` and
   #     `Customer.find_by(processor_customer_id:)` — under one description,
   #     because one row can be found by either identifier and a delivery may
-  #     carry only one. So there are more accesses than keys.
+  #     carry only one.
+  #   * `Webhooks::Charges::Recorder#find_customer` performs the same **two
+  #     lookups** under one description, for the same reason: a payment may
+  #     carry a cafaye id or a processor id and never both.
   #   * `Subscriptions::Lifecycle#apply` builds a row that did not exist **and**
   #     writes to the one that did, so it has two keys. So there are more keys
   #     than methods.
   #
-  # A single number would have hidden both, and both are the shape of the code.
-  test "there are 36 account-scoped data accesses in 34 methods, filed under 35 keys" do
-    assert_equal 36, self.class.accesses.size
-    assert_equal 34, classified_sites.size
-    assert_equal 35, DATA_ACCESSES.size
+  # A single number would have hidden all three, and all three are the shape of the code.
+  test "there are 44 account-scoped data accesses in 41 methods, filed under 42 keys" do
+    assert_equal 44, self.class.accesses.size
+    assert_equal 41, classified_sites.size
+    assert_equal 42, DATA_ACCESSES.size
 
-    assert_equal 1, self.class.accesses.size - DATA_ACCESSES.size,
-      "the gap between accesses and keys has changed. It is 1 because `Lifecycle#customer` " \
-      "does two lookups under one description; a different number means a method is doing " \
-      "something the table no longer describes."
+    assert_equal 2, self.class.accesses.size - DATA_ACCESSES.size,
+      "the gap between accesses and keys has changed. It is 2 because `Lifecycle#customer` " \
+      "and `Recorder#find_customer` each do two lookups under one description; a different " \
+      "number means a method is doing something the table no longer describes."
 
     assert_equal 1, DATA_ACCESSES.size - classified_sites.size,
       "the gap between keys and methods has changed. It is 1 because `Lifecycle#apply` " \
@@ -557,15 +590,15 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # zero kinds are filled in explicitly because `tally` omits an absent key, and
   # a breakdown that quietly lost `delete` is the one breakdown this file exists
   # to keep honest.
-  test "the data-access breakdown is read 12, list 11, write 8, update 5, delete 0" do
-    assert_equal({ "read" => 12, "list" => 11, "write" => 8, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
+  test "the data-access breakdown is read 18, list 12, write 9, update 5, delete 0" do
+    assert_equal({ "read" => 18, "list" => 12, "write" => 9, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
   end
 
-  # **14 account-scoped routes**, derived from the router, in the same four kinds.
+  # **15 account-scoped routes**, derived from the router, in the same four kinds.
   # This is the caller-facing count, and unlike the one above it does not change
   # when a helper is extracted.
-  test "there are 14 account-scoped routes, and the router serves exactly them plus the webhook" do
-    assert_equal 14, ACCOUNT_SCOPED_ROUTES.size
+  test "there are 15 account-scoped routes, and the router serves exactly them plus the webhook" do
+    assert_equal 15, ACCOUNT_SCOPED_ROUTES.size
     assert_equal served_routes.to_set,
                  (ACCOUNT_SCOPED_ROUTES.keys + NOT_ACCOUNT_SCOPED_ROUTES.keys).to_set
   end
@@ -583,8 +616,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
       "these routes are excluded with no reason"
   end
 
-  test "the route breakdown is read 4, list 3, write 3, update 4, delete 0" do
-    assert_equal({ "read" => 4, "list" => 3, "write" => 3, "update" => 4, "delete" => 0 },
+  test "the route breakdown is read 5, list 3, write 3, update 4, delete 0" do
+    assert_equal({ "read" => 5, "list" => 3, "write" => 3, "update" => 4, "delete" => 0 },
                  breakdown(ACCOUNT_SCOPED_ROUTES.values.map(&:first)))
   end
 
@@ -592,8 +625,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # packet's headline is two separately-asserted numbers and not one sum that
   # double-counts a route against the method that serves it.
   test "the two layers are counted separately, because a route and the method that serves it overlap" do
-    assert_equal 14, ACCOUNT_SCOPED_ROUTES.size
-    assert_equal 36, self.class.accesses.size
+    assert_equal 15, ACCOUNT_SCOPED_ROUTES.size
+    assert_equal 44, self.class.accesses.size
     refute_equal ACCOUNT_SCOPED_ROUTES.size, self.class.accesses.size,
       "the two layers have converged, which means one of them is counting the other's rows"
   end
@@ -679,12 +712,12 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
       "the access an entry point and a scope, and drop the exclusion."
   end
 
-  # The tenant-data set is the same three models the contract matrix pins, plus the
+  # The tenant-data set is the same four models the contract matrix pins, plus the
   # one model that carries an account in its payload without having the column.
-  test "the models this treats as tenant data are the three account-scoped ones" do
-    assert_equal %w[Customer Plan Subscription], TENANT_MODELS
+  test "the models this treats as tenant data are the four account-scoped ones" do
+    assert_equal %w[Customer Charge Plan Subscription], TENANT_MODELS
     assert_equal(
-      { "Customer" => Customer, "Plan" => Plan, "Subscription" => Subscription },
+      { "Customer" => Customer, "Charge" => Charge, "Plan" => Plan, "Subscription" => Subscription },
       TENANT_MODELS.to_h { |name| [ name, name.constantize ] }
     )
   end

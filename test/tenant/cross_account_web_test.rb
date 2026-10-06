@@ -473,15 +473,17 @@ class TenantCrossAccountWebTest < ActionDispatch::IntegrationTest
   # merely weaken the check — it could not be moved at all: `scope :for_account`
   # matches `scope :for_account_disabled` too, so renaming a scope to disable it
   # left the count untouched. The pattern is now word-anchored.
-  test "meta: the account-constrained queries are exactly the two scopes and their two callers" do
-    assert_equal 4, account_scoped_queries,
+  test "meta: the account-constrained queries are exactly the three scopes and their callers" do
+    assert_equal 6, account_scoped_queries,
       "the account-constrained queries in app/ are not the ones this file's tests are about. " \
-      "`Subscription.for_account` or `Customer.for_account` has been renamed or removed, which " \
-      "means the rewritten tests above are asserting a boundary the code no longer has. " \
-      "Measured: 2 named scopes + 2 inline `where`/`find_by` constraints."
+      "`Subscription.for_account`, `Customer.for_account` or `Charge.for_account` has been " \
+      "renamed or removed, which means the rewritten tests above are asserting a boundary the " \
+      "code no longer has. Measured: 3 named scopes + 3 inline `where`/`find_by` constraints."
     assert_empty app_sources.select { |_path, source| source.match?(/\.for_account\b/) }.map { |path, _source| path } - %w[
+      app/models/charge.rb
       app/models/customer.rb
       app/models/subscription.rb
+      app/controllers/v1/charges_controller.rb
       app/controllers/v1/customers_controller.rb
       app/controllers/v1/subscriptions_controller.rb
     ].then { |unexpected| unexpected },

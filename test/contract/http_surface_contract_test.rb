@@ -143,6 +143,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     createCustomer
     createPlan
     createSubscriptionCheckout
+    getCharge
     getCustomer
     getPlan
     getSubscription
@@ -236,7 +237,12 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     # while the surface breaks is a judgement call, not an oversight: the old prefix
     # answers every request without a token, so "keep serving `/v1`" would be "keep the
     # vulnerability". See the header on `info.version` and README's "Breaking change".
-    assert_equal "2.0.0", document.fetch("info").fetch("version")
+    #
+    # **2.1.0 is the receipts packet**: one additive operation,
+    # `GET /v1/charges/{id}`, and nothing else moved. A non-breaking addition bumps
+    # only `info.version` — the `/v1` prefix is untouched, and the bump is what a
+    # client generator reads.
+    assert_equal "2.1.0", document.fetch("info").fetch("version")
   end
 
   # --- the security the document declares, and what the router actually does ----

@@ -101,7 +101,14 @@ info:
   # 1.1.0 was the five subscription paths under the same `/v1` prefix, plus a new
   # response field on the subscription resource (`price`) and one on the plan
   # resource (`entitlements`).
-  version: 2.0.0
+  #
+  # 2.1.0 added one operation and changed no other: `GET /v1/charges/{id}`, the
+  # receipt for one charge. It is account-scoped like every other row-addressed
+  # operation, it is additive — no existing operation, response or body shape
+  # moved — and it is the first operation whose success response is not JSON,
+  # which is a fact about the response and not a break for a client that never
+  # called it. A minor bump under the unchanged `/v1` prefix, per core's rule.
+  version: 2.1.0
   description: >-
     Plans, customers, the subscription lifecycle, and one inbound
     payment-processor webhook for cafaye. This document describes every client
@@ -150,6 +157,11 @@ tags:
       The plan lifecycle. Every mutating action asks the payment processor to do
       something and returns; the subscription's own status changes only when a
       webhook says the processor did it.
+  - name: charges
+    description: >-
+      What a customer was charged, and the receipt for it. A charge is recorded
+      when a payment succeeds and never when it fails or is pending; it is read
+      by id, scoped by the token's account.
   - name: webhooks
     description: >-
       Events coming in from a payment processor. Authenticated by signature
@@ -768,6 +780,47 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/charges/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ChargeId'
+    get:
+      tags: [charges]
+      operationId: getCharge
+      summary: Get a charge receipt
+      description: >-
+        The receipt for one charge, rendered as a self-contained HTML document,
+        **for a charge in the token's account**. Another account's uuid is a
+        `404` — byte for byte the answer a uuid naming nothing gets, which is
+        what makes it safe: a `403` would tell a caller walking uuids which ids
+        exist.
+
+        This is the one operation on `/v1` whose success response is not JSON:
+        a receipt is a page a person reads, not a resource a program consumes.
+        Every **error** on it is still `application/problem+json`, with the same
+        seven keys as everywhere else.
+
+        The receipt's description is the processor's own text — an invoice line
+        item's description — and is HTML-escaped on the way out, without
+        exception, because a price named `<script>` at the processor must not
+        execute in a page served from this origin.
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      responses:
+        '200':
+          description: The receipt, as a self-contained HTML document.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/CallerIdentityUnavailable'
   /v1/webhooks/stripe:
     post:
       tags: [webhooks]
@@ -979,6 +1032,14 @@ components:
       in: path
       required: true
       description: The subscription's uuid.
+      schema:
+        type: string
+        format: uuid
+    ChargeId:
+      name: id
+      in: path
+      required: true
+      description: The charge's uuid.
       schema:
         type: string
         format: uuid
