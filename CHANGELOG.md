@@ -8,6 +8,40 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **The recipient fact on the money events, and the plan's name on the
+  subscription events.** billing publishes the fleet's money events and courier —
+  the fleet's only consumer — would mail about every one of them: a receipt for a
+  succeeded payment, a warning for a failed one, a confirmation for a subscription
+  change. None of the payloads carried an address to mail to, and courier has no
+  billing client and no billing tables, so every money event was a dead letter.
+  This packet puts the fact on the envelope, the same treatment identity's
+  `session.revoked` and `user.created` already carry.
+
+  - **`billing.payment.succeeded` and `billing.payment.failed` carry the
+    customer's billing email**, resolved in `Webhooks::StripeEvents.with_recipient`
+    from the processor's own customer id — one indexed lookup on
+    `customers.processor_customer_id` (unique since billing-13), per payment
+    event, stated in the builder's comment rather than hidden. A failed payment
+    records no charge, so the recorder's own resolution cannot be the one the
+    event relies on; the event's builder resolves for itself.
+  - **`billing.subscription.started/updated/canceled` carry the same email and
+    the plan's name beside `plan_id`.** The customer and the plan are already
+    resolved when the lifecycle builds the payload, so both fields cost no query
+    the builder was not already making. A mail about a plan change has to say
+    which plan, and a uuid does not say it.
+  - **The field is named `email`, matching identity's events** — one fleet, one
+    field name for the address a consumer cannot look up. It is **absent, never
+    null**, when the customer has no address on file or no cafaye row at all: an
+    event that promises a mail it cannot address is worse than one that carries
+    no address, and a consumer refuses the latter by design.
+  - **The gap to core is recorded, not matched.** core's payload schemas are
+    closed with `additionalProperties: false` and do not declare either field, so
+    `PENDING_PAYLOAD_ALIGNMENT` gains the five entries and `cafaye.yml` a
+    DECISION NEEDED — the same recorded-not-matched mechanism as `entitlements`,
+    and the same reason: core is read-only from a service worktree. The contract
+    test's corpus customer carries an email, because the payment payloads are
+    built by resolving that row.
+
 - **Charges and receipts: what a customer was charged, and the page that shows
   it.** A user who pays could not see what they paid for — there was no `Charge`
   model, no receipt, no route. This packet adds the record and the read path.

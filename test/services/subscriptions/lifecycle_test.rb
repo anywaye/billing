@@ -256,16 +256,53 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "USD", events.sole.data.fetch("currency")
   end
 
-  # core's payload schema is closed with `additionalProperties: false`, so a
-  # started event carries exactly the fields it names and nothing else. The
-  # processor's own provenance is deliberately *not* here: it is on the delivery
-  # row, where a human looking at a subscription can find it, and putting it in
-  # the payload would make core's schema reject the event written against it.
-  test "a start's payload carries only the fields core's schema names" do
+  # The recipient fact, and the reason a consumer can mail a subscription change
+  # with no billing client and no billing tables: the address is on the envelope,
+  # because there is nowhere else it can be read from. The customer is resolved
+  # for the payload already, so the field costs the builder no query it was not
+  # already making.
+  test "a start's payload carries the customer's billing email" do
+    apply("customer.subscription.created")
+
+    assert_equal "billing@example.com", events.sole.data.fetch("email")
+  end
+
+  # The plan's name beside its id: a mail about a subscription change has to say
+  # which plan, and `plan_id` is a uuid no consumer can render into words.
+  test "a start's payload carries the plan's name beside its id" do
+    apply("customer.subscription.created")
+
+    assert_equal @plan.name, events.sole.data.fetch("plan_name")
+  end
+
+  # Absent, never null: an event that promises a mail it cannot address is
+  # worse than one that carries no address at all, and a consumer refuses the
+  # latter by design. A customer created through `/v1` has no email until the
+  # client sets one, so this is a state the row can honestly be in.
+  test "a subscription event for a customer with no address carries no email" do
+    @customer.update!(email: nil)
+    apply("customer.subscription.created")
+
+    refute_includes events.sole.data.keys, "email"
+  end
+
+  # The payload's exact key set, pinned rather than described. core's schema is
+  # closed with `additionalProperties: false` and does not name most of these
+  # fields — that disagreement is recorded in `PENDING_PAYLOAD_ALIGNMENT` in
+  # `test/contract/`, which holds the payload against core's schema in both
+  # directions. What this test holds is the other half: that the payload carries
+  # exactly the fields this service's builder writes, so a field added to the
+  # builder fails here rather than shipping unannounced.
+  #
+  # The processor's own provenance is deliberately *not* here: it is on the
+  # delivery row, where a human looking at a subscription can find it, and
+  # putting it in the payload would make core's schema reject the event written
+  # against it.
+  test "a start's payload carries exactly the fields the builder writes" do
     apply("customer.subscription.created")
 
     assert_equal(
-      %w[account_id currency plan_id quantity started_at status subscription_id].sort,
+      %w[account_id currency email plan_id plan_name quantity started_at status subscription_id].sort,
       events.sole.data.keys.sort
     )
   end
@@ -408,6 +445,21 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal team.id, events.order(:created_at, :id).last.data.fetch("plan_id")
   end
 
+  # The recipient fact and the plan's name are on the update too, not just the
+  # start: a plan change is the subscription event a consumer is most likely to
+  # mail about, and the address and the plan's name are what the mail's body
+  # needs. Both come from the same builder as the start's.
+  test "an update's payload carries the customer's email and the plan's name" do
+    apply("customer.subscription.created")
+    team = create_plan(price: 4900, price_id: "price_1PZQaBcDeFgHiJkLmNoPqR4")
+
+    apply("customer.subscription.updated", quantity: 3, price_id: team.processor_price_id)
+
+    data = events.order(:created_at, :id).last.data
+    assert_equal "billing@example.com", data.fetch("email")
+    assert_equal team.name, data.fetch("plan_name")
+  end
+
   test "an update emits billing.subscription.updated" do
     apply("customer.subscription.created")
     apply("customer.subscription.updated", quantity: 3)
@@ -488,6 +540,18 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     apply("customer.subscription.deleted")
 
     assert_equal [ "billing.subscription.started", "billing.subscription.canceled" ], event_types
+  end
+
+  # A cancellation confirmation is mailed to the same address a receipt is, and
+  # it names the plan being left — the same two fields, from the same builder,
+  # on the third event type.
+  test "a canceled payload carries the customer's email and the plan's name" do
+    apply("customer.subscription.created")
+    apply("customer.subscription.deleted")
+
+    data = events.order(:created_at, :id).last.data
+    assert_equal "billing@example.com", data.fetch("email")
+    assert_equal @plan.name, data.fetch("plan_name")
   end
 
   # Cancellation *taking effect* is what is published, not cancellation being
@@ -920,7 +984,12 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
         owner_type: "Account",
         owner_id: account_id,
         processor: "stripe",
-        processor_customer_id: @customers_created == 1 ? fixture_id : "cus_FAKEother#{format('%016d', @customers_created)}"
+        processor_customer_id: @customers_created == 1 ? fixture_id : "cus_FAKEother#{format('%016d', @customers_created)}",
+        # The recipient fact the subscription events carry. Every customer in
+        # this file has one, because the payload tests assert the field — and a
+        # customer without an address is the edge case, arranged where the test
+        # is about it rather than in the helper that serves the other ninety.
+        email: "billing@example.com"
       )
     end
 

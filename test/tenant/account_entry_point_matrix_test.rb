@@ -233,6 +233,15 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     [ "app/services/webhooks/charges/recorder.rb", "record", "write" ] => "writes the charge a settled payment is the receipt for",
     [ "app/controllers/v1/charges_controller.rb", "show", "read" ] => "resolves a charge by its uuid inside `for_account`; another account's is a 404",
 
+    # --- the recipient fact: the payment payload's one lookup (billing-event-payloads-01)
+    # The payment events carry the customer's billing email because the fleet's
+    # consumer cannot read it anywhere else, and this is the read that fact costs:
+    # one indexed lookup on `customers.processor_customer_id` (unique, billing-13),
+    # per payment event. It is the same lookup the recorder's `find_customer` makes
+    # for the charge, made here for the event — a failed payment records no charge,
+    # so the recorder's resolution cannot be the one the event relies on.
+    [ "app/services/webhooks/stripe_events.rb", "recipient_email", "read" ] => "resolves the cafaye customer a payment is for, by the processor's customer id, for the recipient fact on the event",
+
     # --- the keyset every list goes through ----------------------------------
     [ "app/controllers/concerns/cursor_paging.rb", "apply_cursor", "list" ] => "applies a client-supplied keyset to a relation the caller chose",
 
@@ -312,8 +321,14 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # and every read and write the checkout path performs is in `Session`, whose
     # accesses are classified above rather than excluded from the enumeration.
     "app/services/checkout.rb" => "the checkout namespace; it declares no query",
-    "app/services/webhooks/emission.rb" => "the value object a handler returns; it holds no query",
-    "app/services/webhooks/stripe_events.rb" => "normalizes a payload and names an emission; the row lookups it implies are the lifecycle's, classified above"
+    "app/services/webhooks/emission.rb" => "the value object a handler returns; it holds no query"
+    # `app/services/webhooks/stripe_events.rb` was on this list until
+    # billing-event-payloads-01: the recipient fact's one lookup
+    # (`recipient_email`, classified in DATA_ACCESSES above) is a row read, and a
+    # file that performs one does not belong among the files that perform none.
+    # The list is closed in both directions, so the entry is dropped rather than
+    # reworded — the access has an entry point and a scope now, which is what the
+    # exclusion was standing in for.
   }.freeze
 
   # --- the derivation --------------------------------------------------------
@@ -524,7 +539,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
 
   # --- the counts the report quotes ------------------------------------------
 
-  # **44 data accesses, in 41 methods, filed under 42 keys.** All three numbers
+  # **45 data accesses, in 42 methods, filed under 43 keys.** All three numbers
   # are asserted, and neither gap between them is a rounding of the one above.
   #
   # billing-13's 33 became 35 and **both of the new ones are the account scopes
@@ -569,10 +584,19 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   #     than methods.
   #
   # A single number would have hidden all three, and all three are the shape of the code.
-  test "there are 44 account-scoped data accesses in 41 methods, filed under 42 keys" do
-    assert_equal 44, self.class.accesses.size
-    assert_equal 41, classified_sites.size
-    assert_equal 42, DATA_ACCESSES.size
+  #
+  # billing-event-payloads-01's 44 became 45, and the new one is the recipient
+  # fact's lookup: `StripeEvents.recipient_email` resolves the cafaye customer a
+  # payment is for, by the processor's customer id, so the payment events can
+  # carry the customer's billing email. It is the same lookup the recorder's
+  # `find_customer` makes for the charge, made for the event — a failed payment
+  # records no charge, so the recorder's resolution cannot be the one the event
+  # relies on. The file left `NO_DATA_ACCESS` the same day: a file that performs
+  # a read does not belong among the files that perform none.
+  test "there are 45 account-scoped data accesses in 42 methods, filed under 43 keys" do
+    assert_equal 45, self.class.accesses.size
+    assert_equal 42, classified_sites.size
+    assert_equal 43, DATA_ACCESSES.size
 
     assert_equal 2, self.class.accesses.size - DATA_ACCESSES.size,
       "the gap between accesses and keys has changed. It is 2 because `Lifecycle#customer` " \
@@ -590,8 +614,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # zero kinds are filled in explicitly because `tally` omits an absent key, and
   # a breakdown that quietly lost `delete` is the one breakdown this file exists
   # to keep honest.
-  test "the data-access breakdown is read 18, list 12, write 9, update 5, delete 0" do
-    assert_equal({ "read" => 18, "list" => 12, "write" => 9, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
+  test "the data-access breakdown is read 19, list 12, write 9, update 5, delete 0" do
+    assert_equal({ "read" => 19, "list" => 12, "write" => 9, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
   end
 
   # **15 account-scoped routes**, derived from the router, in the same four kinds.
@@ -626,7 +650,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # double-counts a route against the method that serves it.
   test "the two layers are counted separately, because a route and the method that serves it overlap" do
     assert_equal 15, ACCOUNT_SCOPED_ROUTES.size
-    assert_equal 44, self.class.accesses.size
+    assert_equal 45, self.class.accesses.size
     refute_equal ACCOUNT_SCOPED_ROUTES.size, self.class.accesses.size,
       "the two layers have converged, which means one of them is counting the other's rows"
   end

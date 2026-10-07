@@ -261,9 +261,53 @@ module Webhooks
       data = normalize(payload)
       Charges::Recorder.new(data: data, payload: payload, event_time: event_time).record
 
-      Emission.new(event_type: event_type_for(type, data), subject: subject_for(data), data: data)
+      Emission.new(event_type: event_type_for(type, data), subject: subject_for(data), data: with_recipient(data))
     end
     private_class_method :payment_emission
+
+    # The recipient fact: the cafaye customer's billing email, carried on the
+    # payment events because the fleet's consumer cannot read it anywhere else.
+    #
+    # courier — the consumer that would mail a receipt for a settled charge and a
+    # warning for a failed one — has no billing client and no billing tables
+    # (REPORT-courier-consumer-invite-01.md §2.6: a consumer acts on the envelope
+    # or refuses, and never looks up). An event with no address on it is an event
+    # that is dropped, so every money event was a dead letter for the one consumer
+    # that needed it. The parallel fix already exists on the identity side:
+    # `identity.session.revoked` and `identity.user.created` carry a top-level
+    # `email` for exactly this reason, and this field is named `email` to match
+    # it — one fleet, one field name for the address a consumer cannot look up.
+    #
+    # ## What it costs, stated rather than hidden
+    #
+    # This is the one query the payment path makes that the normalizer does not:
+    # one indexed lookup on `customers.processor_customer_id` (unique, partial —
+    # billing-13), per payment event, on the processor's own customer id. The
+    # webhook path is not a user-facing request, and the ingestion transaction
+    # is already writing three rows; one more indexed read against a unique
+    # column is noise beside them. It is here because the alternative — a receipt
+    # event with no address — is the gap this packet exists to close.
+    #
+    # ## Absent, never null
+    #
+    # A customer created in the processor's dashboard has no cafaye row, and a
+    # cafaye customer created through `/v1` has no email until the client sets
+    # one (`customers.email` is nullable on purpose). Both cases leave the field
+    # **absent** rather than null, the same rule the normalizer applies to a field
+    # the processor did not send: an event that promises a mail it cannot address
+    # is worse than one that carries no address at all, and a consumer refuses
+    # the latter by design.
+    def self.with_recipient(data)
+      email = recipient_email(data["customer_id"])
+      email ? data.merge("email" => email) : data
+    end
+
+    def self.recipient_email(processor_customer_id)
+      return nil if processor_customer_id.blank?
+
+      Customer.find_by(processor_customer_id: processor_customer_id)&.email.presence
+    end
+    private_class_method :recipient_email
 
     class << self
       # The handler for a processor event type, or nil when this build does not

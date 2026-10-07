@@ -103,6 +103,69 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     assert_equal "acc_01J9Z8RR7B2QK3M4N5P6Q7R8S9T", data.fetch("client_reference_id")
   end
 
+  # The recipient fact. A consumer of these events — courier, for a receipt or a
+  # payment-failure warning — has no billing client and no billing tables, so the
+  # address has to be on the envelope. The field is named `email` because that is
+  # what identity's events call it (`identity.session.revoked`,
+  # `identity.user.created`): one fleet, one field name for the address a
+  # consumer cannot look up.
+  #
+  # The lookup is the one query the payment path makes that the normalizer does
+  # not: one indexed read on `customers.processor_customer_id`, which is unique
+  # (billing-13). It is asserted here as the builder's contract — the field is
+  # present exactly when a cafaye customer with an address on file is the one the
+  # payment is about — and the end-to-end path through `Ingestion` is the
+  # contract test's business.
+  test "a payment payload carries the billing email of the customer it is about" do
+    Customer.create!(
+      owner_type: "Account",
+      owner_id: "11111111-1111-4111-8111-111111111111",
+      processor: "stripe",
+      processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0",
+      email: "billing@example.com"
+    )
+
+    data = Webhooks::StripeEvents.with_recipient(normalize("invoice.paid"))
+
+    assert_equal "billing@example.com", data.fetch("email")
+  end
+
+  test "a payment payload for a customer with no address on file carries no email" do
+    Customer.create!(
+      owner_type: "Account",
+      owner_id: "11111111-1111-4111-8111-111111111111",
+      processor: "stripe",
+      processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0"
+    )
+
+    data = Webhooks::StripeEvents.with_recipient(normalize("invoice.paid"))
+
+    refute_includes data.keys, "email"
+  end
+
+  test "a payment payload for a customer this service has never seen carries no email" do
+    data = Webhooks::StripeEvents.with_recipient(normalize("invoice.paid"))
+
+    refute_includes data.keys, "email"
+  end
+
+  # The failed-payment path resolves the customer the same way the settled one
+  # does: a warning about a decline is mailed to the same address a receipt is,
+  # and the two events are built by the same builder.
+  test "a failed payment's payload carries the same customer's email" do
+    Customer.create!(
+      owner_type: "Account",
+      owner_id: "11111111-1111-4111-8111-111111111111",
+      processor: "stripe",
+      processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0",
+      email: "billing@example.com"
+    )
+
+    data = Webhooks::StripeEvents.with_recipient(normalize("invoice.payment_failed"))
+
+    assert_equal "billing@example.com", data.fetch("email")
+  end
+
   # Stripe sends both of these for one signup: the Checkout session, then the
   # subscription's own lifecycle events. Emitting from both would state one fact
   # twice, under two different envelope ids.

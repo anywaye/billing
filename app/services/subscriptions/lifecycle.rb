@@ -354,6 +354,12 @@ module Subscriptions
         payload = {
           "subscription_id" => subscription.id,
           "plan_id" => plan.id,
+          # The plan's name beside its id. A mail about a subscription change has
+          # to say which plan, and `plan_id` is a uuid no consumer can render into
+          # words. The name is the plan's own, read from the row this builder has
+          # already resolved, so it costs no query the payload was not already
+          # making — the same reason `currency` is here.
+          "plan_name" => plan.name,
           "account_id" => customer.owner_id,
           "status" => subscription.status,
           "currency" => plan.currency
@@ -366,6 +372,17 @@ module Subscriptions
         # trialing, and that is what it does here — a null when trialing with no end
         # date, absent otherwise.
         payload["trial_ends_at"] = data["trial_ends_at"] if subscription.status == "trialing"
+        # The recipient fact, and the reason a consumer can mail a subscription
+        # change with no billing client and no billing tables: the address is on
+        # the envelope, because there is nowhere else it can be read from
+        # (REPORT-courier-consumer-invite-01.md §2.6). The customer is resolved for
+        # this payload already, so the email costs no query the builder was not
+        # already making. Absent — never null — when the customer has no address
+        # on file: an event that promises a mail it cannot address is worse than
+        # one that carries no address at all, and a consumer refuses the latter
+        # by design. Named `email` to match identity's events, which carry the same
+        # fact for the same reason.
+        payload["email"] = customer.email if customer.email.present?
         payload
       end
 

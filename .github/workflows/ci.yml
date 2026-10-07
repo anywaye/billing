@@ -20,10 +20,12 @@
 #
 # THE BASELINE THIS FILE HOLDS
 #
-#   **998 runs, 2842 assertions, 0 failures, 0 errors, 0 skips** — measured on
-#   this branch, with the observability packet's 48 tests on top of billing-13's
-#   three cross-tenant fixes, billing-08's hardening, billing-09's race fix and
-#   billing-12's tenant isolation. The numbers below are that line, asserted.
+#   **1143 runs, 3278 assertions, 0 failures, 0 errors, 0 skips** — measured on
+#   this branch, with the event-payloads packet's recipient fact on top of the
+#   receipts packet's charge and receipt, billing-21's authorization,
+#   the observability packet's 48 tests, billing-13's three cross-tenant fixes,
+#   billing-08's hardening, billing-09's race fix and billing-12's tenant
+#   isolation. The numbers below are that line, asserted.
 #
 # **+48 runs / +118 assertions is the whole of the observability packet**, and it
 # is itemised so a reviewer does not have to reconstruct it either:
@@ -306,8 +308,25 @@ env:
   # The delta is exact — the two files were run on their own before and after — but
   # the total is `gate`'s to confirm, and a `gate` failure naming a different pair
   # of numbers is this commit being wrong about arithmetic, not a lost test.
-  BASELINE_RUNS: '1134'
-  BASELINE_ASSERTIONS: '3264'
+  # 1134/3264 -> 1143/3278. **The event-payloads packet**: the recipient fact on
+  # the money events and the plan's name on the subscription events. Two files,
+  # measured by running each on its own before and after:
+  #
+  #   file                                    before       after       delta
+  #   test/services/webhooks/stripe_events    33  /  70    37  /  76    +4 /   +6
+  #     _test.rb
+  #   test/services/subscriptions/             82  / 144    87  / 152    +5 /   +8
+  #     lifecycle_test.rb
+  #                                          ----  ----   ----  ----   ----  ----
+  #                                          115 / 214 122 / 228    +9 /  +14
+  #
+  # **Nothing existing was weakened.** The one assertion that changed shape is
+  # the lifecycle's exact-key-set pin, which grew to include the two new fields
+  # — the test doing its job, not a loosened one. The contract test's
+  # `PENDING_PAYLOAD_ALIGNMENT` table and the tenant matrix's counts moved with
+  # the payloads, as they exist to.
+  BASELINE_RUNS: '1143'
+  BASELINE_ASSERTIONS: '3278'
 
 jobs:
   # ------------------------------------------------------------------ shared
