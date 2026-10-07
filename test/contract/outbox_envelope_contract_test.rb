@@ -59,6 +59,15 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
   # payload is the same shape an HTTP response uses, so it cannot be quietly
   # narrowed here either.
   #
+  # `email` and `plan_name` are this packet's addition (billing-event-payloads-01):
+  # the recipient fact and the plan's name, carried because the fleet's consumer
+  # acts on the envelope and never looks up. core's schemas for these types do
+  # not declare them, and core is read-only from a service worktree — recorded,
+  # not matched, the same mechanism as `entitlements` and for the same reason.
+  # The two payment types were absent from this table before this packet: their
+  # payloads matched core's schemas exactly, and the recipient field is what
+  # moved them onto it.
+  #
   # Asserted as a set rather than subtracted from the failures. Subtracting would
   # let a payload that starts matching sit here forever, and would let a new event
   # stop matching without anyone noticing. A set means a difference in either
@@ -72,18 +81,28 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
     },
     # core's D10 shape: `kind`, `processor` and `processor_event_id` are required
     # by core and absent here, and the four cafaye ids are rejected by a schema
-    # closed with `additionalProperties: false`.
+    # closed with `additionalProperties: false`. `email` and `plan_name` are the
+    # recipient fact and the plan's name (billing-event-payloads-01).
     "billing.subscription.started" => {
       missing: %w[customer_id kind processor processor_event_id],
-      unexpected: %w[account_id currency plan_id started_at]
+      unexpected: %w[account_id currency email plan_id plan_name started_at]
     },
     "billing.subscription.updated" => {
       missing: %w[customer_id kind],
-      unexpected: %w[account_id currency plan_id processor_subscription_id]
+      unexpected: %w[account_id currency email plan_id plan_name processor_subscription_id]
     },
     "billing.subscription.canceled" => {
       missing: %w[customer_id kind],
-      unexpected: %w[account_id currency plan_id processor_subscription_id]
+      unexpected: %w[account_id currency email plan_id plan_name processor_subscription_id]
+    },
+    # The recipient fact on the money events. Both types matched core's schemas
+    # exactly until this packet; `email` is what a mailing consumer needs and
+    # cannot read anywhere else, and core's closed schemas do not declare it.
+    "billing.payment.succeeded" => {
+      unexpected: %w[email]
+    },
+    "billing.payment.failed" => {
+      unexpected: %w[email]
     }
   }.freeze
 
@@ -544,7 +563,13 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
         owner_type: "Account",
         owner_id: "11111111-1111-4111-8111-111111111111",
         processor: "stripe",
-        processor_customer_id: StripeSubscriptionFixtures::PROCESSOR_CUSTOMER_ID
+        processor_customer_id: StripeSubscriptionFixtures::PROCESSOR_CUSTOMER_ID,
+        # The recipient fact this packet added to the money events. The corpus
+        # customer carries one, because the payment payloads are built by
+        # resolving this row through the processor's customer id — without an
+        # address here, the field would be absent from every payment payload and
+        # the gap recorded below would be a gap about a field nothing emitted.
+        email: "billing@example.com"
       )
       plan = Plan.create!(
         name: "Pro monthly",
