@@ -345,19 +345,23 @@ env:
   # generated test's `assert_response` line is unchanged in text and
   # `CLIENT_OPERATIONS`' count of 15 is untouched.
   #
-  # And the outbox publisher moved it again: **+21 runs / +445 assertions**, all
-  # of them in `test/services/outbox/` (16 runs, 427 assertions — the transport
-  # and one publish pass against an in-process broker double, the loop and the
-  # `NATS_URL` condition, and the every-type-delivered / no-secret proof) and
-  # `test/contract/vendored_gem_test.rb` (5 runs, 18 assertions — the pinned
-  # copy of the fleet gem held to its `DIGESTS` manifest, the claim being the
-  # gem's constant, and the outbox's partial index). No existing assertion
-  # moved. The measurement is 1166 / 3725 locally, with the whole suite green
-  # and the vendored-gem guard seen red against a tampered file; CI's number is
-  # the same delta above this file's previous 1145 / 3280, because the new tests
-  # assert identically with and without core on disk.
+  # And the outbox publisher moved it again: **+21 runs / +447 assertions**.
+  # 445 of those assertions are this packet's — `test/services/outbox/` (16 runs,
+  # 427 assertions: the transport and one publish pass against an in-process
+  # broker double, the loop and the `NATS_URL` condition, and the
+  # every-type-delivered / no-secret proof) and
+  # `test/contract/vendored_gem_test.rb` (5 runs, 18 assertions: the pinned copy
+  # of the fleet gem held to its `DIGESTS` manifest, the claim being the gem's
+  # constant, and the outbox's partial index) — and 2 are the seed-measurement
+  # refinement to the payload test. No existing assertion moved. The
+  # measurement is **1166 / 3366 locally** (1145 / 2919 before, taken with the
+  # whole suite green and the vendored-gem guard seen red against a tampered
+  # file) and **1166 / 3727 in CI**, which is the local number plus the 361
+  # assertions the core-contract tier contributes when core is checked out and
+  # the 21 local skips do not happen. The new tests assert identically with and
+  # without core on disk, so the delta is the same in both places.
   BASELINE_RUNS: '1166'
-  BASELINE_ASSERTIONS: '3725'
+  BASELINE_ASSERTIONS: '3727'
 
 jobs:
   # ------------------------------------------------------------------ shared
