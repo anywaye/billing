@@ -325,8 +325,27 @@ env:
   # — the test doing its job, not a loosened one. The contract test's
   # `PENDING_PAYLOAD_ALIGNMENT` table and the tenant matrix's counts moved with
   # the payloads, as they exist to.
-  BASELINE_RUNS: '1143'
-  BASELINE_ASSERTIONS: '3278'
+  #
+  # 1143/3278 -> 1145/3280. **The tenancy declaration packet (TG-A4).** Two tests,
+  # both in `test/authentication/principal_lock_test.rb`, one assertion each,
+  # measured by running that file on its own before and after:
+  #
+  #   file                          before       after       delta
+  #   test/authentication/          36  / 106    38  / 108   +2 /   +2
+  #     principal_lock_test.rb
+  #                                ----  ----   ----  ----   ----  ----
+  #                                36  / 106    38  / 108   +2 /   +2
+  #
+  # They are not filler. The tenancy declaration's `no-identity` arm for
+  # `customer-write` and `charge-read` points at this file's named-refusal
+  # table, and that table did not contain "patching a customer" or "reading a
+  # receipt". Adding the two rows is what makes those two arms point at a line
+  # that really asserts a 401 for the operation named. No existing assertion
+  # moved: the rows are appended after the `writing the catalogue` entry, so the
+  # generated test's `assert_response` line is unchanged in text and
+  # `CLIENT_OPERATIONS`' count of 15 is untouched.
+  BASELINE_RUNS: '1145'
+  BASELINE_ASSERTIONS: '3280'
 
 jobs:
   # ------------------------------------------------------------------ shared
