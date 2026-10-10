@@ -270,9 +270,30 @@ repository.** No new dependency — the `stripe` gem was already here, for
     served from this origin. The document is marked `html_safe` only after the
     values are escaped, because `render html:` escapes its argument by default.
 
-There are no invoices, no usage metering, no prepaid credit and no publisher
-loop yet. Do not read their absence as something to fix in a side patch; those
-are later packets with their own briefs.
+- **billing-outbox-publisher** is the drain: `outbox_events` now **leaves the
+  table**. The claim, the envelope and the publish pass are the fleet's shared
+  gem (`Cafaye::Outbox`, vendored at `vendor/cafaye` because the gem is
+  unpublished and github is unreachable from here — `VENDORED.md` records the
+  pin and `DIGESTS` holds it); billing adds exactly the three things the gem
+  says a service owns — `Outbox::NatsPublisher` (the transport, one method,
+  JetStream so `published_at` is set from the broker's ack), `Outbox::Relay`
+  (the loop: fixed one-second poll, batch 100, no wired Noop) and
+  `config/initializers/outbox_relay.rb` (starts on `NATS_URL`, inert without
+  it, inert in the test suite). The **subject is the event type** — core's "no
+  mapping table, no prefix rewriting" — so `billing.subscription.started` goes
+  to `billing.subscription.started`, which the fleet's `billing.>` stream
+  covers. Delivery is proved end to end against an in-process broker double
+  (`test/support/fake_nats_broker.rb`), including that **no published payload
+  carries a processor secret, a card, or PII beyond the `email` core's schemas
+  name**. Two things this packet deliberately did **not** do: it did not add a
+  `cafaye` gem dependency from rubygems or git (neither is reachable), and it
+  did not touch the subscription payloads' known disagreement with core's
+  schemas — that is core's change to make, and it is reported rather than
+  shipped around. See `REPORT-billing-outbox-publisher-01.md`.
+
+There are no invoices, no usage metering, no prepaid credit yet. Do not read
+their absence as something to fix in a side patch; those are later packets with
+their own briefs. The publisher loop is no longer one of the missing pieces.
 
 ## Layout
 
@@ -320,6 +341,9 @@ billing/
 │       │   └── lifecycle.rb           # the only writer of a subscription
 │       └── webhooks/                  # verify, store, normalize, emit — in that order
 │           └── ingestion.rb           # store, act once, and what a lost race records
+│       └── outbox/                    # the publisher: transport, loop — and nothing else
+│           ├── nats_publisher.rb      # one method: put this envelope on the bus
+│           └── relay.rb               # the fixed one-second poll, tied to the process
 ├── lib/
 │   ├── kit/
 │   │   ├── telemetry.rb               # the span-attribute ALLOWLIST and the ONE recorder
@@ -347,11 +371,16 @@ billing/
 │   │   └── canary_test.rb             # THE PROOF: a canary in every caller field: 12
 │   ├── requests/v1/                   # the API specs
 │   ├── services/                      # the lifecycle, the client, the webhook mapping
-│   │   └── webhooks/
-│   │       └── concurrent_delivery_test.rb  # the duplicate-charge race, deterministically
+│   │   ├── webhooks/
+│   │   │   └── concurrent_delivery_test.rb  # the duplicate-charge race, deterministically
+│   │   └── outbox/                    # the publisher: delivery, the loop, what reaches the bus
+│   │       ├── nats_publisher_test.rb  # the transport and one pass, against the broker double
+│   │       ├── relay_test.rb           # the loop, the fixed poll, and the NATS_URL condition
+│   │       └── published_payloads_test.rb # the inventory, and the no-secret proof
 │   ├── support/                       # shared helpers: frozen clock, fake Stripe, two accounts
 │   │   ├── two_accounts.rb            # the pair every isolation spec compares against
 │   │   ├── identity_helpers.rb        # a real RSA key; only the FETCH is stubbed
+│   │   ├── fake_nats_broker.rb        # an in-process broker: INFO, PONG, PUB → ack or 503
 │   │   ├── test_span_exporter.rb      # the exporter that records instead of sending
 │   │   └── test_spans.rb              # reading those spans, and RAISING on empty
 │   └── tenant/                        # the tenant boundary, enumerated and held
@@ -558,11 +587,18 @@ The rules are core's, in `core: docs/event-outbox.md` and
   row**, not from which processor event carried it. This is the one place the
   "same type, same vocabulary" rule needs explaining rather than restating, and
   it is what makes out-of-order delivery safe.
-- The publisher loop that moves rows to NATS **does not exist yet**. Until it
-  does, `published_at` is always null, `attempts` always zero, and nothing
-  consumes these events — including courier, which is how
-  `billing.subscription.started` and `.canceled` become transactional mail. Do not
-  write a row and call it delivered.
+- **The publisher loop that moves rows to NATS exists**: `Outbox::Relay`,
+  started by `config/initializers/outbox_relay.rb` when `NATS_URL` names a
+  broker, and not started when it does not. It drains through
+  `Cafaye::Outbox`'s claim — `for update skip locked`, bounded, in `created_at`
+  order — so N replicas can run it against one table, and it marks a row
+  published **from the broker's ack and never before**. The subject on the wire
+  is the event type, which is what the fleet's `billing.>` stream covers.
+  Delivery is at-least-once and the row's id is the envelope's id, so a
+  republish after a crash between the ack and the mark dedupes at the consumer.
+  With no broker the rows simply stay unpublished: that accumulation is the
+  honest state, and the boot log names it rather than leaving an operator to
+  wonder.
 
 ## Subscriptions
 

@@ -427,11 +427,17 @@ to make, not an oversight.
   carries a third verdict, `catalogue`, for exactly these four routes, and asserts
   it as a *set of distinct verdicts* rather than as a count, so the day a plan route
   becomes scoped the failure names the verdict that changed.
-- **No publisher loop.** The outbox table and the transactional insert are here;
-  the process that moves rows to NATS is not. `published_at` is therefore always
-  null and `attempts` always zero, and `outbox_events` grows without bound. This
-  is the one gap that is a real operational risk rather than a missing
-  convenience: until a publisher exists, nothing consumes these events.
+- **The publisher loop exists, and it is configured by a deployment.**
+  `Outbox::Relay` moves committed rows to the fleet's NATS bus when `NATS_URL`
+  is set, and starts nothing when it is not — the rows then accumulate in
+  `outbox_events`, which is the honest state an unconfigured broker produces
+  (a wired no-op publisher would mark every event published and drain them
+  into nowhere, which is worse). Delivery is at-least-once, `published_at` is
+  set from the broker's ack and never before, and the row's id is the
+  envelope's id so a republish after a crash dedupes at the consumer. The
+  broker itself is a deployment's: `NATS_URL` names it, and a broker that is
+  down is an outage rather than a boot failure. **What is still missing is
+  retention** — see below.
 - **No retention.** `IdempotencyKey#expired` and `OutboxEvent#unpublished` exist
   to be pruned on a schedule; nothing schedules them. core is explicit that an
   unpruned outbox is the largest table in the database.

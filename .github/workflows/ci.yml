@@ -344,8 +344,20 @@ env:
   # moved: the rows are appended after the `writing the catalogue` entry, so the
   # generated test's `assert_response` line is unchanged in text and
   # `CLIENT_OPERATIONS`' count of 15 is untouched.
-  BASELINE_RUNS: '1145'
-  BASELINE_ASSERTIONS: '3280'
+  #
+  # And the outbox publisher moved it again: **+21 runs / +445 assertions**, all
+  # of them in `test/services/outbox/` (16 runs, 427 assertions — the transport
+  # and one publish pass against an in-process broker double, the loop and the
+  # `NATS_URL` condition, and the every-type-delivered / no-secret proof) and
+  # `test/contract/vendored_gem_test.rb` (5 runs, 18 assertions — the pinned
+  # copy of the fleet gem held to its `DIGESTS` manifest, the claim being the
+  # gem's constant, and the outbox's partial index). No existing assertion
+  # moved. The measurement is 1166 / 3725 locally, with the whole suite green
+  # and the vendored-gem guard seen red against a tampered file; CI's number is
+  # the same delta above this file's previous 1145 / 3280, because the new tests
+  # assert identically with and without core on disk.
+  BASELINE_RUNS: '1166'
+  BASELINE_ASSERTIONS: '3725'
 
 jobs:
   # ------------------------------------------------------------------ shared

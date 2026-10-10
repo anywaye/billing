@@ -8,6 +8,65 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **Billing's outbox publisher.** `outbox_events` has been written since
+  billing-02 and moved nowhere: `published_at` was always null and nothing
+  consumed the rows. With the broker installed, this packet drains them.
+
+  Three files, and the third is the only one that names a broker:
+
+  * `Cafaye::Outbox` — the fleet's shared gem — owns the claim
+    (`select ... for update skip locked`, ordered, bounded, with the per-row
+    backoff core specifies), the envelope grammar and the publish pass.
+    **No second claim mechanism was written**: `vendor/cafaye` is a pinned copy
+    of `cafaye-rb` at `5056500`, because the gem is not on rubygems and
+    github.com/cafaye/cafaye-rb is unreachable from this environment.
+    `vendor/cafaye/DIGESTS` pins every shipped file by sha256 and
+    `test/contract/vendored_gem_test.rb` re-reads them on every run — a check
+    with no skip, so it holds in CI. The action item (publish the gem, or make
+    it reachable, and replace the `path:` dependency) is recorded in
+    `vendor/cafaye/VENDORED.md`.
+  * `Outbox::NatsPublisher` is the transport: one method — put this envelope on
+    the bus, return only once the broker has it. JetStream and not core NATS,
+    because `published_at` is set from the broker's acknowledgement and only
+    JetStream's `publish` blocks until the broker answers. The publish is
+    bounded by `PUBLISH_TIMEOUT` (10s, identity's `DefaultPublishTimeout`): an
+    unanswered publish is a failure, not a wait, which leaves the row claimable
+    rather than hanging the loop. A broker that is down is an outage — the loop
+    starts, publishes fail, rows accumulate and drain when it returns — and a
+    URL that does not parse is refused at boot.
+  * `Outbox::Relay` is the loop: a fixed one-second poll (identity's
+    `DefaultPollInterval`, and deliberately *not* a backoff that grows while
+    idle, because a freshly created subscription's event would wait minutes),
+    batch 100 (the gem's default, from core's range at the low end), stopped by
+    `#stop` from an `at_exit`. No `NoopPublisher` is wired anywhere: with no
+    broker the rows simply stay, and the boot log says so.
+
+  `config/initializers/outbox_relay.rb` is the wiring: it starts the relay when
+  `NATS_URL` is set and starts nothing when it is not, in every environment
+  except the test suite — the suite boots this application once per parallel
+  worker, and a developer with a local broker would otherwise publish fixture
+  rows onto a real bus from inside a test run.
+
+  **The subject is the event type.** core's "no mapping table, no prefix
+  rewriting": a row whose type is `billing.subscription.started` is published
+  on `billing.subscription.started`, which is what the fleet's `billing.>`
+  stream covers; the envelope's `subject` attribute is the entity and is not
+  the wire subject. The transport refuses a type that is not billing's own
+  before it reaches the wire, and `test/services/outbox/published_payloads_test.rb`
+  proves the inventory: every type in `OutboxEvent::TYPES` reaches the bus on
+  its own subject, carrying core's seven attributes and the row's own id, with
+  no processor secret, no card, and no PII beyond the `email` core's schemas
+  name for the money events.
+
+  The proofs are end-to-end. `test/support/fake_nats_broker.rb` is an
+  in-process broker speaking enough of the NATS protocol for the real
+  `nats-pure` client to connect, request and be acknowledged — a mock would
+  prove the loop calls something, and the subject a consumer receives is the
+  contract. Ruby has no embedded nats-server (identity's Go tests use one), so
+  the broker is a double and everything else is real.
+
+### Added
+
 - **Billing's first tenancy declaration.** `tenancy.yml` at the repository root,
   checked by `core/harness/bin/tenancy-check .` against
   `core/schemas/tenant-isolation.schema.json`. It declares **five entry points**

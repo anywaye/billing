@@ -1,81 +1,53 @@
+# frozen_string_literal: true
+
+require "digest"
+require "pathname"
 require "test_helper"
 
-# The pinned copy of the fleet's shared gem, held to its upstream.
+# The pinned copy of the fleet's shared gem, held to its pin.
 #
 # `vendor/cafaye` exists because the gem is not on rubygems and github is not
 # reachable from this environment — see `vendor/cafaye/VENDORED.md`. A pinned
-# copy is honest only while it stays pinned, so these tests read the upstream
-# checkout whenever it is on disk and compare byte for byte.
+# copy is honest only while it stays pinned, and a pin nothing can check is a
+# pin in name only, so `DIGESTS` records a sha256 for every file the gem's
+# gemspec ships and this test re-reads them on every run. There is no skip in
+# this file: a check that passes by not running is the thing the copy exists to
+# prevent.
 #
-# The seam is `CAFAYE_RB_PATH` with the standard fleet layout as its default
-# (`../..` from this worktree is `moon/`, and the shared gem lives at
-# `cafaye/cafaye-rb` beside it). When the upstream is absent the drift test
-# skips with that sentence printed — the same seam, and the same limitation,
-# `test/contract/`'s core checks already carry: a developer with the fleet
-# checked out beside them gets the guarantee, and CI cannot reach a private
-# repository. The two tests that never skip are the ones about what the gem is
-# *for*: the claim mechanism billing publishes with is the shared gem's, and
-# the index it orders through exists in this repository's schema.
+# What the manifest can and cannot say. It can say the copy is byte-stable —
+# an edit to a vendored file, or a re-copy, changes a digest and fails here.
+# It cannot say the upstream has not moved, because nothing in CI can reach
+# the private repository. That half is a developer workflow, documented in
+# VENDORED.md: with the fleet checked out beside this worktree, `diff -r` the
+# two trees and re-copy deliberately, rewriting the manifest and the pinned
+# commit in the same commit.
 class VendoredGemTest < ActiveSupport::TestCase
-  VENDOR = Rails.root.join("vendor/cafaye").to_s
-  UPSTREAM = (ENV["CAFAYE_RB_PATH"].presence || Rails.root.join("../../cafaye/cafaye-rb").expand_path).to_s
+  VENDOR = Pathname.new(File.expand_path("../../vendor/cafaye", __dir__))
 
-  # Every file the gem's own gemspec ships. The vendored copy carries exactly
-  # these and `VENDORED.md`; a file that appears or disappears upstream changes
-  # this list, and the drift test notices.
-  SHIPPED_FILES = %w[
-    cafaye.gemspec
-    db/outbox_events.sql
-    lib/cafaye.rb
-    lib/cafaye/configuration.rb
-    lib/cafaye/errors.rb
-    lib/cafaye/generators/outbox_generator.rb
-    lib/cafaye/generators/templates/create_outbox_events.rb
-    lib/cafaye/jwks/cache.rb
-    lib/cafaye/jwks/fetcher.rb
-    lib/cafaye/jwks/key_set.rb
-    lib/cafaye/jwks/transport.rb
-    lib/cafaye/outbox.rb
-    lib/cafaye/outbox/active_record_connection.rb
-    lib/cafaye/outbox/envelope.rb
-    lib/cafaye/outbox/pg_connection.rb
-    lib/cafaye/outbox/publisher.rb
-    lib/cafaye/outbox/writer.rb
-    lib/cafaye/principal.rb
-    lib/cafaye/railtie.rb
-    lib/cafaye/token.rb
-    lib/cafaye/token_verifier.rb
-    lib/cafaye/version.rb
-    LICENSE.txt
-    README.md
-    CHANGELOG.md
-  ].freeze
-
-  test "the vendored copy is byte-identical to the upstream checkout" do
-    skip("cafaye-rb is not on disk at #{UPSTREAM}; set CAFAYE_RB_PATH to the checkout") unless Dir.exist?(UPSTREAM)
-
-    drifted = SHIPPED_FILES.reject do |relative|
-      vendored = File.join(VENDOR, relative)
-      upstream = File.join(UPSTREAM, relative)
-      File.exist?(vendored) && File.exist?(upstream) && File.read(vendored) == File.read(upstream)
+  test "every vendored file is the file the manifest pinned" do
+    drifted = DIGESTS.reject do |relative, digest|
+      file = VENDOR.join(relative)
+      file.exist? && Digest::SHA256.hexdigest(file.binread) == digest
     end
 
-    assert_empty drifted,
-      "vendor/cafaye has drifted from #{UPSTREAM}. Re-copy the gem's shipped files, " \
-      "and update VENDORED.md's pinned commit with the reason in the same commit."
+    assert_empty drifted.keys,
+      "vendor/cafaye no longer matches its DIGESTS manifest. Either an edit crept " \
+      "into the copy — revert it — or the pin was deliberately refreshed: re-copy " \
+      "the gem's shipped files, rewrite DIGESTS and VENDORED.md's commit in the " \
+      "same commit, and say why."
   end
 
-  test "the vendored copy ships nothing the gem does not" do
-    vendored = Dir.glob("**/*", base: VENDOR).select { |path| File.file?(File.join(VENDOR, path)) }
+  test "the manifest covers exactly the files the vendored copy carries" do
+    on_disk = Dir.glob("**/*", base: VENDOR).select { |path| File.file?(VENDOR.join(path)) }
 
-    extras = vendored - SHIPPED_FILES - [ "VENDORED.md" ]
-    assert_empty extras,
-      "the vendored copy carries files the gemspec does not ship; a copy with extras " \
+    assert_empty DIGESTS.keys - on_disk, "the manifest names a file that is no longer vendored"
+    assert_empty on_disk - DIGESTS.keys - [ "DIGESTS", "VENDORED.md" ],
+      "the vendored copy carries a file the manifest does not pin; a copy with extras " \
       "is a fork wearing a pin"
   end
 
   test "the pinned commit is recorded" do
-    note = Rails.root.join("vendor/cafaye/VENDORED.md").read
+    note = VENDOR.join("VENDORED.md").read
     assert_match(/\b[0-9a-f]{40}\b/, note, "VENDORED.md does not name the upstream commit it pins")
   end
 
@@ -103,4 +75,14 @@ class VendoredGemTest < ActiveSupport::TestCase
     assert_equal "(published_at IS NULL)", unpublished.where
     assert_equal [ "created_at" ], unpublished.columns
   end
+
+  # The manifest, read once. A recorded-debt table may never become the thing
+  # being iterated: this file IS the iterated table, and every entry in it is
+  # asserted against a file that exists.
+  DIGESTS = begin
+    VENDOR.join("DIGESTS").read.lines.each_with_object({}) do |line, into|
+      path, digest = line.strip.split(/\s+/, 2)
+      into[path] = digest
+    end
+  end.freeze
 end

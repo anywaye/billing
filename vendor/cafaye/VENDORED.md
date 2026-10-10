@@ -27,13 +27,21 @@ gem's own `cafaye.gemspec` ships, and nothing else.
 
 ## The obligation this creates
 
-The copy will drift. `test/contract/vendored_gem_test.rb` compares it, file by
-file, against the upstream checkout whenever that checkout is on disk — by
-`CAFAYE_RB_PATH`, or at `../../cafaye/cafaye-rb` beside the standard fleet
-layout. When the upstream checkout is absent the test **says so and skips**,
-which is the same seam and the same limitation `test/contract/`'s core checks
-already carry (`CORE_PATH`): CI cannot reach a private repository, so the drift
-check is a developer-machine guarantee, not a CI one.
+The copy will drift. `vendor/cafaye/DIGESTS` records a sha256 for every file
+the gem's own gemspec ships, and `test/contract/vendored_gem_test.rb` re-reads
+them on every run — **no skip, in CI and locally alike** — so an edit that
+creeps into the copy, or a re-copy nobody recorded, fails by name. What the
+manifest cannot say is that the *upstream* has not moved: nothing in CI can
+reach a private repository. That half is a developer workflow, not a test:
+
+```
+# with the fleet checked out beside this worktree (moon/cafaye/cafaye-rb):
+diff -r vendor/cafaye ../../cafaye/cafaye-rb --exclude=DIGESTS --exclude=VENDORED.md
+```
+
+A deliberate re-pin re-copies the shipped files, rewrites the manifest and the
+commit named below **in the same commit**, and says why. Re-pin is a decision,
+not a `bundle update`.
 
 **The action item this records: publish `cafaye` (or make the private repo
 reachable from CI), and replace this `path:` dependency with the released or
