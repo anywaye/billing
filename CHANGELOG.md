@@ -6,6 +6,29 @@ All notable changes to billing are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The recorded payload gap is core-w46's smaller one, and the payment events
+  are out of it entirely.** `PENDING_PAYLOAD_ALIGNMENT` in
+  `test/contract/outbox_envelope_contract_test.rb` no longer carries the two
+  `billing.payment.*` `email` entries, and the three subscription entries have
+  lost `email` and `plan_name` from their `unexpected` lists. core's `b8ae8fb`
+  ("billing's money events: declare the recipient and the plan name", core-w46)
+  declared both fields the way billing already sent them — `email` optional and
+  never null, `plan_name` required and non-empty — so the disagreement core's
+  closed schemas used to have with these payloads is gone.
+  **Nothing was removed from a payload.** `StripeEvents.with_recipient` still
+  merges `email` on the `payment_emission` path, still by one indexed lookup on
+  `customers.processor_customer_id`, and still absent-never-null; the PII
+  position is unchanged and the fields are now part of the contract rather than
+  beside it. `billing.payment.succeeded` and `billing.payment.failed` now match
+  core's schemas exactly — the first money events to do so. What remains
+  recorded is what core's D10 still describes: the subscription shape, and
+  `entitlements` on the two plan events. The table is asserted as a set in both
+  directions, which is how a gap closing from the *core* side shows up as a
+  failure naming it, rather than as an entry describing a disagreement that no
+  longer exists.
+
 ### Added
 
 - **Billing's outbox publisher.** `outbox_events` has been written since

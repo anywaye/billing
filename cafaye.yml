@@ -68,6 +68,18 @@
 # >   the payload is a contract change this worktree does not get to make, and the
 # >   plan payload is the shape an HTTP response uses, so it cannot be quietly
 # >   narrowed here either.
+# > * **core-w46 (`b8ae8fb`) closed the recipient-fact gap from the core side.**
+# >   billing-event-payloads-01 added `email` to the two payment types and `email`
+# >   plus `plan_name` to the three subscription types, and both were recorded
+# >   here the day they were added. core has since declared them the way billing
+# >   already sends them, so those entries are **not** in
+# >   `PENDING_PAYLOAD_ALIGNMENT` any more and the two payment events match
+# >   core's schemas exactly. Nothing was removed from a payload: the fields are
+# >   still on the wire and `email` is still resolved by one indexed lookup, which
+# >   is the PII position this service took deliberately. The table is asserted
+# >   as a set in both directions, so a gap closing from the core side is the
+# >   mechanism working, and it is the reason this bullet exists — an entry left
+# >   sitting beside a closed one describes a disagreement that no longer exists.
 # >
 # > Four decisions are recorded here. Two change what this service *is*, and two
 # > are questions core owns that this worktree cannot answer.
@@ -85,14 +97,25 @@
 # >
 # > **DECISION NEEDED (billing-event-payloads-01, on the recipient fact).** The
 # > five money events now carry the customer's billing email, and the three
-# > subscription events carry the plan's name beside its id. Neither field is
-# > declared by core's payload schemas, which are closed with
-# > `additionalProperties: false` for all eight of this service's types, so the
-# > gap is recorded in `PENDING_PAYLOAD_ALIGNMENT` and asserted in both directions
-# > rather than matched — the same mechanism as `entitlements` above, and for the
-# > same reason: core is read-only from a service worktree, and the two ways to
-# > make the contract test green without a core change are both the spec moving
-# > without a decision.
+# > subscription events carry the plan's name beside its id. **core has since
+# > declared both** (`b8ae8fb`, core-w46, "billing's money events: declare the
+# > recipient and the plan name"), the way billing already sends them: `email`
+# > OPTIONAL and NEVER NULL, because it is merged only when `customers.email` is
+# > present, and `plan_name` REQUIRED and non-empty, because it is written
+# > unconditionally from a `null: false` column. So this gap is **closed from the
+# > core side** and the two entries that recorded it are gone from
+# > `PENDING_PAYLOAD_ALIGNMENT` — nothing was removed from the payload, and the
+# > PII direction of travel is unchanged. What remains of the recorded gap is the
+# > subscription shape core's D10 described, above, and `entitlements` on the two
+# > plan events.
+# >
+# > **The two payment events now match core's schemas exactly**, which is the
+# > first time a money event has. `billing.payment.succeeded` and
+# > `billing.payment.failed` declare `email` in core and emit it, and their
+# > D11 `oneOf` pair — invoice-backed, Checkout-backed — is satisfied by the two
+# > shapes the normalizers produce. They are no longer in the recorded table, and
+# > the table is asserted as a set in both directions, so a future divergence
+# > fails by name rather than sitting beside a closed one.
 # >
 # > **Why the fields are here anyway, and why now.** The fleet's consumer design
 # > is that a consumer acts on the envelope or refuses, and never looks up
@@ -103,10 +126,13 @@
 # > `identity.user.created` carry a top-level `email` for exactly this reason —
 # > and this packet gives billing's events the same field under the same name.
 # >
-# > **What it needs from core is one schema update per type** (or one decision
-# > that a recipient field is not part of the published contract, which would
-# > remove the fields here and in the payload builders together). The action
-# > item is core's; what it needs from billing is nothing further until then.
+# > **What it needed from core was one schema update per type, and it got them.**
+# > That action item is discharged: core-w46 (`b8ae8fb`) declared `email` and
+# > `plan_name` on all five money events and all three subscription events. The
+# > alternative this paragraph once held open — a decision that a recipient field
+# > is not part of the published contract — was not taken, so the fields stay in
+# > the payload builders and are now part of the contract rather than beside it.
+# > Nothing further is owed by billing here.
 # >
 # > **DECISION NEEDED (billing-04, on the subject).** billing-03 recorded a
 # > decision: the envelope's subject had to be the processor's own id, because

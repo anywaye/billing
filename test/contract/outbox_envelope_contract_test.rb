@@ -59,19 +59,37 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
   # payload is the same shape an HTTP response uses, so it cannot be quietly
   # narrowed here either.
   #
-  # `email` and `plan_name` are this packet's addition (billing-event-payloads-01):
-  # the recipient fact and the plan's name, carried because the fleet's consumer
-  # acts on the envelope and never looks up. core's schemas for these types do
-  # not declare them, and core is read-only from a service worktree — recorded,
-  # not matched, the same mechanism as `entitlements` and for the same reason.
-  # The two payment types were absent from this table before this packet: their
-  # payloads matched core's schemas exactly, and the recipient field is what
-  # moved them onto it.
+  # ## The recipient fact and the plan's name were a gap, and core closed it
+  #
+  # billing-event-payloads-01 added `email` to the two payment types and `email`
+  # and `plan_name` to the three subscription types, and both were recorded here
+  # the day they were added, because core's schemas were closed with
+  # `additionalProperties: false` and declared neither. They are **not here now**,
+  # and the direction that matters is that nothing in this repository removed
+  # them: they stopped being gaps because core's own commit `b8ae8fb`
+  # ("billing's money events: declare the recipient and the plan name", core-w46)
+  # declared them **the way billing already sends them** — `email` OPTIONAL and
+  # NEVER NULL, because `with_recipient`/`core_payload` merge it only when
+  # `customers.email` is present, and `plan_name` REQUIRED and non-empty, because
+  # `core_payload` writes it unconditionally from a column that is `null: false`
+  # with a presence validation.
+  #
+  # So the two payment events are the **first money events to match core's
+  # schemas exactly**, and the three subscription events each lost two fields
+  # from their `unexpected` list. The PII direction of travel is unchanged: the
+  # fields are still on the wire, `email` still resolved by one indexed lookup on
+  # `customers.processor_customer_id`, and the schema that now declares them was
+  # written to fit the emitter rather than the reverse. A gap this table records
+  # closing from the core side is the mechanism working, and the two-way
+  # assertion is what caught it — a table subtracted from the failures would have
+  # left these entries sitting here, describing a disagreement that no longer
+  # existed.
   #
   # Asserted as a set rather than subtracted from the failures. Subtracting would
   # let a payload that starts matching sit here forever, and would let a new event
   # stop matching without anyone noticing. A set means a difference in either
-  # direction fails.
+  # direction fails, and that is exactly the failure this commit pays off: the
+  # difference was in the *closing* direction.
   PENDING_PAYLOAD_ALIGNMENT = {
     "billing.plan.created" => {
       unexpected: %w[entitlements]
@@ -81,28 +99,19 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
     },
     # core's D10 shape: `kind`, `processor` and `processor_event_id` are required
     # by core and absent here, and the four cafaye ids are rejected by a schema
-    # closed with `additionalProperties: false`. `email` and `plan_name` are the
-    # recipient fact and the plan's name (billing-event-payloads-01).
+    # closed with `additionalProperties: false`. `email` and `plan_name` were
+    # here until core-w46 (`b8ae8fb`) declared them; see the note above.
     "billing.subscription.started" => {
       missing: %w[customer_id kind processor processor_event_id],
-      unexpected: %w[account_id currency email plan_id plan_name started_at]
+      unexpected: %w[account_id currency plan_id started_at]
     },
     "billing.subscription.updated" => {
       missing: %w[customer_id kind],
-      unexpected: %w[account_id currency email plan_id plan_name processor_subscription_id]
+      unexpected: %w[account_id currency plan_id processor_subscription_id]
     },
     "billing.subscription.canceled" => {
       missing: %w[customer_id kind],
-      unexpected: %w[account_id currency email plan_id plan_name processor_subscription_id]
-    },
-    # The recipient fact on the money events. Both types matched core's schemas
-    # exactly until this packet; `email` is what a mailing consumer needs and
-    # cannot read anywhere else, and core's closed schemas do not declare it.
-    "billing.payment.succeeded" => {
-      unexpected: %w[email]
-    },
-    "billing.payment.failed" => {
-      unexpected: %w[email]
+      unexpected: %w[account_id currency plan_id processor_subscription_id]
     }
   }.freeze
 
