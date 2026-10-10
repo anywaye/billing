@@ -897,12 +897,34 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
 
     # --- core's schema, read from disk ---
 
+    # Where core is, and the reason this file no longer answers that question
+    # itself.
+    #
+    # This used to be a private method returning `Rails.root.join("..", "core")`,
+    # which is correct for the main checkout and **nil from a worktree** — a
+    # worktree has no `core` sibling, so every test here skipped and a whole
+    # contract tier read as green having checked nothing. BRK-4R2: the worktree
+    # reported 21 skips and a pass; the merged tree, on the same commit,
+    # reported 0 skips and one failure. The `setup` skip below is untouched — a
+    # repository with no core beside it really has no schemas to check against —
+    # but the *resolution* is shared, in `TestSupport::CoreLocation`, and walks
+    # the primary worktree through git so a worktree finds the same core its
+    # main checkout does. One resolution for both of this file's readers.
     def core_path
-      @core_path ||= ENV["CORE_PATH"].presence || ENV["CORE_SPECS_PATH"].presence || default_core_path
+      @core_path ||= core_location.path_for
     end
 
+    # What the resolution tried, named in the skip so an operator is told where
+    # to put core rather than told nothing.
     def default_core_path
-      Rails.root.join("..", "core").expand_path
+      @default_core_path ||= core_location.searched.first
+    end
+
+    # Both readers answer "where is core" through this one module, so the two
+    # cannot drift. The `nil` a reader would otherwise hand itself is handled
+    # inside it — see `path_for`.
+    def core_location
+      TestSupport::CoreLocation
     end
 
     def schema

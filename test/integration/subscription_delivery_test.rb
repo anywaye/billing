@@ -188,9 +188,18 @@ class SubscriptionDeliveryTest < ActiveSupport::TestCase
   # condition is stated in the test rather than implied by a missing file, and
   # CI sets `CORE_PATH` and **fails the build on any skipped test at all**, so
   # this line cannot be reached green in CI.
+  #
+  # Where core is, though, is no longer this file's own path arithmetic. It used
+  # to spell `Rails.root.join("..", "core")` out here — the same sibling path
+  # `outbox_envelope_contract_test.rb` used — which is right beside the main
+  # checkout and resolves to nothing from a worktree. That is the BRK-4R2 hazard:
+  # one skipped contract test silently, in every worktree, forever. The
+  # resolution is now shared and walks the primary worktree through git, so the
+  # two readers cannot drift and a worktree finds the same core its main
+  # checkout does. The skip stays, for the case where core genuinely is not on
+  # disk at all.
   test "both events courier needs have a row in core's catalog" do
-    core_catalog = ENV["CORE_PATH"].presence&.then { |p| File.join(p, "docs", "event-naming.md") } ||
-      Rails.root.join("..", "core", "docs", "event-naming.md")
+    core_catalog = TestSupport::CoreLocation.path_for.join("docs", "event-naming.md")
     catalog = begin
       File.read(core_catalog)
     rescue Errno::ENOENT, Errno::ENOTDIR

@@ -6,6 +6,45 @@ All notable changes to billing are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A worktree can now find core, so the contract tier stops skipping in one and
+  is checked in neither.** Both readers that read core's schemas answered "where
+  is core" as `Rails.root.join("..", "core")`, which resolves beside the **main**
+  checkout and resolves to nothing from a worktree — a worktree has no `core`
+  sibling. Every worker on this machine gates in a worktree, so the whole
+  contract tier skipped silently and a run that checked nothing reported 0
+  failures. Measured on this branch, same commit, same code: the worktree
+  reported **21 skips and a pass**; the main checkout reported **0 skips and one
+  failure**. The red was never in the merge — it was in the environment, and the
+  test the worktree skipped was the one that carried it.
+
+  The resolution is now one answer, in `test/support/core_location.rb`, and both
+  `outbox_envelope_contract_test.rb` and `subscription_delivery_test.rb` call it.
+  The order is `CORE_PATH`/`CORE_SPECS_PATH` (CI's seam, unchanged), then `../core`
+  beside `Rails.root` (the main checkout), then **core beside the primary
+  worktree**, found through `git worktree list --porcelain`. The skip is
+  untouched: a repository cloned on its own still skips, because answering "no
+  problem" for a schema never read is the outcome a contract test exists to
+  prevent. What changed is that a worktree is no longer *accidentally* in that
+  state.
+
+  `test/contract/core_location_test.rb` is 8 tests and it asserts the resolution
+  works **with nothing configured**, from this directory. It also pins the two
+  bugs the module had on first write, both of which are the same failure one
+  level down: `primary_worktree` returned `Pathname.new("")`, which expands to
+  the working directory — a real directory carrying a `cafaye.yml`, so a failed
+  lookup validated as "found" and answered the worktree itself; and a directory
+  is only core if it holds `schemas/`.
+
+  `BASELINE_RUNS`/`BASELINE_ASSERTIONS` are now **1174 / 3744 in CI and the same
+  locally**, which is the first time the two have been one number: the 361
+  assertions the core-contract tier contributes were absent locally because a
+  worktree skipped them. A local run reporting a different count from CI's is now
+  a run missing the tier. The `/v1` authorization tier's recorded number is
+  raised 66/180 → 68/184, which had been stale since `504de05` and was making
+  `gate` red for a reason unrelated to this packet.
+
 ### Changed
 
 - **The recorded payload gap is core-w46's smaller one, and the payment events

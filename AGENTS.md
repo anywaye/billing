@@ -357,6 +357,8 @@ billing/
 │   │   └── principal_lock_test.rb     # the boundary, from the router's own table: 36
 │   ├── contract/                      # the checks against core, and the HTTP one
 │   │   ├── http_surface_contract_test.rb # the document and the router, by method and path
+│   │   ├── outbox_envelope_contract_test.rb # the envelope and the payloads, against core
+│   │   └── core_location_test.rb     # core is found, from a worktree, with nothing set
 │   ├── coverage/                      # the money-path coverage gate, and its inventory
 │   │   └── fixture_processor_ids_check_test.rb # the fake processor and the helpers agree
 │   ├── integration/                   # health, and the webhook's HTTP edge
@@ -380,6 +382,7 @@ billing/
 │   ├── support/                       # shared helpers: frozen clock, fake Stripe, two accounts
 │   │   ├── two_accounts.rb            # the pair every isolation spec compares against
 │   │   ├── identity_helpers.rb        # a real RSA key; only the FETCH is stubbed
+│   │   ├── core_location.rb           # WHERE CORE IS — and the worktree hazard it closes
 │   │   ├── fake_nats_broker.rb        # an in-process broker: INFO, PONG, PUB → ack or 503
 │   │   ├── test_span_exporter.rb      # the exporter that records instead of sending
 │   │   └── test_spans.rb              # reading those spans, and RAISING on empty
@@ -1054,6 +1057,53 @@ So:
   **fails the build on a single skipped test**. `cafaye/core` is public, so no
   token is involved, and the ref is `master` rather than a pinned SHA on purpose:
   this tier exists to catch a change in core, and a pinned ref would blind it.
+
+### The worktree that could not see the tier, and no longer cannot
+
+**A worktree never could, and that is a fleet-wide hazard, not a billing one.**
+Both files above answered "where is core" as `Rails.root.join("..", "core")`,
+which resolves beside the **main** checkout — at `<root>/billing`/`<root>/core` —
+and resolves to *nothing* from a worktree, which lives at `<root>/wt/billing-<name>`
+and has no `core` sibling. So every worker on this machine, gating in a
+worktree, ran a suite that silently skipped the whole contract tier and reported
+0 failures. **BRK-4R2 measured exactly that: the worktree reported 21 skips and a
+pass; the merged tree, on the same commit with the same code, reported 0 skips
+and one failure.** The red was never in the merge. It was in the environment —
+20 skipped tests in `outbox_envelope_contract_test.rb` plus the 21st in
+`subscription_delivery_test.rb`, and among them the one payload contract test in
+this repository. A green that was made green.
+
+**The resolution is one answer, in `test/support/core_location.rb`.** The order
+is `CORE_PATH`/`CORE_SPECS_PATH` (CI's seam, unchanged), then `../core` beside
+`Rails.root` (the main checkout, which is what the documents describe), then
+**core beside the primary worktree**, found through `git worktree list
+--porcelain` — so a worktree resolves the same core its main checkout does. Both
+readers call it, so they cannot drift, and `test/contract/core_location_test.rb`
+asserts that it resolves **with nothing configured**, from this directory. Do not
+shorten the resolution back to the sibling path: that test goes red, which is
+the point.
+
+Three things about that module are load-bearing and each is asserted rather than
+commented:
+
+- **`primary_worktree` returns `nil`, never `Pathname.new("")`.** An empty
+  Pathname expands to the process's working directory, which is a real directory
+  and which carries a `cafaye.yml` — so an empty lookup validated as "found" and
+  handed the caller the worktree itself, where there are no `schemas/`. That bug
+  was written, and it was invisible until the skip was looked at, and it is the
+  same failure the module exists to prevent, one level down.
+- **A directory is core only if it holds `schemas/` and a `cafaye.yml`.** A
+  `cafaye.yml` alone is what a failed lookup lands on.
+- **The skip is not weakened and not deleted.** A repository cloned on its own
+  has no core beside it and no `CORE_PATH`, and answering "no problem" for a
+  schema never read is the outcome a contract test exists to prevent.
+  `checkout` returns `nil` there and the callers still skip.
+
+The consequence in the workflow is that **the local and CI baseline numbers are
+now one number.** They used to differ by 361 assertions, which were the
+core-contract tier's, absent locally because a worktree skipped them. `BASELINE_`
+is the same figure in both places now, so a local run reporting a different count
+from CI's is a run that is missing the tier.
 
 ### The other environment-gated tier
 

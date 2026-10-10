@@ -354,14 +354,16 @@ env:
   # of the fleet gem held to its `DIGESTS` manifest, the claim being the gem's
   # constant, and the outbox's partial index) — and 2 are the seed-measurement
   # refinement to the payload test. No existing assertion moved. The
-  # measurement is **1166 / 3366 locally** (1145 / 2919 before, taken with the
-  # whole suite green and the vendored-gem guard seen red against a tampered
-  # file) and **1166 / 3727 in CI**, which is the local number plus the 361
-  # assertions the core-contract tier contributes when core is checked out and
-  # the 21 local skips do not happen. The new tests assert identically with and
-  # without core on disk, so the delta is the same in both places.
-  BASELINE_RUNS: '1166'
-  BASELINE_ASSERTIONS: '3727'
+  # measurement is **1175 / 3747 locally and in CI**, which is the same number in
+  # both places for the first time, and the reason is this commit: the 361
+  # assertions the core-contract tier contributes used to be absent locally,
+  # because a worktree has no `core` beside it and 21 tests skipped. The gap is
+  # closed by resolving core through the primary worktree, so the local number
+  # and the CI number are now one number, and a run that reports a different
+  # count from CI's is a run that is missing the tier. (1145 / 2919 was the
+  # first of these; 1166 / 3727 was this packet's parent.)
+  BASELINE_RUNS: '1175'
+  BASELINE_ASSERTIONS: '3747'
 
 jobs:
   # ------------------------------------------------------------------ shared
@@ -872,7 +874,7 @@ jobs:
           fi
           echo "::notice::48 runs, 118 assertions, 0 skips — the redaction boundary was exercised"
 
-      - name: tier — the contract tier, against core's real schemas (52 tests)
+      - name: tier — the contract tier, against core's real schemas (68 tests)
         # **The environment-gated tier, and the reason this job exists.**
         #
         # `outbox_envelope_contract_test.rb` skips every test in the file when
@@ -906,9 +908,17 @@ jobs:
         # implementation detail of it. billing-08 added
         # `tenant_isolation_matrix_test.rb` here, which is why this is a
         # directory count and not a file list: that file must not be skippable,
-        # and a list is how a new tier member goes unnamed. 45 / 400 on this
-        # commit, and it does not read `core` at all — that is the point of it
-        # being here. 52 / 420 on this commit.
+        # and a list is how a new tier member goes unnamed. It does not read
+        # `core` at all, which is the point of it being here. 59 / 459 on the
+        # four pre-existing files; 68 / 479 with this commit's
+        # `core_location_test.rb`, the guard that a worktree finds core at all
+        # (see `test/support/core_location.rb`, and the header note above on the
+        # local and CI numbers having converged).
+        #
+        # The 52 / 420 this step used to assert was stale by 7 runs from
+        # before that number could have been right: `outbox_envelope_contract_
+        # test.rb` grew and nobody re-measured here. A step name and an
+        # assertion nobody can verify is a claim about work that was not done.
         #
         # 45/400 -> 52/420 is billing-21's, measured per file in both
         # directions: `http_surface_contract_test.rb` 7 -> 12 (five
@@ -962,7 +972,7 @@ jobs:
           # that ends in a comma ("failures,") and every number is bare, so the
           # numbers land in the named variables with nothing to strip.
           read -r runs _r assertions _a failures _f errors _e skips _s <<< "$summary"
-          if [ "$runs" != 52 ] || [ "$assertions" != 420 ] ||
+          if [ "$runs" != 68 ] || [ "$assertions" != 479 ] ||
              [ "$failures" != 0 ] || [ "$errors" != 0 ] || [ "$skips" != 0 ]; then
             echo "::error::expected 52 runs, 420 assertions, 0 failures, 0 errors, 0 skips; got '$summary'." >&2
             echo "  Skips mean core was not readable, and a skipped contract test" >&2
@@ -1019,12 +1029,20 @@ jobs:
             echo "::error::$failures failure(s), $errors error(s) in the /v1 authorization tier." >&2
             exit 1
           fi
-          if [ "$runs" != "66" ] || [ "$assertions" != "180" ]; then
-            echo "::error::the /v1 authorization tier ran $runs/$assertions; this file says 66/180." >&2
+          if [ "$runs" != "68" ] || [ "$assertions" != "184" ]; then
+            echo "::error::the /v1 authorization tier ran $runs/$assertions; this file says 68/184." >&2
             echo "  Raise those two numbers in this step in the same commit that added or" >&2
             echo "  removed the tests, exactly as BASELINE_RUNS must be raised." >&2
             exit 1
           fi
+          # 66/180 was what this step asserted when billing-21 wrote it, and the
+          # directory has measured 68/184 since `504de05` landed the tenancy.yml
+          # lock rows that `principal_lock_test.rb` asserts. Nothing in the tier
+          # weakened; the recorded number simply stopped being measured, which is
+          # the same failure this packet is about one tier over — a number that
+          # is not re-measured is a number that is not a claim. Raised here
+          # because a gate that is red for an unrelated reason is a gate whose
+          # red means nothing.
           # A POSITIVE claim, asserted as one: the accept path has to have run, not
           # only the refusals. A tier of 66 refusals and no acceptance is a
           # verifier that refuses everything, which is "the door is shut" by
