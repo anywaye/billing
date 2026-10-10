@@ -672,16 +672,16 @@ Change Date `2030-10-10`, Change License `Apache License, Version 2.0`.
 `LICENSE` held a plain MIT grant until this packet. OPS-D2 splits the fleet:
 the framework (`core`, `caf`, `kit`, `pantry`) stays permissive, the **services
 move to a Business Source Licence** — free to run, free to self-host, never to
-offer a competing service (`CAFAYE-OPS.md`, OPS-D2). billing is a service, so its
-grant moved with the policy rather than being left to contradict it.
+offer a competing service (`CAFAYE-OPS.md:176`, OPS-D2). billing is a service, so
+its grant moved with the policy rather than being left to contradict it.
 
 **Anyone who already holds a copy keeps the grant it was published under.** A
 copy of this repository taken while `LICENSE` said MIT is still MIT, and this
 change takes nothing away from whoever holds it. What has changed is the grant a
 copy taken from today forward carries. OPS-D3's rule is that a published grant
 is superseded out loud rather than quietly, because a repo whose grant quietly
-contradicts the policy is worse than either licence (`CAFAYE-OPS.md`, OPS-D3 and
-risk 8).
+contradicts the policy is worse than either licence (`CAFAYE-OPS.md:177`, OPS-D3,
+and the risk-8 entry at `CAFAYE-OPS.md:1076`).
 
 What BSL means for a caller, stated plainly: **calling billing over HTTP changes
 nothing about your licence.** Nothing here is linked into a consumer's process

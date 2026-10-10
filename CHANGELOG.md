@@ -1708,13 +1708,13 @@ never calls.
 - **`LICENSE` is a Business Source License 1.1, and it was MIT.** OPS-D2 splits the
   fleet — the framework (`core`, `caf`, `kit`, `pantry`) stays permissive, the
   **services move to a Business Source Licence**: free to run, free to self-host,
-  never to offer a competing service (`CAFAYE-OPS.md`, OPS-D2). billing is a
+  never to offer a competing service (`CAFAYE-OPS.md:176`, OPS-D2). billing is a
   service, so its grant moved with the policy in one commit rather than being left
   to contradict it. The move down is recorded here because OPS-D3's rule is that a
   superseded grant is superseded *out loud*: a repo whose grant quietly changes
   while its policy changed looks like a bait-and-switch to whoever read the old one,
-  and the ambiguity is worse than either licence (`CAFAYE-OPS.md`, OPS-D3 and the
-  risk-8 entry).
+  and the ambiguity is worse than either licence (`CAFAYE-OPS.md:177`, OPS-D3, and
+  the risk-8 entry at `CAFAYE-OPS.md:1076`).
 
   The parameters are Licensor `Cafaye`, Licensed Work `billing`, Additional Use
   Grant `None`, Change Date `2030-10-10` — four years out, the fleet's fixed
