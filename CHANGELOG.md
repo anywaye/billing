@@ -1730,11 +1730,11 @@ never calls.
 
   **No manifest field moved, because billing has none to move.** `cafaye.yml`
   declares no licence key and none can be added: core's manifest schema is a closed
-  object — `additionalProperties: false` with no licence property among its
-  thirteen top-level keys (`core/schemas/cafaye.manifest.schema.json:7-9`, and core
-  is read-only from a service worktree). billing also publishes no gem — no
-  gemspec, and the `Gemfile` carries no `gemspec` directive — so there is no
-  package metadata field to reconcile either. That is the same fact the MIT landing
+  object — `additionalProperties: false` with no licence property among its twelve
+  top-level keys (`core/schemas/cafaye.manifest.schema.json:7-9`, and core is
+  read-only from a service worktree). billing also publishes no gem — no gemspec,
+  and the `Gemfile` carries no `gemspec` directive — so there is no package
+  metadata field to reconcile either. That is the same fact the MIT landing
   recorded (`CHANGELOG.md:260`): `LICENSE` and `README.md` are the entire grant,
   and both now agree.
 
