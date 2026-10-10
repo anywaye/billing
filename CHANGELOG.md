@@ -8,6 +8,44 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **Billing's first tenancy declaration.** `tenancy.yml` at the repository root,
+  checked by `core/harness/bin/tenancy-check .` against
+  `core/schemas/tenant-isolation.schema.json`. It declares **five entry points**
+  — `customer-read`, `customer-write`, `subscription-read`,
+  `subscription-write` and `charge-read` — each enforced on the line of the
+  `for_account` scope that scopes it (`app/models/customer.rb:95`,
+  `app/models/subscription.rb:94`, `app/models/charge.rb:49`) and each proved by
+  the three-arm denial shape: `no-identity` (the principal lock's router-derived
+  refusal table), `other-account` (a valid credential for a different account,
+  answered 404 and compared byte for byte against a uuid naming nothing), and
+  `own-account` (the caller's own row's own value, so a service returning
+  nothing to everybody cannot pass).
+
+  `rls.databaseEnforced: false` with an empty table list is the truth and is a
+  claim rather than a gap: no migration in this tree carries a policy, an enable
+  bit or a definer function, and the day one does, `tenancy.rls-undeclared` is a
+  failure.
+
+  **Not declared, on purpose:** the `plans` catalogue (a plan has no `account_id`
+  column — it is what an account may buy, not what an account owns), the Stripe
+  webhook (scoped by the processor's ids and authenticated by signature), the
+  lifecycle's resolution of a processor id to a row, the denormalised
+  `account_id` stamps `Lifecycle#apply` and the charge recorder write, and
+  `delete` (this service serves no such route on `/v1`).
+
+  The checker reads SQL, so it classifies zero sites in a Rails tree and reports
+  `tenancy.enumeration-partial` (34 named lines, verified by hand against the
+  four kinds of site they are) and `tenancy.scope-key-unused` as **warnings**.
+  `tenancy-check .` reports 0 failures, exit 0.
+
+- Two named refusals in `test/authentication/principal_lock_test.rb` —
+  `patching a customer` and `reading a receipt` — because the declaration's
+  `no-identity` arm for `customer-write` and `charge-read` points at that table
+  and the two operations were not in it. The baseline moves 1143/3278 ->
+  1145/3280 in the same commit.
+
+### Added
+
 - **The recipient fact on the money events, and the plan's name on the
   subscription events.** billing publishes the fleet's money events and courier —
   the fleet's only consumer — would mail about every one of them: a receipt for a
