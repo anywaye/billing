@@ -271,7 +271,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     [ "app/models/subscription.rb", "scope :live", "list" ] => "resolves a subscription's live rows; carries no account and is not meant to",
     [ "app/models/subscription.rb", "scope :canceled", "list" ] => "resolves a subscription's canceled rows; carries no account and is not meant to",
     [ "app/models/outbox_event.rb", "scope :unpublished", "list" ] => "resolves unpublished outbox rows, whose payloads carry every account's events",
-    [ "app/models/outbox_event.rb", "scope :oldest_first", "list" ] => "orders outbox rows for the publisher loop, which does not exist yet",
+    [ "app/models/outbox_event.rb", "scope :oldest_first", "list" ] => "orders outbox rows for the publisher loop, which now exists: `Outbox::Relay` starts it when NATS_URL names a broker",
     [ "app/models/outbox_event.rb", "scope :for_processor_event", "list" ] => "resolves outbox rows by a processor event id, never by an account"
   }.freeze
 
@@ -321,7 +321,17 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # and every read and write the checkout path performs is in `Session`, whose
     # accesses are classified above rather than excluded from the enumeration.
     "app/services/checkout.rb" => "the checkout namespace; it declares no query",
-    "app/services/webhooks/emission.rb" => "the value object a handler returns; it holds no query"
+    "app/services/webhooks/emission.rb" => "the value object a handler returns; it holds no query",
+    # The three files the outbox publisher packet added. None of them queries a
+    # tenant model here: the namespace is a module and its refusal classes, the
+    # transport speaks a broker protocol and holds no model, and the loop's claim
+    # and mark are the shared gem's SQL over `outbox_events` — the one table with
+    # no account column to scope by, already classified above through its scopes.
+    # Naming them is what keeps the list closed, and the reason is written out
+    # because "the loop touches no row" would be false if the gem were inlined.
+    "app/services/outbox.rb" => "the outbox namespace and its configuration refusal; it declares no query",
+    "app/services/outbox/nats_publisher.rb" => "puts an envelope on the broker and waits for the ack; it holds no model and the payload is never read back out of it",
+    "app/services/outbox/relay.rb" => "the loop and the boot condition: it resolves the shared gem's publisher over the outbox connection pool, and the claim and the marks are the gem's SQL over the account-less outbox table, not this file's"
     # `app/services/webhooks/stripe_events.rb` was on this list until
     # billing-event-payloads-01: the recipient fact's one lookup
     # (`recipient_email`, classified in DATA_ACCESSES above) is a row read, and a
