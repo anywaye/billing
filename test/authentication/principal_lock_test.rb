@@ -112,7 +112,17 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     "moving any subscription onto another plan" => [ "POST", ->(t) { "/v1/subscriptions/#{t.subscription.id}/change_plan" } ],
     "reading any subscription's entitlements" => [ "GET", ->(t) { "/v1/subscriptions/#{t.subscription.id}/entitlements" } ],
     "reading the catalogue" => [ "GET", ->(_t) { "/v1/plans" } ],
-    "writing the catalogue" => [ "POST", ->(_t) { "/v1/plans" } ]
+    "writing the catalogue" => [ "POST", ->(_t) { "/v1/plans" } ],
+    # The two operations the tenancy declaration names as entry points and that the
+    # table above did not carry. `PATCH /v1/customers/:id` is the only customer
+    # write, and it is a cross-tenant write's only route in; a receipt is the only
+    # `/v1` response that is not JSON. Both are already covered by the
+    # router-derived loop above — but a named refusal is a fact and a loop is a
+    # claim, and `tenancy.yml`'s `no-identity` arm points at the assertion below.
+    # Adding a row moves it, so the declaration's line numbers are measured after
+    # this insertion rather than before it.
+    "patching a customer" => [ "PATCH", ->(t) { "/v1/customers/#{t.customer.id}" } ],
+    "reading a receipt" => [ "GET", ->(t) { "/v1/charges/#{t.charge.id}" } ]
   }.each do |what, (method, path)|
     test "lock: #{what} is refused with no token" do
       without_token!
@@ -368,9 +378,15 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     # evaluated as the class is defined and a row created there would be created
     # outside any test's transaction — visible to the other seven parallel workers
     # and rolled back by nobody.
+    #
+    # `charge` is here because "reading a receipt" is one of the named refusals:
+    # the receipt route is the only `/v1` operation whose success response is not
+    # JSON, and it is the one the tenancy declaration names as an entry point.
     def fixtures_for(what)
       @fixtures ||= {}
-      @fixtures[what] ||= Struct.new(:customer, :subscription).new(customer, subscription)
+      @fixtures[what] ||= Struct.new(:customer, :subscription, :charge).new(
+        customer, subscription, charge
+      )
     end
 
     def send_request(method, path)
@@ -406,6 +422,17 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
         name: "Lock probe", slug: "lock-probe-#{SecureRandom.hex(4)}",
         price: Money.new(1_900, "USD"), interval: "month",
         processor_price_id: "price_FAKElock#{SecureRandom.hex(6)}"
+      )
+    end
+
+    # A receipt for the caller's own account, so "the lock refused it" is a claim
+    # about a request that could otherwise have succeeded. `account_id` is the
+    # same account the token names, which is what `Charge.for_account` scopes on.
+    def charge
+      @charge ||= Charge.create!(
+        account_id: TestSupport::TestIdentity::Account, customer: customer,
+        processor_charge_id: "ch_FAKElock#{SecureRandom.hex(6)}",
+        amount: 1_900, currency: "USD", description: "Lock probe", paid_at: frozen_now
       )
     end
 end
