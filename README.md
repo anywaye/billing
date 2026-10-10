@@ -686,6 +686,6 @@ risk 8).
 What BSL means for a caller, stated plainly: **calling billing over HTTP changes
 nothing about your licence.** Nothing here is linked into a consumer's process
 and no source is copied into one. What it does forbid is offering a competing
-service built from this code — the "the mint is the moat" half of OPS-D2, the
-same rule `conductor` and the artifact distribution are closed under. Everyone
-may run it and self-host it.
+service built from this code — the "mint is the moat" half of OPS-D2, the same
+rule `conductor` and the artifact distribution are closed under. Everyone may
+run it and self-host it.
