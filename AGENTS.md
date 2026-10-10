@@ -964,7 +964,7 @@ and in this repository the unknown is load-bearing.
 | job | what it is |
 |-----|------------|
 | `ruby (kit)` | `uses: cafaye/kit/.github/workflows/ci.reusable.yml@master` with `language: ruby`. The shared half. Fails on two steps, absorbed by `continue-on-error` — see below. |
-| `gate` | THE gate. `bin/prime` against a real Postgres, every environment-gated tier forced on and counted, and `git diff --exit-code`. Four tiers are named: the whole suite (998 / 2842 by equality), the redaction tier (48 / 118), the contract tier (45 / 400) and the webhook tier (163). |
+| `gate` | THE gate. `bin/prime` against a real Postgres, every environment-gated tier forced on and counted, and `git diff --exit-code`. Four tiers are named: the whole suite (1175 / 3747 by equality), the redaction tier (48 / 118), the contract tier (68 / 479) and the webhook tier (163 / 396). |
 | `security` | `brakeman` and `bundler-audit`, with no database. |
 | `pins` | One Ruby number in three files, the documented `uses:` path, and no secret in the file. No toolchain, so it fails in seconds. |
 
@@ -1002,9 +1002,12 @@ Four things that are not obvious and that the file argues in full:
   first are the money arithmetic and the webhook signatures. Adding a test turns
   CI red until
   `BASELINE_RUNS`/`BASELINE_ASSERTIONS` are raised **in the same commit** — that
-  is the intended direction, and lowering one is not. They were 950 / 2724 and are
-  now **998 / 2842**, and the whole of that difference is the 48 tests and 118
-  assertions in `test/observability/`, itemised in the workflow's own header.
+  is the intended direction, and lowering one is not. They were 1145 / 2919 on
+  the worktree, whose 21 skipped contract tests made the local number and the CI
+  number differ by 361 assertions, and are now **1175 / 3747 — one number in both
+  places**: this packet's `core_location_test.rb` is the +9 runs / +20
+  assertions, and the convergence itself is the change, itemised in the
+  workflow's own header.
 
   **The tiers are measured by directory, and `test_helper.rb` requires all of
   `test/support/**/*.rb`** — so a `_test.rb` file living in `test/support/` joins

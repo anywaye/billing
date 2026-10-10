@@ -29,21 +29,24 @@ All notable changes to billing are recorded here. The format follows
   prevent. What changed is that a worktree is no longer *accidentally* in that
   state.
 
-  `test/contract/core_location_test.rb` is 8 tests and it asserts the resolution
-  works **with nothing configured**, from this directory. It also pins the two
-  bugs the module had on first write, both of which are the same failure one
-  level down: `primary_worktree` returned `Pathname.new("")`, which expands to
-  the working directory — a real directory carrying a `cafaye.yml`, so a failed
-  lookup validated as "found" and answered the worktree itself; and a directory
-  is only core if it holds `schemas/`.
+  `test/contract/core_location_test.rb` is 9 runs, 20 assertions, and it asserts
+  the resolution works **with nothing configured**, from this directory. It also
+  pins the two bugs the module had on first write, both of which are the same
+  failure one level down: `primary_worktree` returned `Pathname.new("")`, which
+  expands to the working directory — a real directory carrying a `cafaye.yml`, so
+  a failed lookup validated as "found" and answered the worktree itself; and a
+  directory is only core if it holds `schemas/`.
 
-  `BASELINE_RUNS`/`BASELINE_ASSERTIONS` are now **1174 / 3744 in CI and the same
+  `BASELINE_RUNS`/`BASELINE_ASSERTIONS` are now **1175 / 3747 in CI and the same
   locally**, which is the first time the two have been one number: the 361
   assertions the core-contract tier contributes were absent locally because a
   worktree skipped them. A local run reporting a different count from CI's is now
-  a run missing the tier. The `/v1` authorization tier's recorded number is
-  raised 66/180 → 68/184, which had been stale since `504de05` and was making
-  `gate` red for a reason unrelated to this packet.
+  a run missing the tier. The contract tier's own recorded number is 68 / 479
+  (59 / 459 on the four pre-existing files plus this packet's 9 / 20), replacing
+  a 52 / 420 that had been stale by seven runs since before it could have been
+  right. The `/v1` authorization tier's recorded number is raised 66/180 →
+  68/184, which had been stale since `504de05` and was making `gate` red for a
+  reason unrelated to this packet.
 
 ### Changed
 
