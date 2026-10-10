@@ -1703,6 +1703,41 @@ never calls.
   that says so is one startup log line. There is no metric for it, because a metric
   asserting that telemetry is off is a metric nobody is looking at.
 
+### Changed
+
+- **`LICENSE` is a Business Source License 1.1, and it was MIT.** OPS-D2 splits the
+  fleet — the framework (`core`, `caf`, `kit`, `pantry`) stays permissive, the
+  **services move to a Business Source Licence**: free to run, free to self-host,
+  never to offer a competing service (`CAFAYE-OPS.md`, OPS-D2). billing is a
+  service, so its grant moved with the policy in one commit rather than being left
+  to contradict it. The move down is recorded here because OPS-D3's rule is that a
+  superseded grant is superseded *out loud*: a repo whose grant quietly changes
+  while its policy changed looks like a bait-and-switch to whoever read the old one,
+  and the ambiguity is worse than either licence (`CAFAYE-OPS.md`, OPS-D3 and the
+  risk-8 entry).
+
+  The parameters are Licensor `Cafaye`, Licensed Work `billing`, Additional Use
+  Grant `None`, Change Date `2030-10-10` — four years out, the fleet's fixed
+  wording — and Change License `Apache License, Version 2.0`. The body is the
+  reference BSL 1.1 text, so a diff between two cafaye services shows only the
+  `Licensed Work` line.
+
+  **Anyone who already holds a copy keeps the grant it was published under.** A
+  copy taken while `LICENSE` said MIT is still MIT and this change takes nothing
+  from whoever holds it; what changes is the grant a copy taken from today forward
+  carries. `README.md`'s licence section says the same thing where a reader looks
+  first.
+
+  **No manifest field moved, because billing has none to move.** `cafaye.yml`
+  declares no licence key and none can be added: core's manifest schema is a closed
+  object — `additionalProperties: false` with no licence property among its
+  thirteen top-level keys (`core/schemas/cafaye.manifest.schema.json:7-9`, and core
+  is read-only from a service worktree). billing also publishes no gem — no
+  gemspec, and the `Gemfile` carries no `gemspec` directive — so there is no
+  package metadata field to reconcile either. That is the same fact the MIT landing
+  recorded (`CHANGELOG.md:260`): `LICENSE` and `README.md` are the entire grant,
+  and both now agree.
+
 
 ## [0.1.0] - 2026-09-30
 
