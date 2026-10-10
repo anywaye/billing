@@ -56,6 +56,41 @@ gem "stripe", "~> 19.6"
 # not build on top of it.
 gem "pay", "~> 12.2"
 
+# The transactional outbox substrate, from the fleet's shared gem `cafaye-rb`.
+#
+# This is the gem that owns the outbox claim (`select ... for update skip
+# locked`), the envelope grammar and the publish pass — one mechanism for the
+# whole fleet, so billing's publisher does not carry a second answer to "how is
+# a batch claimed". A publisher in billing that bypassed it would be a second
+# mechanism for one thing, which is the thing the gem exists to prevent.
+#
+# WHY A PATH GEM AT `vendor/cafaye` AND NOT A RELEASED OR GIT DEPENDENCY: the
+# gem is not published to rubygems.org and github.com/cafaye/cafaye-rb is not
+# reachable from this environment (both verified). Until the fleet publishes it
+# — see the report, `cafaye-rb` at 5056500 is the pinned copy — this is the
+# pinned source of the same bytes, not a fork: `VENDORED.md` records the commit
+# and `test/contract/vendored_gem_test.rb` fails when the copy drifts from the
+# upstream checkout whenever that checkout is on disk. The gem's own Railtie is
+# inert unless a host configures it, so this dependency configures nothing.
+gem "cafaye", path: "vendor/cafaye"
+
+# The broker client. billing publishes its outbox onto the fleet's NATS bus, and
+# this is the one gem that decision costs — the transport is the piece the
+# shared gem deliberately does not own (its README: "It is not a bus client"),
+# because it is the one decision that belongs to the service.
+#
+# JetStream, not core NATS: `published_at` is set from the broker's
+# acknowledgement, and only JetStream's `publish` blocks until the broker acks.
+# A core-NATS publish returns when the bytes are on the wire, so marking on its
+# return would mark rows published the broker never stored — an event announced
+# and lost, which is the failure the outbox exists to prevent. See
+# `Outbox::NatsPublisher`.
+#
+# `nats-pure`, not `nats`: the `nats` gem on rubygems is the 2018
+# EventMachine client with no JetStream and a C extension of its own. The
+# maintained pure-Ruby client is published under this name.
+gem "nats-pure", "~> 2.7"
+
 # Identity's access tokens. billing is the first service in the fleet to verify
 # them, and it verifies them with this gem rather than by hand for the reason the
 # stripe gem is above: RS256 signature checking is the one place a forged amount
