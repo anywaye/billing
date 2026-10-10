@@ -3,7 +3,7 @@ require "test_helper"
 # What actually leaves this service, asserted rather than assumed.
 #
 # Every event type billing publishes is seeded through its real emission path —
-# a model callback, a checkout, a signed webhook fixture — drained once against a
+# two model callbacks and five signed webhook fixtures — drained once against a
 # broker double, and the delivered documents are read as a consumer would read
 # them. Three properties, and the third is the one this packet is answerable for:
 #
@@ -48,9 +48,16 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
     result = publisher.run_once
 
     # One pass, and every row the seed wrote leaves in it: the batch is the
-    # whole table here, which is eight rows for eight types.
-    assert_equal 8, result.claimed
-    assert_equal 8, result.published
+    # whole table here, which is eight rows for eight types. The number is
+    # derived rather than decorative — `OutboxEvent::TYPES.size` is what the
+    # seed above is asserted to produce, type for type, in the inventory
+    # assertion below. A smaller `claimed` is a row the claim's schedule did not
+    # consider due, which is a real failure and not a green.
+    assert_equal OutboxEvent::TYPES.size, result.claimed
+    assert_equal OutboxEvent::TYPES.size, result.published
+    assert_equal OutboxEvent::TYPES.size, OutboxEvent.count,
+      "the seed wrote exactly one row per type — a type with two rows, or a type " \
+      "with none, fails here rather than in the assertions below"
 
     envelopes = @broker.delivered.map { |message| JSON.parse(message.fetch(:payload)) }
     subjects = @broker.delivered.map { |message| message.fetch(:subject) }
@@ -110,11 +117,50 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
     # The fixture, delivered as the webhook path delivers it: through ingestion,
     # with the body's own event id. This is the real writer for these five types.
     #
-    # All at the suite's frozen instant on purpose: the assertions below are over
-    # sets, not sequences, so a row ordering is not being proved and does not
-    # need distinct instants — and a row written *ahead* of the publisher's
-    # injected clock is a row the claim's schedule does not consider due yet,
-    # which is a pass that silently claims three of the eight.
+    # ## The seed, measured — this is why the number is eight
+    #
+    # Seeded here and counted against `outbox_events` on this branch, per step:
+    #
+    #   `Customer.create!`                    1 row   billing.customer.created
+    #   `Plan.create!`                        1 row   billing.plan.created
+    #   fixture invoice.paid                  1 row   billing.payment.succeeded
+    #   fixture invoice.payment_failed        1 row   billing.payment.failed
+    #   fixture customer.subscription.created 1 row   billing.subscription.started
+    #   fixture customer.subscription.updated 1 row   billing.subscription.updated
+    #   fixture customer.subscription.deleted 1 row   billing.subscription.canceled
+    #   `@plan.update!`                       1 row   billing.plan.updated
+    #
+    # Eight rows, eight distinct types, and the set is exactly
+    # `OutboxEvent::TYPES`. **The seed was the wrong half, not the assertion**:
+    # with three fixtures it wrote five rows — a `customer.subscription.created`
+    # whose customer does not exist writes *nothing*, measured at 2 rows with no
+    # customer seeded at all — so the eight was right and the seed was
+    # under-covering. It is the five fixtures plus the two callbacks that reach
+    # all eight, and `assert_equal OutboxEvent::TYPES.sort, types.sort` below is
+    # what keeps them there: a fixture deleted, or a handler that stops writing,
+    # fails that comparison **by name** rather than quietly claiming a smaller
+    # number. No count is changed here to match a number this file already
+    # expected.
+    #
+    # ## Why all eight are due in one pass
+    #
+    # The claim's schedule is `created_at + backoff <= now`, against the clock
+    # the publisher was built with, so **a row written ahead of that clock is
+    # invisible to the pass**. Measured directly: one row stamped eight days in
+    # the future beside two rows at the instant gives 2 rows in the table and
+    # `claimed == 1` — a silent under-claim, not a failure. `travel_to` in
+    # `setup` is therefore load-bearing rather than tidiness, and every write in
+    # this seed happens while it is in effect, so every row is due.
+    #
+    # The fixtures' own `created` fields are in the future relative to the
+    # suite's frozen instant, and that is deliberate and harmless: they land in
+    # the outbox row's `time` — the processor's instant, per AGENTS.md — and not
+    # in its `created_at`. Distinguishing the two columns is the difference
+    # between a pass that claims eight and one that claims five.
+    #
+    # All at the suite's frozen instant for a second reason too: the assertions
+    # below are over sets, not sequences, so a row ordering is not being proved
+    # and does not need distinct instants.
     def deliver_fixture(name)
       body = JSON.parse(stripe_fixture(name))
       Webhooks::Ingestion.new(processor: :stripe, event_id: body["id"], type: body["type"], payload: body).call
@@ -135,6 +181,17 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
     # The one key that may hold PII, and the reason is core's: the money-event
     # schemas name `email` because a consumer cannot look it up anywhere else.
     ALLOWED_PII_KEYS = %w[email].freeze
+
+    # Keys that the PII scan's shape catches and that are **not** PII, named so
+    # the closed set below can be read rather than guessed. Measured over the
+    # whole eight-type seed, not over three of it: `name` on the plan events and
+    # `plan_name` on the subscription events are the platform catalogue's own
+    # display text, and `owner` is a type-and-uuid pair — an opaque reference
+    # to a tenant, not a person. A plan's name is the one field here that comes
+    # from whoever writes the catalogue, so it is bounded by the display-text
+    # rule the receipt page already holds to: escaped on the way out, never a
+    # person's name.
+    NON_PII_NAME_KEYS = %w[name plan_name owner].freeze
 
     def assert_forbidden_values_absent(document)
       FORBIDDEN_VALUES.each do |value|
@@ -158,12 +215,37 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
       end
     end
 
-    # Every key anywhere in every payload that could hold PII is one core names.
-    # `email` is the whole of it; anything else is this service inventing a
-    # consumer's lookup.
+    # Every key anywhere in every payload that could hold PII is one core names,
+    # or one of the display texts named above. **Over the whole bus**: the seed
+    # is the first test's, because a claim about "every payload" proven over
+    # three of eight types is a claim about three types. Measured on this
+    # branch, per type:
+    #
+    #   billing.customer.created     email, owner
+    #   billing.plan.created         name
+    #   billing.plan.updated         name
+    #   billing.payment.succeeded    email
+    #   billing.payment.failed       email
+    #   billing.subscription.started email, plan_name
+    #   billing.subscription.updated email, plan_name
+    #   billing.subscription.canceled email, plan_name
+    #
+    # The first revision of this file seeded only `invoice.paid` and read a
+    # three-row delivered list, so `plan_name` never appeared and the set below
+    # was short by one. **The set is measured, not negotiated** — and the pass
+    # is asserted to have carried all eight rows, because a closed set over a
+    # short list is the shape of the failure that started this packet: an empty
+    # or half-delivered bus satisfies every "no forbidden key" assertion while
+    # checking nothing, and the `KeyError` on `:payload` it finally raised was a
+    # symptom of the list being shorter than the reader assumed.
     test "the only PII a payload carries is the email core names" do
       seed_customer_and_plan
       deliver_fixture("invoice.paid")
+      deliver_fixture("invoice.payment_failed")
+      deliver_fixture("customer.subscription.created")
+      deliver_fixture("customer.subscription.updated")
+      deliver_fixture("customer.subscription.deleted")
+      @plan.update!(name: "Renamed")
 
       publisher = Cafaye::Outbox.publisher(
         connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
@@ -173,13 +255,19 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
       )
       publisher.run_once
 
+      # The bus carried all eight, so the closed set below is over the whole
+      # surface rather than over whatever reached it.
+      assert_equal OutboxEvent::TYPES.size, @broker.delivered.size,
+        "the pass delivered every type this service publishes, so the PII scan " \
+        "below is over the whole bus and not over a short list"
+
       pii_keys = []
       @broker.delivered.each do |message|
         collect_pii_keys(JSON.parse(message.fetch(:payload)).fetch("data"), pii_keys)
       end
 
-      assert_equal [ "email", "name", "owner" ].sort, pii_keys.uniq.sort,
-        "the recipient fact core names, the plan's display name and the owner's " \
+      assert_equal (ALLOWED_PII_KEYS + NON_PII_NAME_KEYS).sort, pii_keys.uniq.sort,
+        "the recipient fact core names, the plan's display text and the owner's " \
         "type-and-uuid are the whole of it — no address, phone, or personal name"
     end
 
