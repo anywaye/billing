@@ -50,7 +50,7 @@ module TestSupport
 
       assert_equal "application/problem+json", media_type
       assert_equal code, body["code"]
-      assert_equal "https://errors.cafaye.com/#{code}", body["type"]
+      assert_equal "https://docs.cafaye.com/errors/#{code}", body["type"]
       assert_equal response.status, body["status"]
       assert_equal request.path, body["instance"]
       assert_equal trace_id_header, body["trace_id"]
