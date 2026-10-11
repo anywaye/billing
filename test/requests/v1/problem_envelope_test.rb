@@ -34,7 +34,7 @@ class V1ProblemEnvelopeTest < ActionDispatch::IntegrationTest
   test "the type is the machine-readable contract and the code is its last segment" do
     get "/v1/plans/enterprise-yearly"
 
-    assert_equal "https://errors.cafaye.com/not_found", json_body.fetch("type")
+    assert_equal "https://docs.cafaye.com/errors/not_found", json_body.fetch("type")
     assert_equal "not_found", json_body.fetch("code")
   end
 

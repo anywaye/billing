@@ -1640,7 +1640,7 @@ components:
       properties:
         type:
           type: string
-          description: 'Stable URI: `https://errors.cafaye.com/<code>`.'
+          description: 'Stable URI: `https://docs.cafaye.com/errors/<code>`.'
           format: uri
         title:
           type: string
@@ -1698,7 +1698,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://errors.cafaye.com/unauthorized
+            type: https://docs.cafaye.com/errors/unauthorized
             title: Unauthorized
             status: 401
             detail: This request needs a bearer token issued by this platform's identity service.
@@ -1726,7 +1726,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://errors.cafaye.com/unavailable
+            type: https://docs.cafaye.com/errors/unavailable
             title: Service unavailable
             status: 503
             detail: This service cannot verify a caller right now.
@@ -1789,7 +1789,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://errors.cafaye.com/unavailable
+            type: https://docs.cafaye.com/errors/unavailable
             title: Service unavailable
             status: 503
             detail: The payment processor is not configured.
@@ -1807,7 +1807,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://errors.cafaye.com/bad_request
+            type: https://docs.cafaye.com/errors/bad_request
             title: Bad request
             status: 400
             detail: The Stripe-Signature header did not verify against the request body.
@@ -1825,7 +1825,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://errors.cafaye.com/unavailable
+            type: https://docs.cafaye.com/errors/unavailable
             title: Service unavailable
             status: 503
             detail: Webhook signature verification is not configured.

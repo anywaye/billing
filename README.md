@@ -224,7 +224,7 @@ in one place (`app/lib/problem.rb`) so no controller can invent its own:
 
 ```json
 {
-  "type": "https://errors.cafaye.com/validation_failed",
+  "type": "https://docs.cafaye.com/errors/validation_failed",
   "title": "Validation failed",
   "status": 422,
   "detail": "slug can't be blank; price must be an object with an integer amount_minor and a three-letter currency",
