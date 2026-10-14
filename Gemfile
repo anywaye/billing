@@ -54,7 +54,7 @@ gem "stripe", "~> 19.6"
 # first line whose FakeProcessor `subscribe` accepts a `quantity`, which is what
 # per-seat pricing needs. See `Checkout::Session` for what this packet did and did
 # not build on top of it.
-gem "pay", "~> 12.2"
+gem "pay", "~> 12.3"
 
 # The transactional outbox substrate, from the fleet's shared gem `cafaye-rb`.
 #
