@@ -676,7 +676,7 @@ Change Date `2030-10-10`, Change License `Apache License, Version 2.0`.
 
 **It was MIT, and this is a deliberate move down, not a drift.** billing's
 `LICENSE` held a plain MIT grant until this packet. OPS-D2 splits the fleet:
-the framework (`core`, `caf`, `kit`, `pantry`) stays permissive, the **services
+the framework (`core`, `cafe`, `kit`, `pantry`) stays permissive, the **services
 move to a Business Source Licence** — free to run, free to self-host, never to
 offer a competing service (`CAFAYE-OPS.md:176`, OPS-D2). billing is a service, so
 its grant moved with the policy rather than being left to contradict it.

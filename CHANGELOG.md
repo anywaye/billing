@@ -1830,7 +1830,7 @@ never calls.
 ### Changed
 
 - **`LICENSE` is a Business Source License 1.1, and it was MIT.** OPS-D2 splits the
-  fleet — the framework (`core`, `caf`, `kit`, `pantry`) stays permissive, the
+  fleet — the framework (`core`, `cafe`, `kit`, `pantry`) stays permissive, the
   **services move to a Business Source Licence**: free to run, free to self-host,
   never to offer a competing service (`CAFAYE-OPS.md:176`, OPS-D2). billing is a
   service, so its grant moved with the policy in one commit rather than being left

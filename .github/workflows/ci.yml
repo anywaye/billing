@@ -390,11 +390,24 @@ jobs:
     #
     # **This is the only acceptable reading of it, and it expires.** A future kit
     # whose `ruby` job has a `services`/`env` seam can make this job green, and
-    # when it does, `continue-on-error` is a lie that costs a lane of CI minutes
-    # and hides a real regression in the shared workflow. Delete this line in the
-    # same commit that makes `ruby (kit)` green, not later. The condition to
-    # check is in WHAT IS EXPECTED TO BE RED below.
-    continue-on-error: true
+    # when it does, the non-blocking posture below is a lie that costs a lane
+    # of CI minutes and hides a real regression in the shared workflow. Retire
+    # it in the same commit that makes `ruby (kit)` green, not later. The
+    # condition to check is in WHAT IS EXPECTED TO BE RED below.
+    #
+    # THE MECHANISM IS THE REQUIRED-CHECKS SET, NOT A KEY ON THIS JOB.
+    # `continue-on-error: true` used to sit on this job, and actionlint refused
+    # it: a job that calls a reusable workflow with `uses:` may carry only name,
+    # uses, with, secrets, needs, if and permissions, so the file was invalid at
+    # workflow-parse time. GitHub never honoured the key on such a job, so
+    # removing it changes nothing about what runs: the job still executes, its
+    # two red steps still fail visibly in the log, and the branch still merges
+    # because the required checks are `gate`, `security` and `pins` — with
+    # `ruby (kit)` deliberately out of that set, as above. If branch protection
+    # ever requires this job, the expiry above fires instead. No
+    # `continue-on-error` key may be re-added here: actionlint reports "when a
+    # reusable workflow is called with uses, continue-on-error is not
+    # available" and the run starts zero jobs.
     # The `uses:` is the whole job. The `.github/workflows/` in that path is not
     # decoration: GitHub resolves a cross-repository reusable workflow at
     # `{owner}/{repo}/.github/workflows/{file}@{ref}` and documents that
@@ -498,13 +511,18 @@ jobs:
       # It now reads `CORE_PATH`, the seam `outbox_envelope_contract_test.rb` has
       # used since billing-02, and skips with a message when core is unreadable —
       # which the whole-suite guard below turns into a red build, so the skip
-      # cannot be reached green here. On the job rather than the step because
-      # there are two tiers that read core and only one of them is the contract
-      # test; setting it per step is how the second one got missed.
+      # cannot be reached green here. It is exported once, for every later step,
+      # by the `core, because the contract tier reads it` step below (through
+      # `$GITHUB_ENV`), rather than set per step — setting it per step is how
+      # the second tier got missed.
       #
-      # `runner` is available to a job's `env:` (it is a context, not a step
-      # input) and resolves to the same directory the checkout step writes to.
-      CORE_PATH: ${{ runner.temp }}/core
+      # NOT in this job's `env:`, although it used to be. `runner` is not an
+      # available context there — actionlint reports "context runner is not
+      # allowed here" and GitHub evaluates the value to nothing — so
+      # `CORE_PATH: ${{ runner.temp }}/core` on the job handed every test an
+      # empty seam. The export below runs on the runner, where `$RUNNER_TEMP`
+      # is an ordinary environment variable, and reaches the same steps.
+      # `RAILS_ENV`, `CI` and the rest stay here: they need no context at all.
       # `test`, and explicitly: `bin/prime` runs `rails db:prepare` before the
       # suite, and a prime that also builds a development database in CI is
       # building a database no job uses. The command is unchanged — this is the
@@ -584,6 +602,19 @@ jobs:
             schemas
             docs
           persist-credentials: false
+
+      - name: CORE_PATH, for every core-reading test below
+        # `$GITHUB_ENV` rather than the job's `env:`. The seam has to reach two
+        # tiers (the contract test and the subscription-delivery test), and the
+        # job's `env:` cannot compute it — `runner` is not an available context
+        # there, so the old spelling evaluated to an empty value. On the runner
+        # `$RUNNER_TEMP` is an ordinary variable, and everything this step
+        # exports is present in every later step of the job. Same directory the
+        # checkout above wrote to; the `what actually ran` step keeps its own
+        # step-level copy and needs no change.
+        run: |
+          set -euo pipefail
+          echo "CORE_PATH=$RUNNER_TEMP/core" >> "$GITHUB_ENV"
 
       - name: the two system packages billing's bundle needs
         # `libpq-dev` because the `pg` gem compiles against it and `bundle
@@ -787,7 +818,7 @@ jobs:
           echo "$summary"
           if [ "$skips" != 0 ]; then
             echo "::error::$skips test(s) skipped. The contract tier is the tier that skips;" >&2
-            echo "  CORE_PATH is set in this job, so a skip means a tier nobody can see" >&2
+            echo "  CORE_PATH is exported for every step of this job, so a skip means a tier nobody can see" >&2
             echo "  ran nothing. Re-run with --verbose to name them." >&2
             exit 1
           fi
@@ -930,9 +961,10 @@ jobs:
         # tier ran, and so a failure here is visibly about the contract rather
         # than about 823 tests somewhere.
         #
-        # `CORE_PATH` comes from the job's `env:`, where it is set for every test
-        # in the repository that reads core and not only for this step — which is
-        # how `subscription_delivery_test.rb` was missed. The seam is the one
+        # `CORE_PATH` is exported by the `CORE_PATH, for every core-reading test
+        # below` step, where it reaches every test in the repository that reads
+        # core and not only this step — which is how `subscription_delivery_test.rb`
+        # was missed when the seam was per step. The seam is the one
         # `outbox_envelope_contract_test.rb` has documented since billing-02:
         # `Rails.root.join("..", "core")` is the default a developer gets from
         # having the repositories side by side, and CI has one checkout, so it
