@@ -677,14 +677,14 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   # card it stored would be a card it holds.
   test "POST /v1/subscriptions/:id/payment_method returns the processor's portal url" do
     post "/v1/subscriptions/#{@subscription.id}/payment_method",
-      params: { return_url: "/billing" }, as: :json
+      params: { return_url: "https://app.cafaye.com/billing/subscriptions" }, as: :json
 
     assert_response :ok
     assert_equal "https://billing.stripe.test/session/pcss_00000000000001", json_body.fetch("payment_method_url")
 
     request = @api.requests.last
     assert_equal @customer.processor_customer_id, request.fetch(:customer)
-    assert_equal "/billing", request.fetch(:return_url)
+    assert_equal "https://app.cafaye.com/billing/subscriptions", request.fetch(:return_url)
   end
 
   # The scoped resolution comes first, so another account's subscription is a 404
@@ -698,19 +698,22 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     )
 
     post "/v1/subscriptions/#{other_subscription.id}/payment_method",
-      params: { return_url: "/billing" }, as: :json
+      params: { return_url: "https://app.cafaye.com/billing/subscriptions" }, as: :json
 
     assert_response :not_found
     assert_empty @api.requests
   end
 
-  # A URL the processor will redirect to is an open-redirect weapon: a phishing
-  # page served by the processor's own redirect, from a page the customer
-  # trusts. So it must be a path on this origin, and the protocol-relative form
-  # `//evil.test` is refused exactly like an absolute URL is.
+  # The rule is the checkout `success_url`'s, and the shapes below are refused by
+  # the same code. **A path is one of them now**: the first version of this
+  # endpoint demanded one, and the live stack measured what Stripe does with it —
+  # `InvalidRequestError: Not a valid URL`, so the portal could never open. A
+  # relative path and the protocol-relative `//evil.test` form both name no
+  # origin for the processor to redirect a browser to.
   [
-    "https://evil.test/x",
-    "//evil.test/x"
+    "/billing",
+    "//evil.test/x",
+    "not a url"
   ].each do |unreturnable|
     test "POST /v1/subscriptions/:id/payment_method refuses a return_url of #{unreturnable}" do
       post "/v1/subscriptions/#{@subscription.id}/payment_method",
@@ -737,7 +740,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     @subscription.customer.update!(processor_customer_id: nil)
 
     post "/v1/subscriptions/#{@subscription.id}/payment_method",
-      params: { return_url: "/billing" }, as: :json
+      params: { return_url: "https://app.cafaye.com/billing" }, as: :json
 
     assert_response :unprocessable_entity
     assert_includes json_body.fetch("errors").map { |error| error.fetch("field") }, "subscription_id"
@@ -749,7 +752,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     Processor::StripeClient.current = Processor::StripeClient.new(api_key: nil)
 
     post "/v1/subscriptions/#{@subscription.id}/payment_method",
-      params: { return_url: "/billing" }, as: :json
+      params: { return_url: "https://app.cafaye.com/billing" }, as: :json
 
     assert_response :service_unavailable
   end

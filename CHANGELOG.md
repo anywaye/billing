@@ -6,6 +6,40 @@ All notable changes to billing are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The money the local whole-stack walk showed going missing** (2026-10-16,
+  launch four + billing on the shared cluster). A real test-mode checkout paid
+  and billing recorded no subscription and no charge:
+  - `Webhooks::Ingestion` called every unique violation `duplicate_delivery`;
+    the live-uniqueness index refusing a second live subscription for the same
+    account and plan surfaced there and filed a real payment as a non-event.
+    Only a violation whose fact is already stored is a duplicate now; anything
+    else parks as `failed:` for a human.
+  - A first checkout's `invoice.paid` arrives before
+    `customer.subscription.created`, and nothing wrote
+    `customers.processor_customer_id` from a webhook — so a real payment
+    resolved no customer and was silently skipped. The invoice's metadata
+    carries the cafaye link, the normalizer reads it, the recorder consults it
+    first, and the lifecycle fills the processor id in once (and never
+    overwrites one). The same write is what makes `upcoming_invoice` and
+    `payment_method` work at all for a customer created through `/v1`.
+  - `settled_or_due` read `paid` while the normalizer accepted `status: paid`,
+    so an invoice could be paid for the event and unpaid for the amount. One
+    predicate answers both.
+  - `POST /v1/subscriptions/{id}/payment_method` demanded a relative
+    `return_url`; Stripe refuses one (`InvalidRequestError: Not a valid URL`),
+    so the portal could never open. The field is an absolute http(s) URL now —
+    the checkout `success_url`'s rule and validator. `openapi/v1.yaml` 2.5.1.
+  - The outbox relay crashed the boot when `NATS_URL` was set (`relay.url`
+    does not exist, and the wiring test passed `logger: nil`, which skips the
+    argument). It boots and names the broker; the test passes a logger and
+    asserts the line.
+
+  Payload: the two payment events carry `cafaye_customer_id`, recorded in
+  `PENDING_PAYLOAD_ALIGNMENT` and `cafaye.yml` because core's payment schemas
+  are closed and do not declare it.
+
 ### Added
 
 - **billing's deploy artifact, and the publish loop that fills it.** `caf gen

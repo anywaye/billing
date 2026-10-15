@@ -121,6 +121,15 @@ info:
   # an operation that never worked, recorded here rather than hidden in a
   # patch note.
   #
+  # 2.5.1 changes one field's rule: `payment_method`'s `return_url` must be
+  # an absolute http(s) URL, not the relative path 2.4.0 demanded. Measured
+  # against the live API on 2026-10-16: Stripe refuses a relative path with
+  # `InvalidRequestError: Not a valid URL`, so the portal this operation
+  # exists for could never open. The path rule was a hand-written guess, and
+  # this is the recording that corrected it; the field keeps its name and the
+  # operation keeps its shape, which is why this is a patch and not a minor
+  # bump.
+  #
   # 2.4.0 is the money history and the portal: **two additive operations**,
   # `GET /v1/charges` (the index the receipts packet recorded as deliberately
   # absent — its two reasons have moved; see the operation) and `POST
@@ -145,7 +154,7 @@ info:
   # unless the deployment enabled it, because a door that fabricates an
   # `active` subscription from a request body is a free-subscription door the
   # day it is reachable.
-  version: 2.5.0
+  version: 2.5.1
   description: >-
     Plans, customers, the subscription lifecycle, and one inbound
     payment-processor webhook for cafaye. This document describes every client
@@ -807,11 +816,13 @@ paths:
         customer the portal opens for is the row's customer, not one the body
         names.
 
-        `return_url` is required and must be a **path on this origin**: the
-        processor redirects there when the customer is done, and a URL the
-        processor will redirect to is an open-redirect weapon if it can name
-        any host — a phishing page served by the processor's own redirect, from
-        a page the customer trusts. A relative path is all any caller needs.
+        `return_url` is required and must be an **absolute http(s) URL**,
+        the same rule and the same validator as the checkout's `success_url`:
+        the processor redirects a browser there when the customer is done, and
+        it refuses a relative path — `InvalidRequestError: Not a valid URL`,
+        measured against the live API on 2026-10-16, which meant the portal
+        could never open. The caller's origin is the browser's page; this
+        service's own address is one no customer's browser can resolve.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/TraceId'
@@ -1971,11 +1982,11 @@ components:
         return_url:
           type: string
           description: >-
-            A path on this origin, where the processor returns the customer.
-            A relative path is all any caller needs, and an absolute URL to
-            another host is a 422: a URL the processor will redirect to is an
-            open-redirect weapon.
-          pattern: '^/[^/]'
+            An absolute http(s) URL — the browser's page the processor returns
+            the customer to. A relative path is a 422 because the processor
+            refuses one; this is the same field shape as the checkout's
+            `success_url`.
+          format: uri
 
     PaymentMethodUrl:
       type: object
