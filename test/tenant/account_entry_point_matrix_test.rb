@@ -312,6 +312,16 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     "app/models/processor_webhook.rb" => "the receipt model; its one write is `ingest`, addressed by the processor's event id",
     "app/services/processor.rb" => "the processor namespace; it declares no query",
     "app/services/processor/stripe_client.rb" => "builds and sends the three processor requests; the row each acts on was resolved by the caller",
+    # The file the fake-client packet added when `pay` left. It holds no query:
+    # the answer it builds is `ProcessorSubscription` — a frozen value object,
+    # not the model. Naming the file here is what keeps the list closed for the
+    # next value object somebody constructs in `app/`, and the reason is
+    # written out because "the scanner misfires" is a reason about a tool, not
+    # a reason about this file. The name is not decoration either: `Subscription`
+    # would shadow the model for every reader, which is the exact confusion
+    # this service's Charge-versus-processor's-charge distinction exists to
+    # prevent.
+    "app/services/processor/fake_client.rb" => "answers a checkout with a value object; the value it constructs is `Processor::FakeClient::ProcessorSubscription`, not the `subscriptions` table, and it reads and writes no model at all",
     "app/services/subscriptions.rb" => "the subscriptions namespace; it declares no query",
     "app/services/subscriptions/plan_change.rb" => "compares two prices and decides timing; pure, no model access",
     "app/services/subscriptions/state_machine.rb" => "a from-status and a to-status in, an answer out; pure, no model access",

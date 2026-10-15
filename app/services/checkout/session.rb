@@ -9,6 +9,22 @@ module Checkout
   # processor said. There is no `CheckoutSession` table, because a checkout is
   # not a thing anybody looks up later: it is a request and its result.
   #
+  # ## The processor, and which one it is
+  #
+  # This checkout goes through `Processor::FakeClient` — the in-process fake
+  # whose books live in memory. It used to go through `pay`'s `FakeProcessor`,
+  # whose books were six Active Record tables; that gem and its tables are gone
+  # (`20261015120000_drop_pay_tables.rb`), because a payment abstraction with a
+  # STI schema is not what a service whose live Stripe surface is three methods
+  # on `Processor::StripeClient` needs. `pay_customer` and `Pay::Customer` are
+  # gone with it: the fake has no customer row, only a derived id, and
+  # `customer_id_for` is where that happens.
+  #
+  # The production door is a different one, and this class must not grow it:
+  # `POST /v1/subscriptions` asks `Processor::StripeClient` for a hosted Checkout
+  # session and writes nothing. A checkout that talked to Stripe here would be
+  # a second path with a second answer to "what is this subscription's status".
+  #
   # ## The rule this class exists to hold
   #
   # **`Subscriptions::Lifecycle` is still the only writer of a `Subscription`, and
@@ -39,22 +55,9 @@ module Checkout
   # that can fail. `test/services/checkout/session_test.rb` asserts the
   # subscription did not move, rather than asserting that it moved back.
   class Session
-    # The processor this service checks out through.
-    #
-    # FakeProcessor only, and that is a packet boundary rather than a preference:
-    # this class asks the processor for a subscription and nothing else, so
-    # swapping in Stripe is a configuration change and not a rewrite. Live
-    # processors are a later packet — see the comment on `Customer#pay_customer`
-    # and `Processor::StripeClient`, which is still this service's Stripe path.
-    PROCESSOR = "fake_processor".freeze
-
-    # The subscription name every checkout buys under. `pay` groups a customer's
-    # subscriptions by this string and `Pay::Customer#subscribed?` filters on it,
-    # so it is a real key and not a label. `pay`'s own default is used rather than
-    # a name of this service's inventing: one product, one name, and the value
-    # lives in configuration (`config/initializers/pay.rb`) if there is ever a
-    # second.
-    PRODUCT_NAME = Pay.default_product_name
+    # The one processor this checkout goes through, and the one call it makes
+    # of it. See the class comment on the processor boundary.
+    PROCESSOR = Processor::FakeClient::PROCESSOR
 
     # The reasons an outcome can be a failure. A closed list, for the reason every
     # closed list in this repository is closed: a reason somebody can read is a
@@ -86,12 +89,13 @@ module Checkout
     # half-finished checkout: there is no object here that is neither complete
     # nor failed, and no object that is complete but has no subscription.
     #
-    # `pay_subscription` is kept alongside `subscription` rather than thrown away
-    # because they are two different records of two different parties: `pay`'s row
-    # is the processor's, and this service's `Subscription` is its own. The
-    # delivery path reconciles them by `processor_subscription_id`, and a checkout
-    # that reported only one of them would hide which side moved.
-    Outcome = Data.define(:state, :reason, :subscription, :pay_subscription) do
+    # `processor_subscription` is kept alongside `subscription` rather than
+    # thrown away because they are two different records of two different
+    # parties: the fake's value is the processor's answer, and this service's
+    # `Subscription` is its own. The delivery path reconciles them by
+    # `processor_subscription_id`, and a checkout that reported only one of
+    # them would hide which side moved.
+    Outcome = Data.define(:state, :reason, :subscription, :processor_subscription) do
       def completed?
         state == :completed
       end
@@ -103,17 +107,21 @@ module Checkout
 
     attr_reader :customer, :plan, :quantity
 
-    # `quantity` is per-seat pricing, and it is validated here rather than at the
-    # edge because this class is the edge for now — there is no HTTP door on
-    # checkout in this build (see the class comment on the processor boundary).
-    # `pay` 12.2 is the floor in the Gemfile precisely because its
-    # `FakeProcessor#subscribe` is the first line that accepts a `quantity` at
-    # all; an earlier one would have silently dropped it and every per-seat test
-    # would have passed while charging for one seat.
-    def initialize(customer:, plan:, quantity: 1)
+    # `quantity` is per-seat pricing, and it is validated here rather than at
+    # the edge because this class is the edge for now — the checkout door this
+    # service serves (`POST /v1/checkouts`) hands the value through, and the
+    # fake multiplies nothing: the seats are the processor's to price.
+    #
+    # `processor` is the seam. The specs pass a recorder, a raiser or a
+    # refusing processor and assert on what was *asked*; the default is the
+    # fake. The shape mirrors `Processor::StripeClient`'s `api:` keyword for
+    # the same reason: a hand-written double of the checkout path is a second
+    # implementation of it.
+    def initialize(customer:, plan:, quantity: 1, processor: Processor::FakeClient.new)
       @customer = customer
       @plan = plan
       @quantity = quantity
+      @processor = processor
     end
 
     # => Outcome. **Never raises for a business refusal**, and never returns
@@ -122,10 +130,10 @@ module Checkout
       return failed(NOT_ON_SALE) unless on_sale?
       return failed(NOT_AN_ACCOUNT) unless account_owned?
 
-      pay_subscription = subscribe
-      return failed(PROCESSOR_REFUSED) if pay_subscription.nil?
+      subscription = subscribe
+      return failed(PROCESSOR_REFUSED) if subscription.nil?
 
-      recorded(pay_subscription)
+      recorded(subscription)
     end
 
     # Whether this plan can be bought at all right now.
@@ -141,10 +149,11 @@ module Checkout
     end
 
     # A `User`-owned customer is in no account, which is the same fact
-    # `Subscription#account_is_the_customers_owner` refuses a row over. Asking the
-    # processor to start a subscription we would then have to refuse to record
-    # would leave a subscription at the processor that this service has no row
-    # for — a live thing being billed with nothing granting entitlements.
+    # `Subscription#account_is_the_customers_owner` refuses a row over. Asking
+    # the processor to start a subscription we would then have to refuse to
+    # record would leave a subscription at the processor that this service has
+    # no row for — a live thing being billed with nothing granting
+    # entitlements.
     def account_owned?
       customer.owner_type == Subscription::BILLABLE_OWNER_TYPE
     end
@@ -156,55 +165,29 @@ module Checkout
       # own reason instead of being flattened into `processor_refused` — the two
       # mean very different things to whoever reads the failure.
       #
-      # The rescue is on `Pay::Error` and `ActiveRecord::RecordInvalid` rather than
-      # on `StandardError`: a processor that refuses is a decision, and those two
-      # are what every processor in `pay` raises for one. Rescuing `StandardError`
-      # here would swallow a `NoMethodError` in this file and report it to the
-      # caller as a declined card, which is the one thing a failure value must
+      # The rescue is on `Processor::Error` alone, and that is deliberate. The old
+      # line also rescued `ActiveRecord::RecordInvalid`, because `pay`'s
+      # `FakeProcessor` wrote rows and a uniqueness validation was one of the ways
+      # it could refuse. This processor writes nothing: an `ActiveRecord::RecordInvalid`
+      # escaping it would be a bug in this service, and rescuing it here would
+      # report that bug as a declined card — the one thing a failure value must
       # never be.
       def subscribe
-        processor_customer.subscribe(
-          name: PRODUCT_NAME,
-          plan: plan.processor_price_id,
-          quantity: quantity,
-          **trial_options
-        )
-      rescue Pay::Error, ActiveRecord::RecordInvalid
+        @processor.subscribe(**request_kwargs)
+      rescue Processor::Error
         nil
       end
 
-      # **Only passed when there is a trial.** `FakeProcessor#subscribe` tests the
-      # option for truthiness and Ruby says `0` is truthy, so passing
-      # `trial_period_days: 0` would set `trial_ends_at` to the present moment and
-      # produce a subscription that is `trialing` and already over. The `positive?`
-      # is the guard, and it is the sort of thing that is invisible in a passing
-      # test and wrong in a customer's invoice.
-      def trial_options
-        plan.trial_days.to_i.positive? ? { trial_period_days: plan.trial_days } : {}
+      # The key is **absent** when there is no trial, and not present-with-nil.
+      # A processor receiving `trial_period_days: nil` reads a key it may act
+      # on, and the guard's whole job is that a checkout with no trial asks for
+      # no trial. Recorded by the specs at the request, not at the answer.
+      def request_kwargs
+        { price_id: plan.processor_price_id, quantity: quantity }.merge(trial_kwargs)
       end
 
-      # The processor's customer for this subscriber, created on first use.
-      #
-      # `payment_processor` is `pay`'s billable reader: it finds or creates the
-      # `Pay::Customer` owned by this subscriber and marked default, so this is
-      # the only place a processor customer is obtained and there is no second
-      # lookup to disagree with it.
-      def processor_customer
-        # Read through the **association**, and that is load-bearing.
-        # `Pay::Attributes::CustomerExtension#payment_processor` overrides the
-        # `has_one` reader and ends in `reload_payment_processor`, whose return
-        # value is not the record — so on the **first** checkout of a subscriber,
-        # where the `Pay::Customer` is *created* by that reader rather than found,
-        # it returns nil with the row written. It also drops the association
-        # reader's own `force_reload` argument, so `payment_processor(true)` is an
-        # ArgumentError.
-        #
-        # So the order is load-bearing and both halves are needed: `pay`'s reader is
-        # the only thing that *decides* which processor customer this subscriber has
-        # and creates the first one, and the association is the only way to read back
-        # what it decided. Reaching past the reader straight to the association would
-        # find nothing at all on a first checkout, because nothing had created it.
-        customer.payment_processor || customer.association(:payment_processor).tap(&:reload).reader
+      def trial_kwargs
+        plan.trial_days.to_i.positive? ? { trial_period_days: plan.trial_days } : {}
       end
 
       # Hand the processor's answer to the one writer of a `Subscription`.
@@ -224,7 +207,7 @@ module Checkout
       # Reconciling it is the delivery path's job, and until that arrives the
       # honest state is "the processor has one and we do not", which is what the
       # failure outcome reports.
-      def recorded(pay_subscription)
+      def recorded(subscription)
         applied = nil
 
         # **One transaction for the row and the event.** This is the rule
@@ -242,15 +225,15 @@ module Checkout
         # and one envelope builder (`AGENTS.md`, Events).
         Subscription.transaction do
           applied = Subscriptions::Lifecycle.new(
-            data: delivery(pay_subscription),
-            event_time: pay_subscription.created_at
+            data: delivery(subscription),
+            event_time: subscription.created_at
           ).call(Subscriptions::Lifecycle::CREATED)
 
           OutboxEvent.publish!(
             type: applied.event_type,
             subject: applied.subject,
             data: applied.data,
-            time: pay_subscription.created_at
+            time: subscription.created_at
           )
         end
 
@@ -258,10 +241,10 @@ module Checkout
           state: :completed,
           reason: nil,
           subscription: applied.subscription,
-          pay_subscription: pay_subscription
+          processor_subscription: subscription
         )
       rescue Subscriptions::Refused => refusal
-        failed(SUBSCRIPTION_REFUSED, reason_detail: refusal.reason, pay_subscription: pay_subscription)
+        failed(SUBSCRIPTION_REFUSED, reason_detail: refusal.reason, processor_subscription: subscription)
       rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
         # **The index, not the machine.** `subscriptions_live_account_plan_idx` is a
         # partial unique index over `(account_id, plan_id)` while the subscription is
@@ -272,15 +255,15 @@ module Checkout
         # outbox index: either a validation or an index may win the race, so the
         # caller is written against the **outcome** and not against a named
         # constraint.
-        failed(SUBSCRIPTION_REFUSED, reason_detail: "already_subscribed", pay_subscription: pay_subscription)
+        failed(SUBSCRIPTION_REFUSED, reason_detail: "already_subscribed", processor_subscription: subscription)
       end
 
-      def failed(reason, reason_detail: nil, pay_subscription: nil)
+      def failed(reason, reason_detail: nil, processor_subscription: nil)
         Outcome.new(
           state: :failed,
           reason: reason_detail ? "#{reason}:#{reason_detail}" : reason,
           subscription: nil,
-          pay_subscription: pay_subscription
+          processor_subscription: processor_subscription
         )
       end
 
@@ -293,6 +276,9 @@ module Checkout
       # customer created through `/v1` has a null `processor_customer_id` until its
       # first subscription tells us what the processor calls it. Sending it means
       # the checkout path and the delivery path resolve the same row the same way.
+      # The processor's own customer id is still carried beside it, because a webhook
+      # carries one and a delivery with the same shape is a delivery the lifecycle
+      # reads the same way.
       #
       # **No `processor_event_id`, on purpose.** `AGENTS.md` (Webhooks in) records
       # that a start payload deliberately carries none, and the reason survives
@@ -303,20 +289,20 @@ module Checkout
       # thing that caused one.
       #
       # `current_period_start` and `current_period_end` are **absent rather than
-      # guessed.** `FakeProcessor` does not compute a period, and deriving one from
+      # guessed.** The fake does not compute a period, and deriving one from
       # `Plan#interval` here would be this service inventing a billing period the
       # processor never stated. A subscription whose period the processor has not
       # published has no period recorded, and `Lifecycle#parse_time` turns an
       # absent value into nil without inventing one.
-      def delivery(pay_subscription)
+      def delivery(subscription)
         {
-          "subscription_id" => pay_subscription.processor_id,
-          "status" => status_for(pay_subscription),
+          "subscription_id" => subscription.processor_id,
+          "status" => status_for(subscription),
           "cafaye_customer_id" => customer.id,
-          "customer_id" => processor_customer.processor_id,
+          "customer_id" => @processor.customer_id_for(customer),
           "price_id" => plan.processor_price_id,
           "quantity" => quantity,
-          "trial_ends_at" => pay_subscription.trial_ends_at&.utc&.iso8601,
+          "trial_ends_at" => subscription.trial_ends_at&.utc&.iso8601,
           "cancel_at_period_end" => false,
           "canceled_at" => nil,
           "processor" => PROCESSOR
@@ -326,12 +312,12 @@ module Checkout
       # What the processor says the subscription is, not what this service would
       # like it to be.
       #
-      # A trial is `trialing` **only while it is running**: `Pay::Subscription#on_trial?`
-      # is false once `trial_ends_at` is in the past, and a checkout that recorded
+      # A trial is `trialing` **only while it is running**: `on_trial?` is false
+      # once `trial_ends_at` is in the past, and a checkout that recorded
       # `trialing` for a trial that ended an hour ago would grant trial
       # entitlements to a customer who has been charged.
-      def status_for(pay_subscription)
-        pay_subscription.on_trial? ? "trialing" : "active"
+      def status_for(subscription)
+        subscription.on_trial? ? "trialing" : "active"
       end
   end
 end

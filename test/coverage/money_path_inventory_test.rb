@@ -169,16 +169,21 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
         # Money). So the proof that money survives this file as minor units is that
         # no minor-unit field leaves it at all, and that the plan's own price is
         # still an integer pair when the session reads it back.
+        #
+        # The subscription value is the fake processor's own — the same value
+        # object `Processor::FakeClient` answers with. Constructed here rather
+        # than subscribed for, because the delivery is read from it and that is
+        # the whole of this entry point.
         customer = Customer.new(owner_type: "Account", owner_id: "11111111-1111-4111-8111-111111111111", processor: "stripe")
         plan = Plan.new(name: "Pro", slug: "pro", price: Money.new(1900, "USD"), interval: "month",
           processor_price_id: "price_FAKEcheckout000000")
         session = Checkout::Session.new(customer: customer, plan: plan, quantity: 3)
 
-        pay_subscription = Pay::Subscription.new(
-          processor_id: "sub_FAKEcheckout0000", status: "active", name: Checkout::Session::PRODUCT_NAME,
-          processor_plan: "price_FAKEcheckout000000", quantity: 3
+        subscription = Processor::FakeClient::ProcessorSubscription.new(
+          processor_id: "sub_FAKEcheckout0000", processor_plan: "price_FAKEcheckout000000",
+          quantity: 3, status: "active", trial_ends_at: nil, created_at: Time.current
         )
-        delivery = session.send(:delivery, pay_subscription)
+        delivery = session.send(:delivery, subscription)
 
         assert_equal "price_FAKEcheckout000000", delivery.fetch("price_id")
         assert_empty delivery.keys.grep(/amount|minor|total/)

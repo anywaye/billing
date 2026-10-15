@@ -1,10 +1,12 @@
 # A charge: what a customer was charged, recorded for the receipt.
 #
-# This is billing's own record of a payment, distinct from `Pay::Charge` (the
-# processor's record). A `Pay::Charge` says what the processor did; this says
-# what a customer paid for, in a shape a receipt can render. The two are
-# linked by `processor_charge_id`, which is the processor's own id for the
-# charge.
+# This is billing's own record of a payment, recorded from what the processor's
+# signed webhook said. It is not the processor's record — there is no
+# `Pay::Charge` row here any more (the `pay` gem and its tables are gone,
+# `20261015120000_drop_pay_tables.rb`) — and there is nothing to reconcile
+# against: this row IS the service's answer to "what did this customer pay",
+# in a shape a receipt can render. The processor's own id for the charge is
+# `processor_charge_id`, and it is the join key.
 #
 # The whole model turns on one fact about it: **a charge is recorded when a
 # payment succeeds, and never when it fails or is pending.** The processor

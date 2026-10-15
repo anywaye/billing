@@ -17,22 +17,6 @@
 # The database still refuses any value outside the set, so bypassing the model
 # does not get a row that the model would not have written.
 class Customer < ApplicationRecord
-  # **This is the billable registration, and the "owner" it points at is this
-  # model** — the polymorphic `pay_customers.owner_type`/`owner_id` pair is
-  # distinct from the `owner_type`/`owner_id` above, which is a reference across
-  # a service boundary to identity and carries no foreign key. The two are both
-  # named "owner" and they are not the same thing: the columns above say *whom*
-  # identity knows, and `pay` says *which* `Customer` row a processor record hangs
-  # off.
-  #
-  # `fake_processor` is the default because that is the only processor this build
-  # can reach: `Pay.enabled_processors` is empty (`config/initializers/pay.rb`), so
-  # Stripe and the rest are switched off at the gem, and a checkout that named one
-  # would raise rather than fall back. **Live processors are a later packet** and
-  # `Processor::StripeClient` is still this service's only Stripe path; nothing
-  # here reaches for it.
-  pay_customer default_payment_processor: :fake_processor
-
   # identity's entities that can be billed. Adding one is a change to what
   # billing believes the platform is made of, which is why it is a constant here
   # rather than a free-form string.
