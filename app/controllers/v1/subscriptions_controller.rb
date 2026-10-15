@@ -124,6 +124,32 @@ module V1
       remember_response(body)
     end
 
+    # The self-serve portal: where a customer goes to change a card or read an
+    # invoice at the processor. This service has no payment-method form of its
+    # own by design — a card it stored would be a card it holds — so the whole
+    # answer is a URL, and the `return_url` is the caller's.
+    #
+    # The door is the customer's, resolved through a subscription this caller
+    # owns: `subscription_record` is the scoped resolution, and the customer comes
+    # off the row rather than from the body, so a caller cannot open a portal for
+    # another account's customer even by naming one.
+    def payment_method
+      subscription = subscription_record
+      return_url = portal_return_url
+      return render_refusals if refused?
+
+      url = ask_processor(field: "subscription_id", message: "has no portal session at the payment processor") do
+        processor.billing_portal_url(
+          processor_customer_id: subscription.customer.processor_customer_id,
+          return_url: return_url
+        )
+      end
+      return render_refusals if refused?
+      return if performed?
+
+      render json: { "payment_method_url" => url }, status: :ok
+    end
+
     def cancel
       replayed = replayed_response
       return render_replayed_response(replayed) if replayed
@@ -327,6 +353,29 @@ module V1
       # a 409 rather than a 422 — and it is refused *here* rather than at the
       # processor, because the processor's own error for a canceled subscription
       # is not a fact this service should ask it for.
+      # Where the processor returns the customer to, and the caller names it:
+      # this is an API service, so the page a customer lands on after changing a
+      # card is the browser's page, not one this service knows about.
+      #
+      # The one refusal is about the shape, not the host. A `return_url` the
+      # processor will redirect to is an open-redirect weapon if it can name any
+      # URL: a phishing page served by the processor's own redirect, from a page
+      # the customer trusts. So it must be a **path on this service's own origin**
+      # — leading `/`, no scheme, no host, no `//` — and anything else is a 422
+      # naming the field rather than a silently-rewritten value.
+      def portal_return_url
+        value = params[:return_url].to_s
+        return refuse(:validation_failed, "return_url", "is required") if value.empty?
+
+        # A path on this origin: it starts with a single `/`, so no scheme, no
+        # host, and not the `//evil.test` protocol-relative form. Predicates
+        # rather than a regex, because a character class that says "not a slash
+        # and not a bracket" is a sentence nobody reads correctly.
+        return refuse(:validation_failed, "return_url", "must be a path on this origin, starting with a single /") unless value.start_with?("/") && !value.start_with?("//")
+
+        value
+      end
+
       def guard_invoicable!(subscription)
         return if subscription.status != "canceled"
 

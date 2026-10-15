@@ -24,6 +24,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   # has the same constant, and the two being equal is what makes a request in either
   # file reach the row it means to.
   ACCOUNT_ID = TestSupport::TestIdentity::Account
+  OTHER_OWNER_ID = "22222222-2222-4222-8222-222222222222".freeze
 
   setup do
     travel_to(frozen_now)
@@ -657,6 +658,91 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     assert_predicate trace_id_header, :present?
   end
 
+  # --- POST /v1/subscriptions/:id/payment_method ------------------------------
+
+  # The whole answer is the processor's own URL, and the processor was asked for
+  # exactly two things: whose portal to open, and where to come back to. This
+  # service has no payment-method form of its own and must never grow one — a
+  # card it stored would be a card it holds.
+  test "POST /v1/subscriptions/:id/payment_method returns the processor's portal url" do
+    post "/v1/subscriptions/#{@subscription.id}/payment_method",
+      params: { return_url: "/billing" }, as: :json
+
+    assert_response :ok
+    assert_equal "https://billing.stripe.test/session/pcss_00000000000001", json_body.fetch("payment_method_url")
+
+    request = @api.requests.sole
+    assert_equal @customer.processor_customer_id, request.fetch(:customer)
+    assert_equal "/billing", request.fetch(:return_url)
+  end
+
+  # The scoped resolution comes first, so another account's subscription is a 404
+  # and no portal is asked for at all. The customer the portal opens for is the
+  # row's, so there is no body field that could name somebody else's.
+  test "POST /v1/subscriptions/:id/payment_method is a 404 for another account's subscription" do
+    other_customer = create_stripe_customer(account_id: OTHER_OWNER_ID, processor_customer_id: "cus_FAKEsomebodyelseBBBBBB")
+    other_subscription = Subscription.create!(
+      account_id: OTHER_OWNER_ID, customer: other_customer, plan: @plan,
+      processor_subscription_id: "sub_FAKEotherXXXXXXX", status: "active"
+    )
+
+    post "/v1/subscriptions/#{other_subscription.id}/payment_method",
+      params: { return_url: "/billing" }, as: :json
+
+    assert_response :not_found
+    assert_empty @api.requests
+  end
+
+  # A URL the processor will redirect to is an open-redirect weapon: a phishing
+  # page served by the processor's own redirect, from a page the customer
+  # trusts. So it must be a path on this origin, and the protocol-relative form
+  # `//evil.test` is refused exactly like an absolute URL is.
+  [
+    "https://evil.test/x",
+    "//evil.test/x"
+  ].each do |unreturnable|
+    test "POST /v1/subscriptions/:id/payment_method refuses a return_url of #{unreturnable}" do
+      post "/v1/subscriptions/#{@subscription.id}/payment_method",
+        params: { return_url: unreturnable }, as: :json
+
+      assert_response :unprocessable_entity
+      assert_includes json_body.fetch("errors").map { |error| error.fetch("field") }, "return_url"
+      assert_empty @api.requests
+    end
+  end
+
+  test "POST /v1/subscriptions/:id/payment_method requires a return_url" do
+    post "/v1/subscriptions/#{@subscription.id}/payment_method", as: :json
+
+    assert_response :unprocessable_entity
+    assert_includes json_body.fetch("errors").map { |error| error.fetch("field") }, "return_url"
+  end
+
+  # A customer the processor does not know is the processor's refusal, not this
+  # service's misconfiguration — so it is a 422 naming the endpoint's field, and
+  # never the 503 a missing API key gets. The guard is deliberately absent from
+  # the client: asking and being refused is the honest path.
+  test "POST /v1/subscriptions/:id/payment_method is a 422 for a customer the processor does not know" do
+    @subscription.customer.update!(processor_customer_id: nil)
+
+    post "/v1/subscriptions/#{@subscription.id}/payment_method",
+      params: { return_url: "/billing" }, as: :json
+
+    assert_response :unprocessable_entity
+    assert_includes json_body.fetch("errors").map { |error| error.fetch("field") }, "subscription_id"
+  end
+
+  # Unconfigured is this service's own misconfiguration, so it is the 503 the
+  # mutators give — the caller's request was fine.
+  test "POST /v1/subscriptions/:id/payment_method is a 503 when the processor is unconfigured" do
+    Processor::StripeClient.current = Processor::StripeClient.new(api_key: nil)
+
+    post "/v1/subscriptions/#{@subscription.id}/payment_method",
+      params: { return_url: "/billing" }, as: :json
+
+    assert_response :service_unavailable
+  end
+
   # --- the surface ------------------------------------------------------------
 
   test "every subscription path is served" do
@@ -684,6 +770,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
         /v1/subscriptions/{id}/cancel
         /v1/subscriptions/{id}/change_plan
         /v1/subscriptions/{id}/entitlements
+        /v1/subscriptions/{id}/payment_method
         /v1/subscriptions/{id}/upcoming_invoice
       ].sort,
       document.fetch("paths").keys.grep(%r{/v1/subscriptions}).sort

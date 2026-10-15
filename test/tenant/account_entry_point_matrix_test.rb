@@ -149,11 +149,13 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # only route on this controller that asks the processor a question instead
     # of telling it to act.
     [ "GET", "/v1/subscriptions/:id/upcoming_invoice" ] => [ "read", "projects the next invoice for a subscription resolved inside `for_account`; another account's is a 404 and the processor is not asked" ],
+    [ "POST", "/v1/subscriptions/:id/payment_method" ] => [ "update", "opens the processor's portal for a subscription resolved inside `for_account`; another account's is a 404 and no portal is asked for" ],
     [ "GET", "/v1/subscriptions/:id/entitlements" ] => [ "read", "reads entitlements for a subscription resolved inside `for_account`" ],
 
     # The receipt for one charge. A charge is billed to an account and the route
     # resolves it inside `Charge.for_account`, so another account's uuid is a 404 —
     # the same answer a uuid naming nothing gets.
+    [ "GET", "/v1/charges" ] => [ "list", "pages this account's charges, scoped by `Charge.for_account`; another account's is not in the listing" ],
     [ "GET", "/v1/charges/:id" ] => [ "read", "resolves a charge by its uuid inside `for_account`; another account's is a 404" ],
 
     # The development checkout door. It WRITES — a completed checkout grants
@@ -219,6 +221,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     [ "app/controllers/v1/subscriptions_controller.rb", "cancel", "update" ] => "asks the processor to cancel a subscription resolved inside `for_account`",
     [ "app/controllers/v1/subscriptions_controller.rb", "change_plan", "update" ] => "asks the processor to move a subscription resolved inside `for_account`",
     [ "app/controllers/v1/subscriptions_controller.rb", "upcoming_invoice", "read" ] => "projects the next invoice for a subscription resolved inside `for_account`; the subscription read is `subscription_record`'s, and this asks the processor a question",
+    [ "app/controllers/v1/subscriptions_controller.rb", "payment_method", "update" ] => "opens the processor's portal for a subscription resolved inside `for_account`; the customer the portal is for comes off the row, never off the body",
 
     # --- the processor delivery path, where an account is resolved from an id -
     [ "app/services/subscriptions/lifecycle.rb", "call", "read" ] => "resolves the row a delivery writes, by the processor's subscription id",
@@ -253,6 +256,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     [ "app/services/webhooks/charges/recorder.rb", "resolved_subscription", "read" ] => "resolves the subscription a payment is for, by the processor's subscription id",
     [ "app/services/webhooks/charges/recorder.rb", "record", "write" ] => "writes the charge a settled payment is the receipt for",
     [ "app/controllers/v1/charges_controller.rb", "show", "read" ] => "resolves a charge by its uuid inside `for_account`; another account's is a 404",
+    [ "app/controllers/v1/charges_controller.rb", "index", "list" ] => "pages this account's charges, scoped by `Charge.for_account`",
 
     # --- the recipient fact: the payment payload's one lookup (billing-event-payloads-01)
     # The payment events carry the customer's billing email because the fleet's
@@ -447,7 +451,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # The projection is a READ of the processor — it asks for a figure and
     # changes nothing — so it is classified as one, and the pattern that
     # otherwise catches every processor call is extended to catch it.
-    [ "read",   /\bprocessor\.upcoming_invoice\(/ ]
+    [ "read",   /\bprocessor\.upcoming_invoice\(/ ],
+    [ "update", /\bprocessor\.billing_portal_url\(/ ]
   ].freeze
 
   # The patterns that only count **on a tenant model**. `scope` is one of them,
@@ -638,10 +643,10 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # records no charge, so the recorder's resolution cannot be the one the event
   # relies on. The file left `NO_DATA_ACCESS` the same day: a file that performs
   # a read does not belong among the files that perform none.
-  test "there are 48 account-scoped data accesses in 45 methods, filed under 46 keys" do
-    assert_equal 48, self.class.accesses.size
-    assert_equal 45, classified_sites.size
-    assert_equal 46, DATA_ACCESSES.size
+  test "there are 50 account-scoped data accesses in 47 methods, filed under 48 keys" do
+    assert_equal 50, self.class.accesses.size
+    assert_equal 47, classified_sites.size
+    assert_equal 48, DATA_ACCESSES.size
 
     assert_equal 2, self.class.accesses.size - DATA_ACCESSES.size,
       "the gap between accesses and keys has changed. It is 2 because `Lifecycle#customer` " \
@@ -659,15 +664,15 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # zero kinds are filled in explicitly because `tally` omits an absent key, and
   # a breakdown that quietly lost `delete` is the one breakdown this file exists
   # to keep honest.
-  test "the data-access breakdown is read 22, list 12, write 9, update 5, delete 0" do
-    assert_equal({ "read" => 22, "list" => 12, "write" => 9, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
+  test "the data-access breakdown is read 22, list 13, write 9, update 6, delete 0" do
+    assert_equal({ "read" => 22, "list" => 13, "write" => 9, "update" => 6, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
   end
 
   # **15 account-scoped routes**, derived from the router, in the same four kinds.
   # This is the caller-facing count, and unlike the one above it does not change
   # when a helper is extracted.
-  test "there are 17 account-scoped routes, and the router serves exactly them plus the webhook" do
-    assert_equal 17, ACCOUNT_SCOPED_ROUTES.size
+  test "there are 19 account-scoped routes, and the router serves exactly them plus the webhook" do
+    assert_equal 19, ACCOUNT_SCOPED_ROUTES.size
     assert_equal served_routes.to_set,
                  (ACCOUNT_SCOPED_ROUTES.keys + NOT_ACCOUNT_SCOPED_ROUTES.keys).to_set
   end
@@ -685,8 +690,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
       "these routes are excluded with no reason"
   end
 
-  test "the route breakdown is read 6, list 3, write 4, update 4, delete 0" do
-    assert_equal({ "read" => 6, "list" => 3, "write" => 4, "update" => 4, "delete" => 0 },
+  test "the route breakdown is read 6, list 4, write 4, update 5, delete 0" do
+    assert_equal({ "read" => 6, "list" => 4, "write" => 4, "update" => 5, "delete" => 0 },
                  breakdown(ACCOUNT_SCOPED_ROUTES.values.map(&:first)))
   end
 
@@ -694,8 +699,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # packet's headline is two separately-asserted numbers and not one sum that
   # double-counts a route against the method that serves it.
   test "the two layers are counted separately, because a route and the method that serves it overlap" do
-    assert_equal 17, ACCOUNT_SCOPED_ROUTES.size
-    assert_equal 48, self.class.accesses.size
+    assert_equal 19, ACCOUNT_SCOPED_ROUTES.size
+    assert_equal 50, self.class.accesses.size
     refute_equal ACCOUNT_SCOPED_ROUTES.size, self.class.accesses.size,
       "the two layers have converged, which means one of them is counting the other's rows"
   end

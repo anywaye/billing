@@ -38,6 +38,72 @@ class V1ChargesTest < ActionDispatch::IntegrationTest
     )
   end
 
+  # --- the index ---------------------------------------------------------------
+
+  # This account's charges, newest first. The index the receipts packet recorded
+  # as deliberately absent — "a list nobody can scope safely" — is safe now that
+  # every charge carries an account and every query runs through `for_account`,
+  # and it is the history a customer asks for when they want to see what they
+  # paid and when.
+  test "GET /v1/charges lists this account's charges, newest first" do
+    travel_to(frozen_now + 1.minute)
+    Charge.create!(
+      account_id: ACCOUNT_ID, customer: @customer,
+      processor_charge_id: "ch_FAKEchargesrequestBBBBBBBBB",
+      amount: 4900, currency: "USD", description: "Team monthly", paid_at: frozen_now + 1.minute
+    )
+
+    get "/v1/charges"
+
+    assert_response :ok
+    body = json_body
+    assert_equal 2, body.fetch("data").size
+    assert_equal "ch_FAKEchargesrequestBBBBBBBBB", body.fetch("data").first.fetch("processor_charge_id")
+    assert_equal @charge.id, body.fetch("data").last.fetch("id")
+    assert_equal @charge.created_at.utc.iso8601, body.fetch("data").last.fetch("created_at")
+    # Two rows on a default page of 25: the last page, and no cursor. A cursor
+    # only exists when there is more to fetch, and a client that parsed one
+    # would be parsing an implementation detail — which is why the shape is
+    # asserted rather than its content.
+    assert_equal false, body.fetch("page").fetch("has_more")
+    assert_nil body.fetch("page").fetch("next_cursor")
+  end
+
+  # The index is scoped like every other row-addressed read on `/v1`, and an
+  # absent row is what absent means: another account's charge is not in the
+  # listing at all, which is the only scope answer a listing can give.
+  test "GET /v1/charges does not list another account's charges" do
+    Charge.create!(
+      account_id: OTHER_ACCOUNT_ID, customer: @customer,
+      processor_charge_id: "ch_FAKEchargesrequestBBBBBBBBB",
+      amount: 4900, currency: "USD", description: "Team monthly", paid_at: frozen_now
+    )
+
+    get "/v1/charges"
+
+    ids = json_body.fetch("data").map { |row| row.fetch("processor_charge_id") }
+    assert_equal [ "ch_FAKEchargesrequestAAAAAAAAA" ], ids
+  end
+
+  # The amount crosses as integer minor units, the one representation the whole
+  # service uses — the receipt is where a number with a decimal point appears.
+  test "the index transmits the amount as integer minor units" do
+    get "/v1/charges"
+
+    row = json_body.fetch("data").sole
+    assert_equal 1900, row.fetch("amount")
+    assert_equal "USD", row.fetch("currency")
+  end
+
+  test "GET /v1/charges is a 401 with no token" do
+    without_token!
+
+    get "/v1/charges"
+
+    assert_response :unauthorized
+    assert_problem "unauthorized"
+  end
+
   # --- the receipt itself ------------------------------------------------------
 
   test "GET /v1/charges/:id renders the receipt as HTML" do

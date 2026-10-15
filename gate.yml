@@ -417,7 +417,12 @@ gate:
       # 1188 -> 1198 is the upcoming invoice: ten request specs for the route and
       # four for the fourth client method, plus the fake's price book. Measured
       # **1198 runs / 3853 assertions**.
-      minimum: 1198
+      #
+      # 1198 -> 1209 is the charges index (4) and the portal (7): the index
+      # supersedes the comment the receipts packet left on `show`, and the portal
+      # carries the two open-redirect refusals, the unknown-customer 422 and the
+      # 503. Measured **1209 runs / 3900 assertions**.
+      minimum: 1209
     # ---------------------------------------------------------------------
     # The gate reached its own last line. With the five above it, the step
     # markers bracket the run: the toolchain was pinned, the bundle resolved, a

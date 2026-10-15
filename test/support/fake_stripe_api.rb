@@ -118,7 +118,26 @@ class FakeStripeAPI
     )
   end
 
+  # The portal URL, from the processor. Recorded like every other request; the
+  # customer and the return path are what went out, and the URL is the
+  # processor's own.
+  PortalSession = Data.define(:url)
+
+  def billing_portal_url(params)
+    @requests << params
+
+    refuse_unknown_customer(params[:customer])
+
+    PortalSession.new("https://billing.stripe.test/session/pcss_00000000000001")
+  end
+
   private
+    def refuse_unknown_customer(customer)
+      return if customer.present?
+
+      raise StripeRefused, "No such customer: #{customer}"
+    end
+
     def refuse_unknown_price(price)
       return if KNOWN_PRICES.include?(price)
 

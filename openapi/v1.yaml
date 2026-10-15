@@ -109,6 +109,13 @@ info:
   # which is a fact about the response and not a break for a client that never
   # called it. A minor bump under the unchanged `/v1` prefix, per core's rule.
   #
+  # 2.4.0 is the money history and the portal: **two additive operations**,
+  # `GET /v1/charges` (the index the receipts packet recorded as deliberately
+  # absent — its two reasons have moved; see the operation) and `POST
+  # /v1/subscriptions/{id}/payment_method` (the processor's own portal, and the
+  # one operation whose answer is someone else's URL). No existing operation,
+  # response or body shape moved, so a minor bump under the unchanged prefix.
+  #
   # 2.3.0 is the upcoming invoice: **one additive operation, `GET
   # /v1/subscriptions/{id}/upcoming_invoice`**, the first operation whose
   # success is a *read from the processor* rather than a mutation. No existing
@@ -126,7 +133,7 @@ info:
   # unless the deployment enabled it, because a door that fabricates an
   # `active` subscription from a request body is a free-subscription door the
   # day it is reachable.
-  version: 2.3.0
+  version: 2.4.0
   description: >-
     Plans, customers, the subscription lifecycle, and one inbound
     payment-processor webhook for cafaye. This document describes every client
@@ -770,6 +777,60 @@ paths:
         '503':
           $ref: '#/components/responses/ProcessorUnconfigured'
 
+  /v1/subscriptions/{id}/payment_method:
+    parameters:
+      - $ref: '#/components/parameters/SubscriptionId'
+    post:
+      tags: [subscriptions]
+      operationId: createPaymentMethodUrl
+      summary: A portal URL for the subscription's customer to update their card
+      description: >-
+        The processor's own self-serve portal: where a customer goes to update a
+        card, add a payment method or read an invoice. This service holds no
+        payment-method form of its own — a card it stored would be a card it
+        holds — so the answer is the processor's URL and nothing else.
+
+        The subscription is resolved **inside the token's account** first, so
+        another account's uuid is a 404 and no portal is asked for. The
+        customer the portal opens for is the row's customer, not one the body
+        names.
+
+        `return_url` is required and must be a **path on this origin**: the
+        processor redirects there when the customer is done, and a URL the
+        processor will redirect to is an open-redirect weapon if it can name
+        any host — a phishing page served by the processor's own redirect, from
+        a page the customer trusts. A relative path is all any caller needs.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentMethodRequest'
+      responses:
+        '200':
+          description: The portal URL, valid for one visit.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethodUrl'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/ProcessorUnconfigured'
   /v1/subscriptions/{id}/entitlements:
     parameters:
       - $ref: '#/components/parameters/SubscriptionId'
@@ -922,6 +983,51 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/charges:
+    get:
+      tags: [charges]
+      operationId: listCharges
+      summary: List this account's charges
+      description: >-
+        **This account's charges**, newest first, scoped by the token's
+        `account_id` and by nothing else. Another account's charge is not in
+        this listing and is not distinguishable from one that does not exist.
+
+        The receipts packet's own note recorded why an index was absent — "a
+        list of money without a date range is a page nobody chose to read and a
+        list nobody can scope safely" — and both reasons have since moved.
+        Every charge row is denormalised with an `account_id` and resolved
+        through `Charge.for_account`, so the listing is scoped by the token;
+        and a cursor page of the newest charges, each carrying its own id, is
+        the history a customer looks for when they ask what they paid and
+        when. A date range is the page size and the order, not a required
+        parameter.
+
+        The receipt is `GET /v1/charges/{id}` — the HTML page a person reads.
+        This is the listing a program pages.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/TraceId'
+      responses:
+        '200':
+          description: A page of charges, newest first.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargePage'
+        '400':
+          $ref: '#/components/responses/CursorInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '503':
@@ -1776,6 +1882,80 @@ components:
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
+
+    Charge:
+      type: object
+      required:
+        [id, account_id, customer_id, processor_charge_id, amount, currency, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+          description: The account the charge is billed to, denormalised at recording time.
+        customer_id:
+          type: string
+          format: uuid
+        subscription_id:
+          type: [string, 'null']
+          format: uuid
+        processor_charge_id:
+          type: string
+          description: The processor's own id for this charge, UNIQUE here.
+        amount:
+          type: integer
+          description: Integer minor units. The receipt formats it; the API transmits it.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        description:
+          type: [string, 'null']
+          description: The processor's own line-item text, stored verbatim.
+        paid_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ChargePage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Charge'
+        page:
+          $ref: '#/components/schemas/Page'
+
+    PaymentMethodRequest:
+      type: object
+      required: [return_url]
+      additionalProperties: false
+      properties:
+        return_url:
+          type: string
+          description: >-
+            A path on this origin, where the processor returns the customer.
+            A relative path is all any caller needs, and an absolute URL to
+            another host is a 422: a URL the processor will redirect to is an
+            open-redirect weapon.
+          pattern: '^/[^/]'
+
+    PaymentMethodUrl:
+      type: object
+      required: [payment_method_url]
+      properties:
+        payment_method_url:
+          type: string
+          format: uri
+          description: The processor's own portal URL. Not stored, and valid for one visit.
 
     Page:
       type: object

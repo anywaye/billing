@@ -52,10 +52,14 @@ Rails.application.routes.draw do
     # every other row-addressed action. A read that asks the processor a
     # question rather than telling it to do something.
     get "subscriptions/:id/upcoming_invoice", to: "subscriptions#upcoming_invoice"
+    # The processor's own portal for a subscription's customer: a URL out and a
+    # URL back, no card ever touching this service.
+    post "subscriptions/:id/payment_method", to: "subscriptions#payment_method"
 
-    # Charges: what a customer was charged, for the receipt. Read by id, scoped
-    # by the token's account — a cross-tenant read is a 404, the same answer a
-    # uuid naming nothing gets.
+    # Charges: what a customer was charged, for the receipt and the history.
+    # Read by id, scoped by the token's account — a cross-tenant read is a 404,
+    # the same answer a uuid naming nothing gets.
+    get "charges", to: "charges#index"
     get "charges/:id", to: "charges#show"
 
     # The fake-processor checkout: a checkout that completes in the request. The

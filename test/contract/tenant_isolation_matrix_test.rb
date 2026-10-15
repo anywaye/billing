@@ -169,10 +169,12 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
     [ "POST", "/v1/subscriptions/:id/change_plan" ] => [ SCOPED, "moves a subscription resolved inside `Subscription.for_account`" ],
     [ "GET", "/v1/subscriptions/:id/entitlements" ] => [ SCOPED, "reads entitlements for a subscription resolved inside `Subscription.for_account`" ],
     [ "GET", "/v1/subscriptions/:id/upcoming_invoice" ] => [ SCOPED, "projects the next invoice for a subscription resolved inside `Subscription.for_account`; another account's is a 404 and the processor is not asked" ],
+    [ "POST", "/v1/subscriptions/:id/payment_method" ] => [ SCOPED, "opens the processor's portal for a subscription resolved inside `Subscription.for_account`; another account's is a 404 and no portal is asked for" ],
 
     # The receipt for one charge. A charge is billed to an account and the route
     # resolves it inside `Charge.for_account`, so another account's uuid is a
     # 404 — the same answer a uuid naming nothing gets.
+    [ "GET", "/v1/charges" ] => [ SCOPED, "pages this account's charges, scoped by `Charge.for_account`; another account's is not in the listing" ],
     [ "GET", "/v1/charges/:id" ] => [ SCOPED, "resolves a charge by its uuid inside `Charge.for_account`; another account's is a 404" ],
 
     # The development checkout door. The customer in the body is resolved inside
@@ -266,11 +268,11 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
   # four plan operations. The count is a pin and not a derivation, for the reason
   # the comment above it gives — a set assertion alone can be satisfied by
   # scoping one route.
-  test "thirteen of the seventeen are scoped: every customer, subscription, checkout and charge operation, and none of the four plan operations" do
+  test "fifteen of the nineteen are scoped: every customer, subscription, checkout and charge operation, and none of the four plan operations" do
     scoped = ACCOUNT_SCOPED.select { |_operation, (verdict, _reason)| verdict == SCOPED }.keys
     catalogue = ACCOUNT_SCOPED.select { |_operation, (verdict, _reason)| verdict == CATALOGUE }.keys
 
-    assert_equal 13, scoped.size, "the scoped set is #{names(scoped)}"
+    assert_equal 15, scoped.size, "the scoped set is #{names(scoped)}"
     assert_equal 4, catalogue.size, "the catalogue set is #{names(catalogue)}"
     assert_empty scoped.grep(%r{/v1/plans}),
       "a plan operation is recorded as scoped. A plan has no `account_id` column, so there is " \

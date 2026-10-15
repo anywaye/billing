@@ -8,6 +8,44 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **`GET /v1/charges` — the money history.** This account's charges, newest
+  first, cursor-paged, every row scoped by `Charge.for_account` and carrying
+  the one wire representation for an amount (integer minor units plus a
+  currency). The receipts packet's own comment recorded why an index was
+  deliberately absent — *"a list of money without a date range is a page
+  nobody chose to read and a list nobody can scope safely"* — and both
+  reasons have since moved: every charge is denormalised with an account and
+  scoped by the token, and a cursor page of the newest charges is exactly the
+  history a customer asks for when they want to see what they paid and when.
+  The receipt itself stays `GET /v1/charges/{id}` as HTML — the listing is for
+  a program, the receipt is for the person.
+
+- **`POST /v1/subscriptions/{id}/payment_method` — the self-serve portal.**
+  The processor's own page where a customer changes a card or reads an
+  invoice: a URL out, a URL back, and no payment-method form in this service
+  at all. A card this service stored would be a card this service holds, and
+  the entire answer being someone else's URL removes the question. The
+  subscription — and therefore the customer the portal opens for — is resolved
+  inside the token's account, so no body field can name another account's
+  customer.
+
+  `return_url` is required and must be a **path on this origin**: the processor
+  redirects there when the customer is done, and a URL the processor will
+  redirect to is an open-redirect weapon — a phishing page served by the
+  processor's own redirect, from a page the customer trusts. A relative path
+  is all any caller needs, and an absolute URL to another host is a 422 naming
+  the field rather than a value this service silently rewrites. A customer the
+  processor does not know is the processor's refusal and a 422, not the 503 a
+  missing key gets.
+
+  `openapi/v1.yaml` is at **2.4.0** — two additive operations, one new schema
+  family (`Charge`, `ChargePage`, `PaymentMethodRequest`, `PaymentMethodUrl`)
+  — and the Stripe client grows a fifth method, `billing_portal_url`
+  (`Stripe::BillingPortal::Session.create`), which returns the processor's own
+  URL and computes nothing.
+
+### Added
+
 - **`GET /v1/subscriptions/{id}/upcoming_invoice** — what the customer will be
   charged at the renewal, before it is paid. The projection is the
   processor's, returned untouched and rendered in integer minor units: the

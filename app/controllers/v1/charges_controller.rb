@@ -54,12 +54,26 @@ module V1
       .label { color: #666; }
     CSS
 
+    # GET /v1/charges
+    #
+    # This account's charges, newest first. The receipts packet's comment on
+    # `show` recorded why an index was deliberately absent — "a list of money
+    # without a date range is a page nobody chose to read and a list nobody can
+    # scope safely" — and both halves of that reasoning have since moved: every
+    # charge row is denormalised with an `account_id` and resolved through
+    # `Charge.for_account`, so the list is scoped by the token's account and
+    # nothing else; and a cursor page of the newest charges, with a `Receipt`
+    # beside each row's id, is the history a customer looks for when they ask
+    # "what did I pay for, and when". The date range a caller wants is the page
+    # size and the order, not a required parameter.
+    def index
+      render_page(paginate(Charge.for_account(current_account_id)), ->(charge) { serialize(charge) })
+    end
+
     # GET /v1/charges/{id}
     #
-    # The receipt for one charge. One charge, not a list: an index over charges is
-    # an obvious next request and it is deliberately not here, because a list of
-    # money without a date range is a page nobody chose to read and a list nobody
-    # can scope safely. One id, one account, one receipt.
+    # The receipt for one charge, as HTML: a page a person reads, not a resource a
+    # program consumes. The index is for the program; this is for the human.
     def show
       charge = Charge.for_account(current_account_id).find_by(id: uuid_param!(params[:id]))
       raise ActiveRecord::RecordNotFound unless charge
@@ -74,6 +88,13 @@ module V1
     end
 
     private
+      # What a charge is on the index, and the same serialization the receipt's
+      # facts are built from. One representation for an amount: integer minor
+      # units and a currency, never a decimal.
+      def serialize(charge)
+        charge.as_json
+      end
+
       # The receipt document. Deliberately self-contained: no stylesheet, no
       # script, no external asset, no image. A receipt has to survive being
       # printed, saved and emailed, and every one of those is a place a relative

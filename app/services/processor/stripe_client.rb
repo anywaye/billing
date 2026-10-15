@@ -1,9 +1,9 @@
 module Processor
   # The whole of this service's outbound surface to Stripe.
   #
-  # Four methods, and every Stripe call in this repository is one of them. That
+  # Five methods, and every Stripe call in this repository is one of them. That
   # is deliberate: "billing receives from Stripe" is only a claim about the code
-  # while there is nowhere else for a `Stripe::` call to be. Adding a fifth
+  # while there is nowhere else for a `Stripe::` call to be. Adding a sixth
   # method is adding a capability, and the diff says so.
   #
   # The `api` keyword is the seam. Production passes nil and gets the `stripe`
@@ -150,6 +150,37 @@ module Processor
       end
     end
 
+    # A self-serve portal URL: where a customer goes to update a card, change a
+    # payment method or read an invoice. The processor owns that page — this
+    # service has no payment-method form of its own, and one that stored a card
+    # would be a card this service holds — so what goes out is the processor's
+    # own customer id and where to come back to, and what comes back is the URL.
+    #
+    # `return_url` is the caller's and is required rather than defaulted: the
+    # processor redirects there when the customer is done, and a default would be
+    # a page this service chose for a caller it did not ask.
+    def billing_portal_url(processor_customer_id:, return_url:)
+      require_configured!
+
+      # A customer with no id at the processor is not this service's
+      # misconfiguration and not a `503`: it is a customer the processor does not
+      # know, and the processor's own answer for one is a refusal. The guard is
+      # deliberately absent — asking and being refused is the honest path, and
+      # pre-empting it here would invent this service's own error for the
+      # processor's fact.
+
+      # The URL, and only the URL: `create_checkout_session` returns the whole
+      # session and the caller reads `.id` and `.url` off it, so this is the same
+      # shape — the client never invents a wrapper of its own, and the seam that
+      # the specs inject returns the processor's own object.
+      perform(:billing_portal, processor_customer_id) do
+        stripe.billing_portal_url(
+          customer: processor_customer_id,
+          return_url: return_url
+        ).url
+      end
+    end
+
     private
       # One translation of one refusal, for every call, so a caller handles
       # "Stripe refused" once. The processor's own message is kept verbatim: it is
@@ -214,6 +245,10 @@ module Processor
 
       def upcoming_invoice(params)
         Stripe::Invoice.upcoming(params, api_key: @api_key)
+      end
+
+      def billing_portal_url(params)
+        Stripe::BillingPortal::Session.create(params, api_key: @api_key)
       end
     end
   end

@@ -142,6 +142,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     changeSubscriptionPlan
     createCheckout
     createCustomer
+    createPaymentMethodUrl
     createPlan
     createSubscriptionCheckout
     getCharge
@@ -150,6 +151,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     getSubscription
     getSubscriptionEntitlements
     getUpcomingInvoice
+    listCharges
     listCustomers
     listPlans
     listSubscriptions
@@ -258,7 +260,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     # The 2.3.0 paragraph above names the packet, and this line is the assertion:
     # the bump is what a client generator reads, so a packet that adds an
     # operation and forgets the version is caught here.
-    assert_equal "2.3.0", document.fetch("info").fetch("version")
+    assert_equal "2.4.0", document.fetch("info").fetch("version")
   end
 
   # --- the security the document declares, and what the router actually does ----
