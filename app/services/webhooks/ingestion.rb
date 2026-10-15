@@ -117,7 +117,7 @@ module Webhooks
         end
       rescue Ignored => e
         webhook.ignore!(e.reason)
-      rescue ActiveRecord::RecordNotUnique
+      rescue ActiveRecord::RecordNotUnique => e
         # A concurrent duplicate delivery, caught wherever the constraint fired.
         #
         # Two deliveries of one event id both read `handled?` as false, both
@@ -158,7 +158,18 @@ module Webhooks
         # redeliver, and the redelivery would race again. Parking it as `failed:`
         # would put a row in front of a human for an event that is published and
         # correct.
-        webhook.ignore!(DUPLICATE_REASON)
+        #
+        # **A unique violation is classified by what it refused, not by its
+        # class.** Measured on this stack (2026-10-16): a *second* live
+        # subscription for an account that already held one on the same plan is
+        # refused by `subscriptions_live_account_plan_idx` — the customer paid,
+        # the invoice's charge was processed, and this branch recorded the
+        # subscription as `ignored:duplicate_delivery`, which is a lie: no earlier
+        # delivery stated this fact. So the constraint's effect is re-read after
+        # the rollback: a duplicate is the same fact already stored (the outbox
+        # row for this event id, or the subscription this event names), and
+        # anything else a constraint refuses is parked for a human.
+        duplicate_delivery? ? webhook.ignore!(DUPLICATE_REASON) : park(webhook, e)
       rescue ActiveRecord::RecordInvalid => e
         # A uniqueness failure and a unique-index violation are **one fact** told
         # two ways, and which of the two a losing thread hears is a scheduling
@@ -169,6 +180,34 @@ module Webhooks
         uniqueness_race?(e) ? webhook.ignore!(DUPLICATE_REASON) : park(webhook, e)
       rescue StandardError => e
         park(webhook, e)
+      end
+
+      # Whether the unique violation that just rolled back was the same fact
+      # arriving twice, read back from committed state rather than inferred from
+      # the constraint's name.
+      #
+      # The two measured duplicate routes are the only ones that answer yes:
+      #
+      #   * the outbox already holds a row for this event id — the payment and
+      #     subscription-updated events carry `processor_event_id`, so this is the
+      #     row their racing delivery lost to;
+      #   * the subscriptions table already holds the subscription this event
+      #     names — `customer.subscription.created`'s outbox payload
+      #     deliberately carries no `processor_event_id`, so its race is lost at
+      #     the subscription's own `INSERT` instead.
+      #
+      # A unique violation that is neither — today, the live-uniqueness index
+      # refusing a different subscription for an account that already has one on
+      # the plan — is a second real fact this service declined to store, and it
+      # parks.
+      def duplicate_delivery?
+        # The index over this expression is `outbox_events_processor_event_id_idx`
+        # — the outbox table has no column of its own for it.
+        return true if OutboxEvent.where("data ->> 'processor_event_id' = ?", @event_id).exists?
+        return false unless @type.to_s.start_with?("customer.subscription.")
+
+        subscription_id = payload.dig("data", "object", "id")
+        subscription_id.present? && Subscription.exists?(processor_subscription_id: subscription_id)
       end
 
       # Whether a validation failure is the duplicate the constraint above

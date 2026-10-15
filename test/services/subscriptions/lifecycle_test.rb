@@ -82,6 +82,23 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", Subscription.sole.processor_subscription_id
   end
 
+  # The link the two processor round trips need: `…/upcoming_invoice` and
+  # `…/payment_method` both send `customers.processor_customer_id`, and a
+  # customer created through `/v1` has none — the Checkout session creates the
+  # customer at the processor, and this delivery is the first that learns what
+  # the processor calls it. Measured on this stack (2026-10-16): without this
+  # write, both actions sent a nil customer to Stripe for a subscription Stripe
+  # itself holds.
+  test "a subscription starting records the processor's id for a customer that had none" do
+    body = JSON.parse(stripe_fixture("customer.subscription.created"))
+    body.dig("data", "object")["metadata"] = { "cafaye_customer_id" => @customer.id }
+    @customer.update!(processor_customer_id: nil)
+
+    Webhooks::Ingestion.new(processor: :stripe, event_id: body["id"], type: body["type"], payload: body).call
+
+    assert_equal "cus_R1pQKz9xLp2mN4vB6yH8jL0", @customer.reload.processor_customer_id
+  end
+
   test "a subscription starting takes the status the processor reported" do
     apply("customer.subscription.created")
 

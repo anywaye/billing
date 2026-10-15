@@ -387,6 +387,26 @@ class Webhooks::IngestionTest < ActiveSupport::TestCase
     end
   end
 
+  # The third unique-violation case, and the one the live stack measured on
+  # 2026-10-16: the violation is neither this event's own id nor this event's
+  # own subscription — it is `subscriptions_live_account_plan_idx` refusing a
+  # *second* live subscription for an account that already has one on the plan.
+  # The customer paid, no delivery was duplicated, and the first version of this
+  # branch recorded `ignored:duplicate_delivery`, which filed a real payment's
+  # subscription as a non-event. A violation that duplicates nothing parks.
+  test "a unique violation that is not this event's own fact is parked, not called a duplicate" do
+    with_handler(SUBSCRIPTION_CREATED, lambda { |_payload, _event_time|
+      raise ActiveRecord::RecordNotUnique, 'duplicate key value violates unique constraint "subscriptions_live_account_plan_idx"'
+    }) do
+      record = ingest(SUBSCRIPTION_CREATED)
+
+      assert record.error.start_with?("failed:ActiveRecord::RecordNotUnique:"),
+        "a refusal that duplicates nothing must not be answered as a decision; got: #{record.error.inspect}"
+      refute_predicate record, :ignored?
+      assert_predicate record.processed_at, :present?
+    end
+  end
+
   # The control, as its own test rather than as an absence: a `RecordInvalid`
   # with no uniqueness error in it is still parked, because that is a bug in this
   # service and nobody should have to tell it from a race by reading the

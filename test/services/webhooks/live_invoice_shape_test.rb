@@ -65,6 +65,35 @@ class LiveInvoiceShapeTest < ActiveSupport::TestCase
     assert_equal "billing.payment.succeeded", event.event_type
   end
 
+  # The FIRST checkout's delivery order, measured on this stack (2026-10-16):
+  # `invoice.paid` arrives before `customer.subscription.created`, and the
+  # customer — created by the Checkout session at the processor — has no
+  # `processor_customer_id` in this service yet. The only link is the metadata
+  # the session set on the subscription. Before the recorder read it, the
+  # receipt for a payment this real was silently not written: the walk showed
+  # `charges` at zero with Stripe holding a paid 19.00 invoice.
+  test "an invoice.paid that arrives before any subscription event still records the charge" do
+    body = stripe_fixture("invoice.paid.live-first-checkout")
+    cafaye_id = JSON.parse(body).dig("data", "object", "parent", "subscription_details", "metadata", "cafaye_customer_id")
+
+    customer = Customer.create!(
+      id: cafaye_id, owner_type: "Account", owner_id: SecureRandom.uuid, processor: "stripe",
+      email: "first-checkout@cafaye.com"
+    )
+    assert_nil customer.processor_customer_id, "the case under test is a customer the processor's id cannot resolve"
+
+    result = ingest(body)
+
+    assert_nil result.error
+    charge = Charge.sole
+    assert_equal 1_900, charge.amount
+    assert_equal "USD", charge.currency
+    assert_equal customer.id, charge.customer_id
+    assert_equal customer.owner_id, charge.account_id
+    assert_nil charge.subscription_id, "no subscription row exists yet, and the receipt does not wait for one"
+    assert_equal "in_1UQxoPCmN780pAiW8Kp4oks8", charge.processor_charge_id
+  end
+
   test "the live recording and the old fixture both pass the paid screen" do
     # The old fixture resolves its own customer, which the hand-written
     # fixture id names (`cus_R1pQKz9xLp2mN4vB6yH8jL0`) — a different row

@@ -251,12 +251,12 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     "customer.subscription.updated" => SUBSCRIPTION_KEYS,
     "customer.subscription.deleted" => SUBSCRIPTION_KEYS,
     "invoice.paid" => %w[
-      kind processor processor_event_id customer_id subscription_id invoice_id payment_intent_id
-      paid amount attempt_count next_payment_attempt
+      kind processor processor_event_id customer_id cafaye_customer_id subscription_id invoice_id
+      payment_intent_id paid amount attempt_count next_payment_attempt
     ],
     "invoice.payment_failed" => %w[
-      kind processor processor_event_id customer_id subscription_id invoice_id payment_intent_id
-      paid amount attempt_count next_payment_attempt
+      kind processor processor_event_id customer_id cafaye_customer_id subscription_id invoice_id
+      payment_intent_id paid amount attempt_count next_payment_attempt
     ],
     "checkout.session.completed.payment" => %w[
       kind processor processor_event_id customer_id checkout_session_id payment_intent_id

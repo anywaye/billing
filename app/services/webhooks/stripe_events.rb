@@ -161,15 +161,44 @@ module Webhooks
       provenance(payload).merge(
         "kind" => "payment",
         "customer_id" => invoice["customer"],
+        # The link back to the cafaye customer, from wherever the shape of the
+        # day carries it. The first checkout's `invoice.paid` arrives **before**
+        # `customer.subscription.created` — measured on this stack, 2026-10-16 —
+        # so there is no subscription row yet to resolve the customer through,
+        # and a customer created through `/v1` has no `processor_customer_id`
+        # either. The Checkout session put this metadata on the subscription,
+        # and reading it is the difference between a receipt and none.
+        "cafaye_customer_id" => cafaye_customer_of(invoice),
         "subscription_id" => invoice["subscription"] || invoice.dig("parent", "subscription_details", "subscription"),
         "invoice_id" => invoice["id"],
         "payment_intent_id" => invoice["payment_intent"],
-        "paid" => invoice["paid"] == true || invoice["status"] == "paid",
+        "paid" => paid_invoice?(invoice),
         "amount" => money(settled_or_due(invoice), invoice["currency"]),
         "attempt_count" => invoice["attempt_count"],
         "next_payment_attempt" => time_of(invoice["next_payment_attempt"])
       )
     end
+
+    # The cafaye reference, wherever the live shape carries it: the invoice's
+    # own metadata, the subscription's (which the live shape nests under
+    # `parent`), or the first line item's. Measured, 2026-10-16: the top level
+    # is empty and the other two carry it.
+    def self.cafaye_customer_of(invoice)
+      invoice.dig("metadata", "cafaye_customer_id") ||
+        invoice.dig("parent", "subscription_details", "metadata", "cafaye_customer_id") ||
+        invoice.dig("lines", "data", 0, "metadata", "cafaye_customer_id")
+    end
+    private_class_method :cafaye_customer_of
+
+    # Whether the processor says this invoice was paid. Two shapes, one fact:
+    # the old fixture carries `paid`, the live one (`2026-03-25.dahlia`)
+    # carries only `status`. `paid` and `settled_or_due` read this one
+    # predicate, so the event and the recorded amount cannot disagree about
+    # whether money moved.
+    def self.paid_invoice?(invoice)
+      invoice["paid"] == true || invoice["status"] == "paid"
+    end
+    private_class_method :paid_invoice?
 
     # The amount an invoice event is about. A paid invoice reports what was
     # collected; a failed one reports what could not be, which is `amount_due` and
@@ -178,7 +207,7 @@ module Webhooks
     # failed 29.00 charge as a settled 0.00. Money is not worth a clever
     # fallback.
     def self.settled_or_due(invoice)
-      invoice["paid"] ? invoice["amount_paid"] : invoice["amount_due"]
+      paid_invoice?(invoice) ? invoice["amount_paid"] : invoice["amount_due"]
     end
     private_class_method :settled_or_due
 

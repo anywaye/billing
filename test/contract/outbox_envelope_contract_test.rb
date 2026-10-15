@@ -97,6 +97,19 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
     "billing.plan.updated" => {
       unexpected: %w[entitlements]
     },
+    # Measured on this stack (2026-10-16): the first checkout's `invoice.paid`
+    # arrives before `customer.subscription.created`, so the charge recorder
+    # needs the cafaye link the Checkout session put in the invoice's metadata —
+    # without it, a real payment recorded no receipt. The key is emitted because
+    # a consumer needs it (the same argument the subscription payloads won), and
+    # core's payment schema is closed and does not declare it: recorded here and
+    # in cafaye.yml as the gap it is, not worked around by narrowing the event.
+    "billing.payment.succeeded" => {
+      unexpected: %w[cafaye_customer_id]
+    },
+    "billing.payment.failed" => {
+      unexpected: %w[cafaye_customer_id]
+    },
     # core's D10 shape: `kind`, `processor` and `processor_event_id` are required
     # by core and absent here, and the four cafaye ids are rejected by a schema
     # closed with `additionalProperties: false`. `email` and `plan_name` were

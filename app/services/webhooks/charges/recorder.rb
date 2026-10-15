@@ -126,8 +126,17 @@ module Webhooks
         # payment that was perfectly real. This is a known gap, not a rule — an
         # `invoice.paid` for a customer created in the processor's dashboard has
         # no cafaye customer, and its receipt is therefore not written.
+        #
+        # **The cafaye link is consulted first**, and the order is the fix for a
+        # measured defect (2026-10-16): the first checkout's `invoice.paid`
+        # arrives before `customer.subscription.created`, and a customer
+        # created through `/v1` has no `processor_customer_id` until a
+        # subscription event names one — so resolving by the processor's
+        # customer id alone found nothing and the receipt for a real payment
+        # was silently not written. The metadata the Checkout session set is
+        # the id this service minted; the processor's id is the fallback.
         def resolved_customer
-          @resolved_customer ||= find_customer(data["customer_id"])
+          @resolved_customer ||= find_customer(data["cafaye_customer_id"]) || find_customer(data["customer_id"])
         end
 
         def find_customer(identifier)

@@ -80,6 +80,17 @@
 # >   as a set in both directions, so a gap closing from the core side is the
 # >   mechanism working, and it is the reason this bullet exists — an entry left
 # >   sitting beside a closed one describes a disagreement that no longer exists.
+# > * **The first checkout's delivery order re-opened one field on 2026-10-16**,
+# >   measured on the local whole stack. `invoice.paid` arrives before
+# >   `customer.subscription.created`, and the charge recorder resolved the
+# >   customer by the processor's id alone — which a customer created through
+# >   `/v1` does not have until a subscription event names one. The invoice's
+# >   metadata carries the cafaye link, so the two payment events now emit
+# >   `cafaye_customer_id`: the field a consumer needs (the same argument the
+# >   subscription payloads already won), and the field without which a real
+# >   payment recorded no receipt. core's payment schemas are closed and do not
+# >   declare it, so the divergence is back in `PENDING_PAYLOAD_ALIGNMENT` —
+# >   recorded rather than worked around, and the declaration is core's to make.
 # >
 # > Four decisions are recorded here. Two change what this service *is*, and two
 # > are questions core owns that this worktree cannot answer.
@@ -109,13 +120,15 @@
 # > subscription shape core's D10 described, above, and `entitlements` on the two
 # > plan events.
 # >
-# > **The two payment events now match core's schemas exactly**, which is the
-# > first time a money event has. `billing.payment.succeeded` and
-# > `billing.payment.failed` declare `email` in core and emit it, and their
-# > D11 `oneOf` pair — invoice-backed, Checkout-backed — is satisfied by the two
-# > shapes the normalizers produce. They are no longer in the recorded table, and
-# > the table is asserted as a set in both directions, so a future divergence
-# > fails by name rather than sitting beside a closed one.
+# > **The two payment events matched core's schemas exactly from core-w46, and
+# > re-opened one field on 2026-10-16** — see the delivery-order bullet above.
+# > `billing.payment.succeeded` and `billing.payment.failed` declare `email` in
+# > core and emit it, and their D11 `oneOf` pair — invoice-backed,
+# > Checkout-backed — is satisfied by the two shapes the normalizers produce.
+# > What the local whole-stack walk added is `cafaye_customer_id`, without which
+# > a first checkout's real payment recorded no receipt. It is back in the
+# > recorded table, and the table is asserted as a set in both directions, so a
+# > future divergence fails by name rather than sitting beside a closed one.
 # >
 # > **Why the fields are here anyway, and why now.** The fleet's consumer design
 # > is that a consumer acts on the envelope or refuses, and never looks up

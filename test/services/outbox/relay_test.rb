@@ -71,11 +71,14 @@ class Outbox::RelayTest < ActiveSupport::TestCase
     assert_includes log.string, "accumulate in outbox_events"
   end
 
-  test "with NATS_URL set the wiring returns a running loop" do
-    relay = Outbox::Relay.start_from_environment(env: { "NATS_URL" => @broker.url }, logger: nil)
+  test "with NATS_URL set the wiring returns a running loop, and the boot log names the broker" do
+    log = StringIO.new
+
+    relay = Outbox::Relay.start_from_environment(env: { "NATS_URL" => @broker.url }, logger: Logger.new(log))
 
     assert_kind_of Outbox::Relay, relay
     assert_predicate relay, :running?
+    assert_includes log.string, "the outbox publisher is running against #{@broker.url}"
   ensure
     relay&.stop
   end

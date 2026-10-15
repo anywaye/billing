@@ -240,6 +240,15 @@ module Subscriptions
         subscription.assign_attributes(attributes)
         raise Refused, "no_change_to_record" if existed && !changes_anything?(subscription)
 
+        # The processor's own id for the customer, recorded the first time a
+        # subscription event names one. A customer created through `/v1` has
+        # none — the Checkout session creates the customer at the processor and
+        # this is the first delivery that learns what the processor calls it —
+        # and `POST …/upcoming_invoice` and `…/payment_method` both send it, so
+        # without this write the two actions a customer uses most are refused
+        # with a processor error for a customer the processor does know.
+        backfill_processor_customer_id
+
         # The processor's own clock, not this service's. It is the only thing that
         # can tell a delivery that arrived late from one that arrived now, and it is
         # written in the same statement as the state so the two cannot disagree about
@@ -253,6 +262,29 @@ module Subscriptions
 
       def changes_anything?(subscription)
         STATE_ATTRIBUTES.any? { |attribute| subscription.will_save_change_to_attribute?(attribute) }
+      end
+
+      # Records the processor's id for the customer, once, and never overwrites
+      # one already there. The id is the event's own `customer`, and the customer
+      # is the row `resolution` already resolved (by the cafaye reference in the
+      # subscription's metadata, or by the processor id it already held).
+      #
+      # **Never overwrites, and the direction matters.** The column is one
+      # customer's id at one processor, and a delivery that arrived later is not
+      # a correction: the fake door's delivery carries the fake processor's
+      # derived id, and letting it rewrite a real one was a measured defect
+      # (2026-10-16) — the walk's receipt stopped resolving after its own
+      # checkout. A customer another row already claims is left alone for the
+      # same reason: `processor_customer_id` is unique, and a second cafaye
+      # customer answering to one processor customer is a disagreement for a
+      # human, not something a webhook settles.
+      def backfill_processor_customer_id
+        processor_id = data["customer_id"].to_s
+        return if processor_id.blank?
+        return if customer.processor_customer_id.present?
+        return if Customer.where(processor_customer_id: processor_id).where.not(id: customer.id).exists?
+
+        customer.update!(processor_customer_id: processor_id)
       end
 
       # Whether the delivery resolves to the account the row is already on.

@@ -79,7 +79,7 @@ module Outbox
       end
 
       relay = start(url: url, logger: logger)
-      logger&.info("the outbox publisher is running against #{relay.url}")
+      logger&.info("the outbox publisher is running against #{url}")
       relay
     end
 
