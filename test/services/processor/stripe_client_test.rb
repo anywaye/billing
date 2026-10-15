@@ -5,9 +5,12 @@ require "test_helper"
 # Two things this seam is for, and they are different:
 #
 #   * **It is the whole of the outbound surface.** Every Stripe call in this
-#     repository is one of these three methods. That is what makes "this service
+#     repository is one of these four methods. That is what makes "this service
 #     only receives from Stripe" a claim about the code rather than an intention:
-#     there is no `Stripe::` call anywhere else to find.
+#     there is no `Stripe::` call anywhere else to find. The fourth — the
+#     upcoming invoice — is the first one that *receives* rather than sends, and
+#     it is held to the same shape: two of the processor's own ids go out, and
+#     every figure that comes back is the processor's.
 #   * **It is the seam the specs replace.** A checkout URL and a subscription's
 #     existence both come from Stripe, so a test cannot invent them and assert
 #     the invention. The specs record what was *asked* of Stripe and assert on the
@@ -254,6 +257,54 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     result = client_for(@api).cancel_subscription(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", at_period_end: true)
 
     assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", result.id
+  end
+
+  # --- the upcoming invoice ---------------------------------------------------
+
+  # The projection: what the customer will be charged at the renewal, before it
+  # is paid. Two of the processor's own ids go out — the subscription and the
+  # customer it is billed to — and the request is recorded like every other.
+  test "an upcoming invoice names the subscription and the customer it belongs to" do
+    client_for(@api).upcoming_invoice(
+      processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1",
+      processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0"
+    )
+
+    request = @api.requests.sole
+    assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", request.fetch(:subscription)
+    assert_equal "cus_R1pQKz9xLp2mN4vB6yH8jL0", request.fetch(:customer)
+  end
+
+  # No amount is computed here and none is sent: the projection is a *read*.
+  # This is the assertion that a future edit which "helpfully" adds a computed
+  # figure to the request fails by name.
+  test "an upcoming invoice asks for no amount, because it is a read" do
+    client_for(@api).upcoming_invoice(
+      processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1",
+      processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0"
+    )
+
+    request = @api.requests.sole
+    assert_empty request.keys - %i[subscription customer],
+      "the projection sent something other than the two identifiers: #{request.keys.inspect}"
+  end
+
+  test "an upcoming invoice returns the processor's own projection untouched" do
+    invoice = client_for(@api).upcoming_invoice(
+      processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1",
+      processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0"
+    )
+
+    assert_equal "usd", invoice.currency
+    assert_equal 1900, invoice.subtotal
+    assert_equal 1900, invoice.total_excluding_tax
+    assert_equal 2147, invoice.total
+    assert_equal 1, invoice.lines.size
+    line = invoice.lines.first
+    assert_equal "Pro monthly", line.description
+    assert_equal 1900, line.price.unit_amount
+    assert_equal 1900, line.amount
+    assert_equal 1, line.quantity
   end
 
   # --- what a processor can refuse --------------------------------------------

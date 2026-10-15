@@ -1,9 +1,9 @@
 module Processor
   # The whole of this service's outbound surface to Stripe.
   #
-  # Three methods, and every Stripe call in this repository is one of them. That
+  # Four methods, and every Stripe call in this repository is one of them. That
   # is deliberate: "billing receives from Stripe" is only a claim about the code
-  # while there is nowhere else for a `Stripe::` call to be. Adding a fourth
+  # while there is nowhere else for a `Stripe::` call to be. Adding a fifth
   # method is adding a capability, and the diff says so.
   #
   # The `api` keyword is the seam. Production passes nil and gets the `stripe`
@@ -14,9 +14,10 @@ module Processor
   # ## Nothing here is arithmetic about money
   #
   # A checkout session sends a price id. A plan change sends a proration
-  # *behaviour*. A cancellation sends an id and a boolean. No amount is ever
-  # computed in this file, and the specs assert the absence of the keys that
-  # would carry one (`amount`, `credit`, `refund`, `prorate`).
+  # *behaviour*. A cancellation sends an id and a boolean. An upcoming invoice
+  # sends two ids and receives the processor's projection back. No amount is
+  # ever computed in this file, and the specs assert the absence of the keys
+  # that would carry one (`amount`, `credit`, `refund`, `prorate`).
   #
   # That is not tidiness. A figure calculated in Ruby and sent to the processor is
   # a figure this service did not keep, and the two eventually disagree — in a
@@ -126,6 +127,29 @@ module Processor
       end
     end
 
+    # The processor's projection of the next invoice for a subscription: what the
+    # customer will be charged at the renewal, before it is paid.
+    #
+    # Two identifiers go out and both are the processor's own: the subscription
+    # and the customer it is billed to. The subscription implies the customer at
+    # the processor, and both are sent because that is what the processor's own
+    # `Invoice.upcoming` takes — the reference passes the same pair.
+    #
+    # What comes back is the processor's object, untouched. Every figure in it is
+    # the processor's, including the two the caller derives the tax line from; a
+    # tax figure invented here would be a figure this service did not keep, and
+    # the disagreement would surface in a customer's invoice.
+    def upcoming_invoice(processor_subscription_id:, processor_customer_id:)
+      require_configured!
+
+      perform(:upcoming_invoice, processor_subscription_id) do
+        stripe.upcoming_invoice(
+          customer: processor_customer_id,
+          subscription: processor_subscription_id
+        )
+      end
+    end
+
     private
       # One translation of one refusal, for every call, so a caller handles
       # "Stripe refused" once. The processor's own message is kept verbatim: it is
@@ -186,6 +210,10 @@ module Processor
 
       def cancel_subscription(id, params)
         Stripe::Subscription.cancel(id, params, api_key: @api_key)
+      end
+
+      def upcoming_invoice(params)
+        Stripe::Invoice.upcoming(params, api_key: @api_key)
       end
     end
   end

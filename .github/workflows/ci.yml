@@ -376,8 +376,10 @@ env:
   # count on a refused second checkout.
   # The checkout door's twelve request specs: **1188 runs, 3807 assertions**,
   # measured. The two floors in gate.yml moved with them.
-  BASELINE_RUNS: '1188'
-  BASELINE_ASSERTIONS: '3807'
+  # The upcoming-invoice route and the fourth StripeClient method: **1198 runs,
+  # 3853 assertions**, measured. Both floors in gate.yml moved with them.
+  BASELINE_RUNS: '1198'
+  BASELINE_ASSERTIONS: '3853'
 
 jobs:
   # ------------------------------------------------------------------ shared

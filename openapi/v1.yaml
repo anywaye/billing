@@ -109,6 +109,14 @@ info:
   # which is a fact about the response and not a break for a client that never
   # called it. A minor bump under the unchanged `/v1` prefix, per core's rule.
   #
+  # 2.3.0 is the upcoming invoice: **one additive operation, `GET
+  # /v1/subscriptions/{id}/upcoming_invoice`**, the first operation whose
+  # success is a *read from the processor* rather than a mutation. No existing
+  # operation, response or body shape moved, so it is a minor bump under the
+  # unchanged prefix. `tax` is the one figure the response derives — a
+  # difference between two of the processor's own figures, for display — and the
+  # operation says so where the figure is described.
+  #
   # 2.2.0 is the checkout door: **one additive operation, `POST /v1/checkouts`**,
   # over the fake processor that replaced the `pay` gem's `FakeProcessor`
   # (`Processor::FakeClient`). No existing operation, response or body shape
@@ -118,7 +126,7 @@ info:
   # unless the deployment enabled it, because a door that fabricates an
   # `active` subscription from a request body is a free-subscription door the
   # day it is reachable.
-  version: 2.2.0
+  version: 2.3.0
   description: >-
     Plans, customers, the subscription lifecycle, and one inbound
     payment-processor webhook for cafaye. This document describes every client
@@ -796,6 +804,56 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/subscriptions/{id}/upcoming_invoice:
+    parameters:
+      - $ref: '#/components/parameters/SubscriptionId'
+    get:
+      tags: [subscriptions]
+      operationId: getUpcomingInvoice
+      summary: What the next invoice will charge, before it is paid
+      description: >-
+        The processor's projection of the next invoice for a subscription **in
+        the token's account**. Another account's uuid is a 404, byte for byte
+        the answer a uuid naming nothing gets, and the processor is not asked.
+
+        Every figure in the response is the processor's own, in integer minor
+        units and an upper-case currency: the line items, the subtotal and the
+        total. The single exception is `tax`, which is **derived for display**
+        as `total - total_excluding_tax` — never stored, never sent to the
+        processor, and never used for a decision — because a response whose
+        parts did not add up when tax is present would be the worse lie.
+
+        A `canceled` subscription is a **409** and the processor is not asked:
+        the processor has stopped collecting, and a projection of a charge that
+        will not happen is a figure this service may not invent. A `past_due` or
+        `unpaid` one is left to the processor — those are collection states, and
+        whether there is still a period to invoice is the processor's answer.
+
+        A `unit_amount` is the processor's own `price.unit_amount`, read rather
+        than derived from the line's total: with a quantity greater than one a
+        derived figure would be wrong, and the processor states it outright.
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      responses:
+        '200':
+          description: The projection, in the processor's own figures.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePreview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/ProcessorUnconfigured'
   /v1/checkouts:
     post:
       tags: [checkouts]
@@ -1655,6 +1713,69 @@ components:
           additionalProperties:
             type: integer
             minimum: 0
+
+    InvoicePreview:
+      type: object
+      description: >-
+        What the next invoice will charge. The processor's own figures, except
+        the one derived `tax` the operation describes.
+      required: [subscription_id, period_end, currency, line_items, subtotal, tax, total]
+      properties:
+        subscription_id:
+          type: string
+          format: uuid
+        period_end:
+          type: string
+          format: date-time
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        line_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLineItem'
+        subtotal:
+          type: integer
+          description: Minor units, the processor's own.
+        tax:
+          type: integer
+          description: >-
+            Derived for display: `total - total_excluding_tax`, both of them the
+            processor's own figures. Never stored and never sent back.
+        total:
+          type: integer
+          description: Minor units, the processor's own.
+
+    InvoiceLineItem:
+      type: object
+      required: [description, period, quantity, unit_amount, amount, currency]
+      properties:
+        description:
+          type: string
+        period:
+          type: object
+          required: [start, end]
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        quantity:
+          type: integer
+          minimum: 0
+        unit_amount:
+          type: integer
+          description: >-
+            The processor's own `price.unit_amount`, read rather than derived
+            from the line total.
+        amount:
+          type: integer
+          description: This line's total in minor units, the processor's own.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
 
     Page:
       type: object

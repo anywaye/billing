@@ -47,6 +47,11 @@ Rails.application.routes.draw do
     post "subscriptions/:id/cancel", to: "subscriptions#cancel"
     post "subscriptions/:id/change_plan", to: "subscriptions#change_plan"
     get "subscriptions/:id/entitlements", to: "subscriptions#entitlements"
+    # The processor's projection of the next invoice for one of this account's
+    # subscriptions, resolved through the same scoped `subscription_record` as
+    # every other row-addressed action. A read that asks the processor a
+    # question rather than telling it to do something.
+    get "subscriptions/:id/upcoming_invoice", to: "subscriptions#upcoming_invoice"
 
     # Charges: what a customer was charged, for the receipt. Read by id, scoped
     # by the token's account — a cross-tenant read is a 404, the same answer a

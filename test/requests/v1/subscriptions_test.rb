@@ -684,6 +684,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
         /v1/subscriptions/{id}/cancel
         /v1/subscriptions/{id}/change_plan
         /v1/subscriptions/{id}/entitlements
+        /v1/subscriptions/{id}/upcoming_invoice
       ].sort,
       document.fetch("paths").keys.grep(%r{/v1/subscriptions}).sort
     )

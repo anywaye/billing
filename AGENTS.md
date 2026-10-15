@@ -47,7 +47,7 @@ first. Read the last one before touching `/v1`.
 - **billing-04** is the subscription lifecycle: the `subscriptions` table, the
   state machine that decides which transitions are possible, the `/v1`
   endpoints that buy a subscription and cancel one and move it between plans,
-  and the three requests this service now makes *to* Stripe.
+  and the four requests this service now makes *to* Stripe.
 - **billing-05** is a reconciliation and nothing else: core shipped payload
   schemas for all eight published types and raised D10, and
   `test/contract/outbox_envelope_contract_test.rb` was the thing that noticed.
@@ -205,9 +205,9 @@ billing-05 changes a claim the earlier packets made, so it is stated plainly:
 **this service now talks to Stripe.** It did not, and saying so was true when it
 was written. A subscription is bought through a Checkout Session, cancelled by
 asking Stripe to cancel, and moved between plans by asking Stripe to move it; a
-lifecycle that cannot make those three requests is not a lifecycle. The claim
+lifecycle that cannot make those four requests is not a lifecycle. The claim
 that replaces it is narrower and checkable by reading one file: **every request
-this service makes to Stripe is one of the three methods on
+this service makes to Stripe is one of the four methods on
 `Processor::StripeClient`, and there is no other `Stripe::` call in the
 repository.** No new dependency — the `stripe` gem was already here, for
 `Stripe::Webhook.construct_event`.
@@ -355,7 +355,7 @@ billing/
 │       ├── identity/
 │       │   └── token_verifier.rb      # the ONLY place a JWT is read
 │       ├── processor/
-│       │   ├── stripe_client.rb       # the three requests this service makes
+│       │   ├── stripe_client.rb       # the four requests this service makes
 │       │   └── fake_client.rb         # the no-network checkout processor
 │       ├── subscriptions/             # the lifecycle, as three pure objects
 │       │   ├── state_machine.rb       # which transitions are possible

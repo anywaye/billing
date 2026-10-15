@@ -75,6 +75,49 @@ class FakeStripeAPI
     Subscription.new(id, "canceled", false)
   end
 
+  # The projection: the processor's own answer for `Invoice.upcoming`, recorded
+  # like every other request and answered with a fixture the same shape the
+  # gem returns. A subscription the fake does not know about is refused,
+  # because that is the processor's own answer and a spec asking about one has
+  # arranged "the processor said no".
+  #
+  # The figures are the committed fixture's plan priced for one seat: 1900 USD,
+  # the plan the fixture subscriptions were created on. `total_excluding_tax`
+  # is separate from `total` so the display delta the controller computes is
+  # exercised as a subtraction rather than as a zero.
+  InvoiceLine = Data.define(:description, :period, :quantity, :price, :amount, :currency)
+  InvoicePeriod = Data.define(:start, :end)
+  InvoicePrice = Data.define(:unit_amount)
+  UpcomingInvoice = Data.define(:period_end, :currency, :lines, :subtotal, :total_excluding_tax, :total)
+
+  def upcoming_invoice(params)
+    @requests << params
+
+    refuse_unknown_subscription(params[:subscription])
+
+    period_start = Time.now.to_i
+    period_end = period_start + 30 * 24 * 60 * 60
+    amount = 1900
+
+    UpcomingInvoice.new(
+      period_end: period_end,
+      currency: "usd",
+      lines: [
+        InvoiceLine.new(
+          description: "Pro monthly",
+          period: InvoicePeriod.new(period_start, period_end),
+          quantity: 1,
+          price: InvoicePrice.new(amount),
+          amount: amount,
+          currency: "usd"
+        )
+      ],
+      subtotal: amount,
+      total_excluding_tax: amount,
+      total: amount + 247
+    )
+  end
+
   private
     def refuse_unknown_price(price)
       return if KNOWN_PRICES.include?(price)

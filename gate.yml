@@ -297,8 +297,9 @@ gate:
       # `bundle exec rubocop --parallel` on this tree, no margin, same rule.
       #
       # 150 -> 152 is the checkout door: two new `.rb` files (the controller and
-      # its request spec), measured the same way.
-      minimum: 152
+      # its request spec), measured the same way. 152 -> 153 is the upcoming
+      # invoice's request spec.
+      minimum: 153
     # ---------------------------------------------------------------------
     # The suite. THE load-bearing proof, and the only line that cannot appear
     # unless the suite ran to the end and every assertion in it passed.
@@ -412,7 +413,11 @@ gate:
       #
       # 1176 -> 1188 is the checkout door's twelve request specs, measured
       # **1188 runs / 3807 assertions / 0 failures / 0 errors / 0 skips**.
-      minimum: 1188
+      #
+      # 1188 -> 1198 is the upcoming invoice: ten request specs for the route and
+      # four for the fourth client method, plus the fake's price book. Measured
+      # **1198 runs / 3853 assertions**.
+      minimum: 1198
     # ---------------------------------------------------------------------
     # The gate reached its own last line. With the five above it, the step
     # markers bracket the run: the toolchain was pinned, the bundle resolved, a

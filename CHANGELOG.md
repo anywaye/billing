@@ -8,6 +8,41 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **`GET /v1/subscriptions/{id}/upcoming_invoice** — what the customer will be
+  charged at the renewal, before it is paid. The projection is the
+  processor's, returned untouched and rendered in integer minor units: the
+  line items with the processor's own `unit_amount` (read, never derived — a
+  quantity above one is where a derived figure goes wrong), the subtotal, and
+  the total. `tax` is the one figure this service computes, as
+  `total - total_excluding_tax` between two of the processor's own figures,
+  **for display and nothing else** — never stored, never sent back, never a
+  decision — because a response whose parts do not add up when tax is present
+  is the worse lie.
+
+  The route resolves through the same scoped `subscription_record` as every
+  other row-addressed action, so another account's subscription is a 404 and
+  the processor is not asked. A `canceled` subscription is a **409 before the
+  processor is asked** — the processor has stopped collecting, and a projection
+  of a charge that will not happen is a figure this service may not invent.
+  A processor refusal names `subscription_id`, not the `plan_id` the mutators'
+  client sends, and the processor's own message stays in the log.
+
+  This is the fourth request this service makes to Stripe
+  (`Processor::StripeClient#upcoming_invoice`, `Stripe::Invoice.upcoming`), and
+  the first that *receives*. The claim in `README.md` moves with it: every
+  request this service makes to Stripe is one of the four methods on
+  `Processor::StripeClient`, and there is no other `Stripe::` call in the
+  repository. `Processor::FakeClient` answers the same shape from its own
+  price book, so the dev door and the CI suite exercise the same response
+  builder Stripe does — one code path, not a branch on which processor
+  answered.
+
+  `openapi/v1.yaml` is at **2.3.0**, one additive operation and one new schema,
+  and the JTBD behind it is the customer's: "what will my next bill be, and
+  does it add up".
+
+### Added
+
 - **`POST /v1/checkouts` — the checkout door that answers immediately.** The
   development, demo and CI path over `Processor::FakeClient`: a `customer_id`
   and a `plan_id` in, and a subscription that exists when the response is

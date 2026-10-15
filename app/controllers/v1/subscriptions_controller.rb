@@ -35,8 +35,8 @@ module V1
   #
   # `index` pages `Subscription.for_account(current_account_id)` — this account's
   # subscriptions, not every subscription in the database — and **every** row-addressed
-  # action resolves inside that same scope: `show`, `cancel`, `change_plan` and
-  # `entitlements`. So a uuid naming another account's subscription is a **404**,
+  # action resolves inside that same scope: `show`, `cancel`, `change_plan`,
+  # `entitlements` and `upcoming_invoice`. So a uuid naming another account's subscription is a **404**,
   # byte for byte the answer a uuid naming nothing gets. Not 403: a 403 says "this
   # exists, you may not have it", and a caller walking uuids would learn exactly
   # which subscriptions exist without reading one. Absence, never refusal.
@@ -67,6 +67,37 @@ module V1
 
     def entitlements
       render json: entitlements_for(subscription_record), status: :ok
+    end
+
+    # The processor's projection of the next invoice for one of the caller's
+    # subscriptions: what the customer will be charged at the renewal, before it
+    # is paid. A read, and the only one on this controller that asks the
+    # processor a question rather than telling it to do something — which is why
+    # its refusals are the read's refusals, not the mutators'.
+    #
+    # A canceled subscription is a 409 before the processor is asked: the
+    # processor has stopped collecting, and a projection of a charge that will
+    # not happen is not a figure this service may invent. Every other status is
+    # left to the processor — `past_due` and `unpaid` are collection states, and
+    # whether there is still a period to invoice is the processor's answer.
+    def upcoming_invoice
+      subscription = subscription_record
+      guard_invoicable!(subscription)
+      return render_refusals if refused?
+
+      # The field and message are this endpoint's, not the plan change's: the
+      # client sent no plan, and the refusal is about the subscription's state
+      # at the processor, so the field names the one thing the client did send.
+      invoice = ask_processor(field: "subscription_id", message: "has no upcoming invoice at the payment processor") do
+        processor.upcoming_invoice(
+          processor_subscription_id: subscription.processor_subscription_id,
+          processor_customer_id: subscription.customer.processor_customer_id
+        )
+      end
+      return render_refusals if refused?
+      return if performed?
+
+      render json: upcoming_invoice_response(subscription, invoice), status: :ok
     end
 
     def create
@@ -165,7 +196,8 @@ module V1
       # which is what makes a 404 safe to reuse for another account's row.
       #
       # **Every row-addressed action on this controller comes through here** —
-      # `show`, `cancel`, `change_plan`, `entitlements` — so the mutating directions,
+      # `show`, `cancel`, `change_plan`, `entitlements`, `upcoming_invoice` — so
+      # the mutating directions,
       # which are the expensive ones, cannot be the one somebody forgot to scope.
       # The scope is written out rather than hidden behind a `scoped` helper because
       # this is the line a reviewer reads to decide whether account A can cancel
@@ -189,10 +221,16 @@ module V1
       # `Money::CurrencyMismatchError` are raised by the plan-change *rule* rather
       # than by the processor and mean the same thing here — this request cannot be
       # carried out as asked — so they are handled alongside.
-      def ask_processor
+      #
+      # The field and message a processor refusal is filed under are the caller's,
+      # because they name what *that* endpoint's client sent: the mutators' client
+      # sent a `plan_id` the processor would not apply, and the upcoming invoice's
+      # client sent a `subscription_id` the processor has no invoice for. The
+      # defaults are the mutators', which are three of the four call sites.
+      def ask_processor(field: "plan_id", message: "could not be applied by the payment processor")
         yield
       rescue Processor::Error, Subscriptions::PlanChange::Error, Money::CurrencyMismatchError => e
-        refuse_processor(e)
+        refuse_processor(e, field: field, message: message)
       end
 
       # The customer the request named, and the check that it is one this service can
@@ -284,6 +322,60 @@ module V1
         refuse(:conflict, "status", "is #{subscription.status}, so its plan cannot be changed")
       end
 
+      # The one status an upcoming invoice does not exist for. A `canceled`
+      # subscription collides with something that has already happened, so it is
+      # a 409 rather than a 422 — and it is refused *here* rather than at the
+      # processor, because the processor's own error for a canceled subscription
+      # is not a fact this service should ask it for.
+      def guard_invoicable!(subscription)
+        return if subscription.status != "canceled"
+
+        refuse(:conflict, "status", "is canceled, so there is no upcoming invoice")
+      end
+
+      # The upcoming invoice, with every figure the processor's own and the one
+      # wire representation for an amount: an integer of minor units, a currency
+      # upper case, and never a decimal string.
+      #
+      # `tax` is the single figure this service computes, and it is a difference
+      # between two processor figures — `total - total_excluding_tax` — made
+      # here for display and for no other purpose. It is never stored, never sent
+      # to the processor and never used for a decision, so it is not the thing
+      # this service's no-arithmetic rule is about: that rule is a figure
+      # *computed to send to the processor*, or one invented that the processor
+      # did not state, and a display delta between two of the processor's own
+      # figures is neither. Omitting it instead would leave a response whose
+      # parts do not add up when tax is present, which is the worse lie.
+      def upcoming_invoice_response(subscription, invoice)
+        {
+          "subscription_id" => subscription.id,
+          "period_end" => Time.at(invoice.period_end).utc.iso8601,
+          "currency" => invoice.currency.upcase,
+          "line_items" => Array(invoice.lines).map { |line| upcoming_invoice_line(line) },
+          "subtotal" => invoice.subtotal,
+          "tax" => invoice.total - invoice.total_excluding_tax,
+          "total" => invoice.total
+        }
+      end
+
+      # One line of the invoice, in the same minor-unit shape. The unit amount is
+      # the processor's own `price.unit_amount`, read rather than derived from
+      # the line total: a quantity greater than one is where a derived figure
+      # would go wrong, and the processor states it outright.
+      def upcoming_invoice_line(line)
+        {
+          "description" => line.description,
+          "period" => {
+            "start" => Time.at(line.period.start).utc.iso8601,
+            "end" => Time.at(line.period.end).utc.iso8601
+          },
+          "quantity" => line.quantity,
+          "unit_amount" => line.price.unit_amount,
+          "amount" => line.amount,
+          "currency" => line.currency.upcase
+        }
+      end
+
       # What the processor said, in the two words a client can act on. `immediately`
       # means the processor is billing the difference now; `period_end` means nothing
       # is carried forward and the move lands at the renewal.
@@ -351,16 +443,16 @@ module V1
       # The processor is not a cafaye client, and its refusals are its own business.
       # This service's own misconfiguration is a 503 — the caller's request was fine
       # and saying otherwise would send an operator looking in the wrong place — and
-      # a processor refusal is a 422 about the plan, with the processor's message
-      # logged and never returned to the caller.
-      def refuse_processor(exception)
+      # a processor refusal is a 422 naming the field the endpoint's client sent,
+      # with the processor's message logged and never returned to the caller.
+      def refuse_processor(exception, field: "plan_id", message: "could not be applied by the payment processor")
         log_processor_refusal(exception)
 
         case exception
         when Processor::StripeClient::Unconfigured
           render_problem(:unavailable, detail: "The payment processor is not configured.")
         else
-          refuse(:validation_failed, "plan_id", "could not be applied by the payment processor")
+          refuse(:validation_failed, field, message)
         end
       end
 

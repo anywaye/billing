@@ -70,8 +70,12 @@ module Processor
     #   * `created_at` — the instant the processor said yes, taken once here
     #     rather than read twice, so the event's `time` and the payload's
     #     `trial_ends_at` cannot drift apart.
+    #   * `price` and `interval` — the fake's price book for THIS subscription,
+    #     passed by the checkout and read back only by `upcoming_invoice`. A
+    #     subscription the fake started without them projects nothing.
     ProcessorSubscription = Data.define(
-      :processor_id, :processor_plan, :quantity, :status, :trial_ends_at, :created_at
+      :processor_id, :processor_plan, :quantity, :status, :trial_ends_at, :created_at,
+      :price, :interval
     ) do
       # A trial is running **only while it is running**. A `trial_ends_at` in
       # the past means the trial is over, and a checkout that reported
@@ -83,6 +87,28 @@ module Processor
       end
     end
 
+    # The projection's shape, and the reason each field is here is the same
+    # reason `ProcessorSubscription` is a value and not a row: these are the
+    # accessors `V1::SubscriptionsController#upcoming_invoice_response` reads,
+    # and a processor — real or fake — answers through them or the controller
+    # grows a branch. `tax` is deliberately absent: it is the one figure the
+    # *caller* derives from `total - total_excluding_tax`, for display, and the
+    # processor stating an invented zero would be this fake having an opinion.
+    InvoicePreview = Data.define(
+      :period_end, :currency, :lines, :subtotal, :total_excluding_tax, :total
+    )
+
+    PreviewLine = Data.define(
+      :description, :period, :quantity, :price, :amount, :currency
+    )
+
+    # A period answers `.start` and `.end` because that is what a processor's own
+    # line-item period answers, and the controller's builder reads it the same way
+    # whichever processor is behind the call.
+    PreviewPeriod = Data.define(:start, :end)
+
+    PreviewPrice = Data.define(:unit_amount)
+
     # The ledger, and it exists for one assertion.
     #
     # The old `pay_subscriptions` table made the two-sided state of a refused
@@ -90,7 +116,10 @@ module Processor
     # service held one, which is the honest report `HANDOFF-w3-checkout.md`
     # recorded. A fake with no ledger makes "the processor was asked twice"
     # unassertable, and the assertion is the thing that stops this class from
-    # quietly becoming a mock.
+    # quietly becoming a mock. The ledger is also where an upcoming-invoice
+    # projection is read back from: the projection is a statement about a
+    # subscription this processor holds, and a fake that answered from
+    # anything else would be answering about a subscription it does not have.
     #
     # It is PROCESS-LOCAL on purpose. Parallel test workers are separate
     # processes (Rails forks them, and each forks after this class is loaded),
@@ -123,7 +152,12 @@ module Processor
     # already over is a subscription that reports `active` with a `trialing`
     # sticker on it. This is the same guard the old `FakeProcessor#subscribe`
     # needed, for the same reason its tests had: Ruby says `0` is truthy.
-    def subscribe(price_id:, quantity: 1, trial_period_days: nil)
+    #
+    # `price` and `interval` are the fake's own price book, and they exist for
+    # one call: `upcoming_invoice` projects what a renewal will charge, and a
+    # processor with no price book has no projection to give. They are taken
+    # from the plan the checkout bought and never used by `subscribe` itself.
+    def subscribe(price_id:, quantity: 1, trial_period_days: nil, price: nil, interval: nil)
       price_id = price_id.to_s.strip
       raise Error, "the plan has no processor_price_id, so there is nothing to subscribe to" if price_id.empty?
 
@@ -137,6 +171,8 @@ module Processor
         quantity: Integer(quantity),
         status: (trial_ends_at.present? ? "trialing" : "active"),
         trial_ends_at: trial_ends_at,
+        price: price,
+        interval: interval,
         created_at: created_at
       )
 
@@ -159,5 +195,65 @@ module Processor
     def customer_id_for(customer)
       "cus_fake_#{customer.id}"
     end
+
+    # The processor's projection of the next invoice: what a renewal will
+    # charge, answered from this processor's own books.
+    #
+    # ## Why the projection has a shape of its own
+    #
+    # `upcoming_invoice_response` on the subscriptions controller reads the
+    # accessors a real invoice carries — `period_end`, `currency`, `lines` with
+    # their `price.unit_amount`, the two subtotals — and it must not know which
+    # processor is behind the call. So this returns a value object with exactly
+    # those accessors, and the controller's builder is one code path for both.
+    #
+    # ## Where the figures come from, and the one that is computed
+    #
+    # `unit_amount` is the plan's price, carried from checkout; `amount` is the
+    # unit amount times the seats, because a projection of a per-seat plan that
+    # showed the unit price alone would understate the bill. That multiplication
+    # is the processor's arithmetic about the processor's own price — the same
+    # direction as the `tax` display delta the controller computes from two of
+    # Stripe's figures, and not the thing `AGENTS.md` (Money) forbids: no
+    # figure is computed here to send to a processor, and none is persisted.
+    #
+    # The period is the interval the plan was bought on, and a plan on no
+    # interval — a one-off — projects nothing: there is no renewal to charge
+    # for, and inventing one would be this processor stating a period it never
+    # stated.
+    def upcoming_invoice(processor_subscription_id:, processor_customer_id:)
+      subscription = self.class.subscriptions.find { |record| record.processor_id == processor_subscription_id }
+      raise Error, "no subscription #{processor_subscription_id} has been started on this processor" if subscription.nil?
+      raise Error, "that subscription was started with no price, so there is nothing to project" if subscription.price.nil?
+      raise Error, "that plan has no interval, so it has no renewal to project" if subscription.interval.blank? || subscription.interval == "one_time"
+
+      amount = subscription.price.minor_units * subscription.quantity
+
+      InvoicePreview.new(
+        period_end: Time.current + interval_length(subscription.interval),
+        currency: subscription.price.currency,
+        lines: [
+          PreviewLine.new(
+            description: "Fake processor subscription to #{subscription.processor_plan}",
+            period: PreviewPeriod.new(
+              start: Time.current,
+              end: Time.current + interval_length(subscription.interval)
+            ),
+            quantity: subscription.quantity,
+            price: PreviewPrice.new(unit_amount: subscription.price.minor_units),
+            amount: amount,
+            currency: subscription.price.currency
+          )
+        ],
+        subtotal: amount,
+        total_excluding_tax: amount,
+        total: amount
+      )
+    end
+
+    private
+      def interval_length(interval)
+        interval == "year" ? 1.year : 1.month
+      end
   end
 end

@@ -149,6 +149,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     getPlan
     getSubscription
     getSubscriptionEntitlements
+    getUpcomingInvoice
     listCustomers
     listPlans
     listSubscriptions
@@ -244,6 +245,9 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     # only `info.version` — the `/v1` prefix is untouched, and the bump is what a
     # client generator reads.
     #
+    # **2.3.0 is the upcoming invoice** — one additive operation, and the first
+    # one whose success is a read from the processor rather than a mutation.
+    #
     # **2.2.0 is the checkout door**: one additive operation, `POST
     # /v1/checkouts`, over the fake processor that replaced `pay`'s
     # `FakeProcessor`. Nothing else moved, so it is a minor bump under the
@@ -251,7 +255,10 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     # document's path description, and the request spec asserts it against the
     # controller — a document that promised an answer the router does not give is
     # the drift this whole file exists to catch.
-    assert_equal "2.2.0", document.fetch("info").fetch("version")
+    # The 2.3.0 paragraph above names the packet, and this line is the assertion:
+    # the bump is what a client generator reads, so a packet that adds an
+    # operation and forgets the version is caught here.
+    assert_equal "2.3.0", document.fetch("info").fetch("version")
   end
 
   # --- the security the document declares, and what the router actually does ----

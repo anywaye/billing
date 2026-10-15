@@ -183,7 +183,17 @@ module Checkout
       # on, and the guard's whole job is that a checkout with no trial asks for
       # no trial. Recorded by the specs at the request, not at the answer.
       def request_kwargs
-        { price_id: plan.processor_price_id, quantity: quantity }.merge(trial_kwargs)
+        {
+          price_id: plan.processor_price_id,
+          quantity: quantity,
+          # The fake's price book: it answers an upcoming-invoice projection
+          # from the plan this checkout bought, which is the only price it
+          # knows. A real processor is not sent either fact — this door talks to
+          # the fake alone — and `AGENTS.md` (Money)'s rule is about what is
+          # sent to a processor, which this is not.
+          price: plan.price,
+          interval: plan.interval
+        }.merge(trial_kwargs)
       end
 
       def trial_kwargs

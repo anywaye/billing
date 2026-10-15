@@ -11,11 +11,11 @@ tested, a processor's signed event can be received, stored once, and turned into
 one of this service's own events, and a customer can subscribe, move between
 plans and be cancelled.
 
-**This service now talks to Stripe, in exactly three ways.** `processor`,
+**This service now talks to Stripe, in exactly four ways.** `processor`,
 `processor_product_id` and `processor_price_id` were all null in practice while it
 only received; buying a plan, cancelling one and moving one are requests to the
 processor, and a lifecycle that cannot make them is not a lifecycle. Every request
-is one of the three methods on `Processor::StripeClient` and there is no other
+is one of the four methods on `Processor::StripeClient` and there is no other
 `Stripe::` call in the repository — a claim that is checked by reading one file
 rather than by trusting a sentence. No new dependency: the `stripe` gem was
 already here for `Stripe::Webhook.construct_event`.
@@ -616,7 +616,7 @@ app/models/processor_webhook.rb      what a processor sent, stored once
 app/models/outbox_event.rb           the event, and the envelope it becomes
 app/services/webhooks/               store once, normalize, emit — in that order
 app/services/subscriptions/          the lifecycle: state machine, plan-change rule
-app/services/processor/              the three requests this service makes
+app/services/processor/              the four requests this service makes
 app/lib/problem.rb                   the one error shape
 app/lib/money_params.rb              the only place a request becomes an amount
 lib/kit/telemetry.rb                 the span-attribute ALLOWLIST, and the ONE recorder

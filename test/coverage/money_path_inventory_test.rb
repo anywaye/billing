@@ -181,7 +181,8 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
 
         subscription = Processor::FakeClient::ProcessorSubscription.new(
           processor_id: "sub_FAKEcheckout0000", processor_plan: "price_FAKEcheckout000000",
-          quantity: 3, status: "active", trial_ends_at: nil, created_at: Time.current
+          quantity: 3, status: "active", trial_ends_at: nil, created_at: Time.current,
+          price: Money.new(1900, "USD"), interval: "month"
         )
         delivery = session.send(:delivery, subscription)
 
