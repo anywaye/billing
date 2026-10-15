@@ -52,6 +52,13 @@ Rails.application.routes.draw do
     # by the token's account — a cross-tenant read is a 404, the same answer a
     # uuid naming nothing gets.
     get "charges/:id", to: "charges#show"
+
+    # The fake-processor checkout: a checkout that completes in the request. The
+    # production door is `POST /v1/subscriptions` above, which asks Stripe for a
+    # hosted session and writes nothing; this one exists for the developer, the
+    # demo, and a CI suite that holds no Stripe key, and it answers 404 unless
+    # `BILLING_FAKE_PROCESSOR_ENABLED` is set. See V1::CheckoutsController.
+    post "checkouts", to: "checkouts#create"
   end
 
   # Processor webhooks. Each processor gets its own path, its own signature

@@ -295,7 +295,10 @@ gate:
       # and the measurement on this tree is 150. So the floor is raised to 150,
       # closing a silently-carried 11-file gap. Measured with
       # `bundle exec rubocop --parallel` on this tree, no margin, same rule.
-      minimum: 150
+      #
+      # 150 -> 152 is the checkout door: two new `.rb` files (the controller and
+      # its request spec), measured the same way.
+      minimum: 152
     # ---------------------------------------------------------------------
     # The suite. THE load-bearing proof, and the only line that cannot appear
     # unless the suite ran to the end and every assertion in it passed.
@@ -406,7 +409,10 @@ gate:
       # came with it. So the floor moves 1134 -> 1176 and closes the gap.
       # The gap existed because a floor never blocks a merge — the reason the
       # floor and `BASELINE_RUNS` are raised in the same commit.
-      minimum: 1176
+      #
+      # 1176 -> 1188 is the checkout door's twelve request specs, measured
+      # **1188 runs / 3807 assertions / 0 failures / 0 errors / 0 skips**.
+      minimum: 1188
     # ---------------------------------------------------------------------
     # The gate reached its own last line. With the five above it, the step
     # markers bracket the run: the toolchain was pinned, the bundle resolved, a

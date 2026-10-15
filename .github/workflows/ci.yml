@@ -374,8 +374,10 @@ env:
   # it). The +4 assertions are the recorder's own: the key is absent when there
   # is no trial, present and correct when there is, and the ledger's two-sided
   # count on a refused second checkout.
-  BASELINE_RUNS: '1176'
-  BASELINE_ASSERTIONS: '3756'
+  # The checkout door's twelve request specs: **1188 runs, 3807 assertions**,
+  # measured. The two floors in gate.yml moved with them.
+  BASELINE_RUNS: '1188'
+  BASELINE_ASSERTIONS: '3807'
 
 jobs:
   # ------------------------------------------------------------------ shared

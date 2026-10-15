@@ -67,7 +67,7 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
   # --- direction one: every /v1 operation is locked ---------------------------
 
   test "every /v1 operation is refused with no token, and the list is the router's own" do
-    assert_equal 15, CLIENT_OPERATIONS.call.size,
+    assert_equal 16, CLIENT_OPERATIONS.call.size,
       "the number of client operations changed. Re-read the exclusion above rather than " \
       "adding to it — a route that arrived unauthenticated is what this count is for."
 

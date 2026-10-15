@@ -108,7 +108,17 @@ info:
   # moved — and it is the first operation whose success response is not JSON,
   # which is a fact about the response and not a break for a client that never
   # called it. A minor bump under the unchanged `/v1` prefix, per core's rule.
-  version: 2.1.0
+  #
+  # 2.2.0 is the checkout door: **one additive operation, `POST /v1/checkouts`**,
+  # over the fake processor that replaced the `pay` gem's `FakeProcessor`
+  # (`Processor::FakeClient`). No existing operation, response or body shape
+  # moved, and it does not duplicate the production door — `POST
+  # /v1/subscriptions` still means "ask Stripe for a hosted Checkout session and
+  # write nothing". The door it adds documents its own absence: it answers 404
+  # unless the deployment enabled it, because a door that fabricates an
+  # `active` subscription from a request body is a free-subscription door the
+  # day it is reachable.
+  version: 2.2.0
   description: >-
     Plans, customers, the subscription lifecycle, and one inbound
     payment-processor webhook for cafaye. This document describes every client
@@ -162,6 +172,12 @@ tags:
       What a customer was charged, and the receipt for it. A charge is recorded
       when a payment succeeds and never when it fails or is pending; it is read
       by id, scoped by the token's account.
+  - name: checkouts
+    description: >-
+      Starting a subscription. Two doors: `POST /v1/subscriptions` is the
+      production door, a hosted Checkout session and no row; `POST
+      /v1/checkouts` is the development door, which completes now against the
+      fake processor and answers 404 where it is not enabled.
   - name: webhooks
     description: >-
       Events coming in from a payment processor. Authenticated by signature
@@ -778,6 +794,78 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/checkouts:
+    post:
+      tags: [checkouts]
+      operationId: createCheckout
+      summary: Start a subscription through the fake processor, completing now
+      description: >-
+        **The development door.** Completes a checkout against
+        `Processor::FakeClient` — a processor whose API is its parameters — so
+        the subscription exists when this answers, and a caller with no Stripe
+        account, no keys and no network can subscribe end to end. The 201
+        carries the created subscription, which is the one difference from
+        `POST /v1/subscriptions` (see below).
+
+        **It answers 404 in a deployment it is not enabled in.** The door
+        fabricates an `active` subscription from a request body, so a
+        deployment where it is reachable is a deployment that gives
+        subscriptions away. It exists when `BILLING_FAKE_PROCESSOR_ENABLED` is
+        set (on by default in development and test) and answers the same 404 a
+        uuid naming nothing gets otherwise — the door is absent, not refused,
+        and a caller learns nothing about the deployment's configuration.
+
+        `customer_id` names the buyer and is resolved **inside the token's
+        account** — a `customer_id` naming another account's customer is the
+        same "not a record this service has" a bogus uuid gets, and the
+        processor is never asked. A `User`-owned customer is refused, because
+        which account a user belongs to is identity's fact and no event
+        carrying it is in this build's `consumes`.
+
+        The subscription is written by `Subscriptions::Lifecycle` — the same
+        state machine, the same `Refused` vocabulary, the same outbox event —
+        from the same normalised delivery a processor webhook would carry. The
+        row is `active`, or `trialing` while a trial is running, exactly as the
+        processor reported it. The failure body names the reason verbatim.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '201':
+          description: >-
+            The completed checkout: the subscription it created, with its
+            plan's price in integer minor units and the processor's own id for
+            it as `processor_subscription_id`. Unlike the production door's
+            201, this one points at a row — a row exists.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+            Location:
+              description: The path of the new subscription.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/CallerIdentityUnavailable'
   /v1/charges/{id}:
@@ -1452,6 +1540,32 @@ components:
         plan_id:
           type: string
           format: uuid
+
+    # The development door's request. Same two fields the production door takes
+    # and one more: a checkout that completes here needs to know how many seats
+    # it is buying, because there is no hosted page that would have asked.
+    CheckoutRequest:
+      type: object
+      required: [customer_id, plan_id]
+      additionalProperties: false
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: >-
+            The billing customer to charge. Resolved inside the token's account:
+            another account's customer is the same answer a bogus uuid gets.
+        plan_id:
+          type: string
+          format: uuid
+          description: A plan that is active and has a processor price.
+        quantity:
+          type: integer
+          minimum: 1
+          description: >-
+            Seats, when the plan is priced per unit. 1 by default. The
+            multiplication happens at the processor and the amount charged is
+            the processor's to compute.
 
     CancelRequest:
       type: object

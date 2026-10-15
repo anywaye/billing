@@ -140,6 +140,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
   OPERATION_IDS = %w[
     cancelSubscription
     changeSubscriptionPlan
+    createCheckout
     createCustomer
     createPlan
     createSubscriptionCheckout
@@ -242,7 +243,15 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     # `GET /v1/charges/{id}`, and nothing else moved. A non-breaking addition bumps
     # only `info.version` — the `/v1` prefix is untouched, and the bump is what a
     # client generator reads.
-    assert_equal "2.1.0", document.fetch("info").fetch("version")
+    #
+    # **2.2.0 is the checkout door**: one additive operation, `POST
+    # /v1/checkouts`, over the fake processor that replaced `pay`'s
+    # `FakeProcessor`. Nothing else moved, so it is a minor bump under the
+    # unchanged prefix. The operation's own 404-when-disabled is in the
+    # document's path description, and the request spec asserts it against the
+    # controller — a document that promised an answer the router does not give is
+    # the drift this whole file exists to catch.
+    assert_equal "2.2.0", document.fetch("info").fetch("version")
   end
 
   # --- the security the document declares, and what the router actually does ----

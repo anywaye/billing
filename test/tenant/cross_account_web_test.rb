@@ -478,7 +478,10 @@ class TenantCrossAccountWebTest < ActionDispatch::IntegrationTest
       "the account-constrained queries in app/ are not the ones this file's tests are about. " \
       "`Subscription.for_account`, `Customer.for_account` or `Charge.for_account` has been " \
       "renamed or removed, which means the rewritten tests above are asserting a boundary the " \
-      "code no longer has. Measured: 3 named scopes + 3 inline `where`/`find_by` constraints."
+      "code no longer has. Measured: 3 named scopes + 3 inline `where`/`find_by` constraints. " \
+      "The checkout door's own scoping is a call to the named `Customer.for_account` scope, so " \
+      "it is not one of these three — it is held by the file list below instead, where a call " \
+      "that appears somewhere the boundary does not reach fails by name."
     # Comment lines are dropped before the scan, for the reason the 403 scan above
     # gives: a file explaining that it does *not* call `Customer.for_account` is
     # not an account-scoped entry point, and a scanner whose only remedy is
@@ -490,6 +493,7 @@ class TenantCrossAccountWebTest < ActionDispatch::IntegrationTest
       app/models/customer.rb
       app/models/subscription.rb
       app/controllers/v1/charges_controller.rb
+      app/controllers/v1/checkouts_controller.rb
       app/controllers/v1/customers_controller.rb
       app/controllers/v1/subscriptions_controller.rb
     ].then { |unexpected| unexpected },

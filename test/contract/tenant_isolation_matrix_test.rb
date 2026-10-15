@@ -172,7 +172,14 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
     # The receipt for one charge. A charge is billed to an account and the route
     # resolves it inside `Charge.for_account`, so another account's uuid is a
     # 404 — the same answer a uuid naming nothing gets.
-    [ "GET", "/v1/charges/:id" ] => [ SCOPED, "resolves a charge by its uuid inside `Charge.for_account`; another account's is a 404" ]
+    [ "GET", "/v1/charges/:id" ] => [ SCOPED, "resolves a charge by its uuid inside `Charge.for_account`; another account's is a 404" ],
+
+    # The development checkout door. The customer in the body is resolved inside
+    # `Customer.for_account` — the same scope `POST /v1/subscriptions` resolves a
+    # buyer through — so a `customer_id` naming another account's customer is a
+    # 404 and the processor is never asked. It is scoped because it WRITES: a
+    # completed checkout grants entitlements, which is the expensive direction.
+    [ "POST", "/v1/checkouts" ] => [ SCOPED, "completes a checkout for a customer resolved inside `Customer.for_account`; another account's customer is a 404 and nothing is asked of the processor" ]
   }.freeze
 
   # Every served `/v1` operation that is **not** account-scoped, with the reason.
@@ -253,11 +260,16 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
   # count.** The set assertion above says "some are scoped and none are unscoped", which a
   # table could satisfy by scoping one route and leaving the rest open. These are the
   # counts that make the set assertion mean what it says.
-  test "eleven of the fifteen are scoped: every customer, subscription and charge operation, and none of the four plan operations" do
+  # **Twelve of the sixteen** since the checkout door landed: the customers,
+  # subscriptions and charges rows plus `POST /v1/checkouts`, and none of the
+  # four plan operations. The count is a pin and not a derivation, for the reason
+  # the comment above it gives — a set assertion alone can be satisfied by
+  # scoping one route.
+  test "twelve of the sixteen are scoped: every customer, subscription, checkout and charge operation, and none of the four plan operations" do
     scoped = ACCOUNT_SCOPED.select { |_operation, (verdict, _reason)| verdict == SCOPED }.keys
     catalogue = ACCOUNT_SCOPED.select { |_operation, (verdict, _reason)| verdict == CATALOGUE }.keys
 
-    assert_equal 11, scoped.size, "the scoped set is #{names(scoped)}"
+    assert_equal 12, scoped.size, "the scoped set is #{names(scoped)}"
     assert_equal 4, catalogue.size, "the catalogue set is #{names(catalogue)}"
     assert_empty scoped.grep(%r{/v1/plans}),
       "a plan operation is recorded as scoped. A plan has no `account_id` column, so there is " \

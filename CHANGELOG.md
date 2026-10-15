@@ -6,6 +6,33 @@ All notable changes to billing are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`POST /v1/checkouts` — the checkout door that answers immediately.** The
+  development, demo and CI path over `Processor::FakeClient`: a `customer_id`
+  and a `plan_id` in, and a subscription that exists when the response is
+  rendered. It resolves the buyer through `Customer.for_account` — the same
+  scope the production door's own `billable_customer` reads, so a
+  `customer_id` naming another account's customer is refused before the
+  processor is asked — writes through `Subscriptions::Lifecycle` exactly as
+  the webhook path does, and publishes `billing.subscription.started` in the
+  same transaction. Takes `Idempotency-Key` like every other retriable POST,
+  and a second checkout on the same live plan is a 422 naming the constraint
+  that refused it.
+
+  **The door answers 404 in a deployment it is not enabled in.** It exists on
+  `BILLING_FAKE_PROCESSOR_ENABLED` and on development and test by default;
+  nowhere else. A door that fabricates an `active` subscription from a request
+  body is a free-subscription door the day it is reachable, so the answer a
+  disabled deployment gives is the fixed 404 a uuid naming nothing gets — a
+  caller learns nothing about the deployment's configuration from it.
+
+  This is not a second way to buy in production, and it is documented as
+  such: `POST /v1/subscriptions` still means "ask Stripe for a hosted Checkout
+  session and write nothing". `openapi/v1.yaml` is at **2.2.0**, the door is
+  one additive operation, and `test/requests/v1/checkouts_test.rb` holds the
+  two doors apart (the production one carries no row; this one does).
+
 ### Removed
 
 - **The `pay` gem, and its six tables with it.** The gem was here for exactly

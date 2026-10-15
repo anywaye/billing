@@ -149,7 +149,15 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # The receipt for one charge. A charge is billed to an account and the route
     # resolves it inside `Charge.for_account`, so another account's uuid is a 404 —
     # the same answer a uuid naming nothing gets.
-    [ "GET", "/v1/charges/:id" ] => [ "read", "resolves a charge by its uuid inside `for_account`; another account's is a 404" ]
+    [ "GET", "/v1/charges/:id" ] => [ "read", "resolves a charge by its uuid inside `for_account`; another account's is a 404" ],
+
+    # The development checkout door. It WRITES — a completed checkout grants
+    # entitlements — and it resolves the `customer_id` in the body inside
+    # `Customer.for_account`, the same resolution the production door's
+    # `billable_customer` makes, so another account's customer cannot be
+    # completed for. The production door and this one are the same rule over the
+    # same scope; only the processor differs.
+    [ "POST", "/v1/checkouts" ] => [ "write", "completes a checkout for the `customer_id` in the body, resolved inside `Customer.for_account`" ]
   }.freeze
 
   # The one `/v1` operation that is served and is **not** account-scoped.
@@ -195,6 +203,13 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     [ "app/controllers/v1/subscriptions_controller.rb", "index", "list" ] => "pages this account's subscriptions, scoped by `Subscription.for_account`",
     [ "app/controllers/v1/subscriptions_controller.rb", "subscription_record", "read" ] => "resolves a subscription by its uuid inside `for_account`; every row-addressed action comes through here",
     [ "app/controllers/v1/subscriptions_controller.rb", "billable_customer", "read" ] => "resolves the customer the body names, inside `Customer.for_account`",
+    # The development checkout door's two resolutions, and they are the same two
+    # the production door makes: the buyer is scoped (a cross-account write is
+    # the expensive direction), and the plan is catalogue and unscoped. The door
+    # being gated off in production is a request filter, not a data access — the
+    # row it writes is account-scoped while the door exists.
+    [ "app/controllers/v1/checkouts_controller.rb", "billable_customer", "read" ] => "resolves the `customer_id` in the body inside `Customer.for_account`; another account's customer cannot be completed for",
+    [ "app/controllers/v1/checkouts_controller.rb", "sellable_plan", "read" ] => "resolves the plan the body names, which is catalogue and unscoped",
     [ "app/controllers/v1/subscriptions_controller.rb", "sellable_plan", "read" ] => "resolves the plan the body names, which is catalogue and unscoped",
     [ "app/controllers/v1/subscriptions_controller.rb", "cancel", "update" ] => "asks the processor to cancel a subscription resolved inside `for_account`",
     [ "app/controllers/v1/subscriptions_controller.rb", "change_plan", "update" ] => "asks the processor to move a subscription resolved inside `for_account`",
@@ -613,10 +628,10 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # records no charge, so the recorder's resolution cannot be the one the event
   # relies on. The file left `NO_DATA_ACCESS` the same day: a file that performs
   # a read does not belong among the files that perform none.
-  test "there are 45 account-scoped data accesses in 42 methods, filed under 43 keys" do
-    assert_equal 45, self.class.accesses.size
-    assert_equal 42, classified_sites.size
-    assert_equal 43, DATA_ACCESSES.size
+  test "there are 47 account-scoped data accesses in 44 methods, filed under 45 keys" do
+    assert_equal 47, self.class.accesses.size
+    assert_equal 44, classified_sites.size
+    assert_equal 45, DATA_ACCESSES.size
 
     assert_equal 2, self.class.accesses.size - DATA_ACCESSES.size,
       "the gap between accesses and keys has changed. It is 2 because `Lifecycle#customer` " \
@@ -634,15 +649,15 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # zero kinds are filled in explicitly because `tally` omits an absent key, and
   # a breakdown that quietly lost `delete` is the one breakdown this file exists
   # to keep honest.
-  test "the data-access breakdown is read 19, list 12, write 9, update 5, delete 0" do
-    assert_equal({ "read" => 19, "list" => 12, "write" => 9, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
+  test "the data-access breakdown is read 21, list 12, write 9, update 5, delete 0" do
+    assert_equal({ "read" => 21, "list" => 12, "write" => 9, "update" => 5, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
   end
 
   # **15 account-scoped routes**, derived from the router, in the same four kinds.
   # This is the caller-facing count, and unlike the one above it does not change
   # when a helper is extracted.
-  test "there are 15 account-scoped routes, and the router serves exactly them plus the webhook" do
-    assert_equal 15, ACCOUNT_SCOPED_ROUTES.size
+  test "there are 16 account-scoped routes, and the router serves exactly them plus the webhook" do
+    assert_equal 16, ACCOUNT_SCOPED_ROUTES.size
     assert_equal served_routes.to_set,
                  (ACCOUNT_SCOPED_ROUTES.keys + NOT_ACCOUNT_SCOPED_ROUTES.keys).to_set
   end
@@ -660,8 +675,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
       "these routes are excluded with no reason"
   end
 
-  test "the route breakdown is read 5, list 3, write 3, update 4, delete 0" do
-    assert_equal({ "read" => 5, "list" => 3, "write" => 3, "update" => 4, "delete" => 0 },
+  test "the route breakdown is read 5, list 3, write 4, update 4, delete 0" do
+    assert_equal({ "read" => 5, "list" => 3, "write" => 4, "update" => 4, "delete" => 0 },
                  breakdown(ACCOUNT_SCOPED_ROUTES.values.map(&:first)))
   end
 
@@ -669,8 +684,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # packet's headline is two separately-asserted numbers and not one sum that
   # double-counts a route against the method that serves it.
   test "the two layers are counted separately, because a route and the method that serves it overlap" do
-    assert_equal 15, ACCOUNT_SCOPED_ROUTES.size
-    assert_equal 45, self.class.accesses.size
+    assert_equal 16, ACCOUNT_SCOPED_ROUTES.size
+    assert_equal 47, self.class.accesses.size
     refute_equal ACCOUNT_SCOPED_ROUTES.size, self.class.accesses.size,
       "the two layers have converged, which means one of them is counting the other's rows"
   end
