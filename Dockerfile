@@ -35,8 +35,18 @@ RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y build-essential git libpq-dev libvips libyaml-dev pkg-config && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
-# Install application gems
-COPY vendor/* ./vendor/
+# Install application gems.
+#
+# The destination is spelled out, and it is not incidental. Docker copies the
+# CONTENTS of a source directory into the destination and drops the directory's
+# own name, so the glob that used to be here — `COPY vendor/* ./vendor/` —
+# matched `cafaye/` (a directory), flattened it into `vendor/`, and left
+# `/rails/vendor/cafaye` nonexistent. The Gemfile's `path: "vendor/cafaye"`
+# dependency then failed at `bundle install` with exit code 13. Naming the
+# destination keeps the directory, which is what the path pin needs. Do not
+# "simplify" this back into a glob: that is the bug this line fixes.
+COPY vendor/cafaye/ ./vendor/cafaye/
+COPY vendor/.keep ./vendor/.keep
 COPY Gemfile Gemfile.lock ./
 
 RUN bundle install && \
