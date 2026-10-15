@@ -380,8 +380,10 @@ env:
   # 3853 assertions**, measured. Both floors in gate.yml moved with them.
   # The charges index and the portal: **1209 runs, 3900 assertions**, measured.
   # Both floors in gate.yml moved with them.
-  BASELINE_RUNS: '1209'
-  BASELINE_ASSERTIONS: '3900'
+  # The deploy-artifact assertions and the first-charge drill: **1219 runs,
+  # 3968 assertions**, measured. Both floors in gate.yml moved with them.
+  BASELINE_RUNS: '1219'
+  BASELINE_ASSERTIONS: '3968'
 
 jobs:
   # ------------------------------------------------------------------ shared

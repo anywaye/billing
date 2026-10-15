@@ -8,6 +8,37 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **billing's deploy artifact, and the publish loop that fills it.** `caf gen
+  chart` generates `chart/` from this repository's own `cafaye.yml` —
+  `Chart.yaml` `0.1.0`, `name: billing`, the workload with a `/readyz`
+  readiness probe, and an Ingress that ships **off** because billing is an
+  internal service reached through its namespace (gateway and parlor are the
+  two exposed ones, per `DEPLOYMENT.md`'s "Who owns the Application"). The
+  generated chart deliberately carries **no** `templates/application.yaml`:
+  kit's substrate owns the `Application`, and a second one named `billing` in
+  `argocd` fighting the substrate's would be split brain. The substrate gains
+  its `billing.yaml` (chart `billing`, `targetRevision: 0.1.0`, namespace
+  `billing`) in `kit/templates/substrate/manifests/applications/`, and
+  `.github/workflows/publish.yml` is kit's composed caller verbatim — one
+  `uses:` of `publish.reusable.yml@master`, `packages: write`, `push: true`.
+
+  `test/deploy/chart_deploy_test.rb` is the seam as assertions rather than
+  prose: the chart name and version the substrate pulls, the readiness path,
+  the Ingress off, no `application.yaml`, the caller being kit's and not a
+  fork, and the chart's version being the OCI tag. Red-proved by bumping the
+  version to 0.2.0: the seam fails by name, and reverting restores green.
+
+  **The preserved `test/deploy/deploy_config_test.rb` was not landed, and the
+  reason is the fleet's direction rather than a gap.** The October wave's test
+  asserted Kamal's `config/deploy.yml` — healthcheck path, `env.secret`, no
+  placeholder host — against a file that is still the stock template, and
+  `DEPLOYMENT.md` is explicit that no new work is Kamal work: the substrate is
+  k3s + Traefik + cert-manager + Argo CD, and Kamal retires at parity. A Kamal
+  config test would invest in a file this service has never deployed with, so
+  the assertion moved to the artifact that actually deploys it.
+
+### Added
+
 - **`GET /v1/charges` — the money history.** This account's charges, newest
   first, cursor-paged, every row scoped by `Charge.for_account` and carrying
   the one wire representation for an amount (integer minor units plus a
@@ -105,6 +136,20 @@ All notable changes to billing are recorded here. The format follows
   session and write nothing". `openapi/v1.yaml` is at **2.2.0**, the door is
   one additive operation, and `test/requests/v1/checkouts_test.rb` holds the
   two doors apart (the production one carries no row; this one does).
+
+### Fixed
+
+- **The checkout door no longer decides a status the processor already
+  reports.** `Checkout::Session#status_for` re-derived `trialing` from
+  `trial_ends_at` and passed its own answer down as the delivery's status —
+  `AGENTS.md` (Subscriptions) says this service never decides a subscription's
+  status, and a re-derivation reads as the same answer the processor gives
+  until the day they disagree, at which point this service's guess is the one
+  recorded. The fake's red proof was what found it: substituting a `canceled`
+  status into the fake changed nothing the door wrote, because nothing read
+  the field. Status is now read off the processor's own answer; the same
+  mutation fails **12 tests and 2 errors**, and the revert restores green.
+  Found while walking the first-charge drill (`REPORT-billing-e2e-01.md`).
 
 ### Removed
 

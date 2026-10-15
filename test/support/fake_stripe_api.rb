@@ -144,8 +144,16 @@ class FakeStripeAPI
       raise StripeRefused, "No such price: #{price}"
     end
 
+    # A subscription the fake door minted counts as known: `Processor::
+    # FakeClient` mints `sub_FAKE…` ids, and a spec that walks the whole loop —
+    # checkout door, then the projection — needs the API double to answer for
+    # one. The prefix is the fake world's own shape, so accepting it is the same
+    # refusal rule one library further in rather than a hole in it.
+    FAKE_DOOR_PREFIX = "sub_FAKE"
+
     def refuse_unknown_subscription(id)
       return if KNOWN_SUBSCRIPTIONS.include?(id)
+      return if id.start_with?(FAKE_DOOR_PREFIX)
 
       raise StripeRefused, "No such subscription: #{id}"
     end

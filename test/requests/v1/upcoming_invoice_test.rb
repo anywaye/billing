@@ -105,8 +105,10 @@ class V1UpcomingInvoiceTest < ActionDispatch::IntegrationTest
   # mutators' client sends — and carries none of the processor's own message.
   test "a processor refusal is a 422 naming the subscription, not the plan" do
     # An id the fake does not know is the processor's own answer, arranged rather
-    # than stubbed: `FakeStripeAPI` refuses what Stripe would refuse.
-    @subscription.update!(processor_subscription_id: "sub_FAKEunknowndoesnotexist")
+    # than stubbed: `FakeStripeAPI` refuses what Stripe would refuse. Not a
+    # `sub_FAKE…` id — those are the ones the fake door mints and the double
+    # answers for, which is the loop `first_charge_test.rb` walks.
+    @subscription.update!(processor_subscription_id: "sub_STRIPEunknowndoesnotexist")
 
     get "/v1/subscriptions/#{@subscription.id}/upcoming_invoice"
 

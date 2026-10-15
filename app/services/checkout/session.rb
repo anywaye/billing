@@ -319,15 +319,16 @@ module Checkout
         }.compact
       end
 
-      # What the processor says the subscription is, not what this service would
-      # like it to be.
-      #
-      # A trial is `trialing` **only while it is running**: `on_trial?` is false
-      # once `trial_ends_at` is in the past, and a checkout that recorded
-      # `trialing` for a trial that ended an hour ago would grant trial
-      # entitlements to a customer who has been charged.
+      # What the processor says the subscription is, read off its answer rather
+      # than decided here. `AGENTS.md` (Subscriptions) says this service never
+      # decides a subscription's status, and a local re-derivation is exactly
+      # that decision wearing a costume: re-computing `trialing` from
+      # `trial_ends_at` reads as the same answer the processor gives, until the
+      # day they disagree — and then this service's guess would be the one
+      # recorded. The processor's own status is the only one that goes on the
+      # wire and the only one that reaches the row.
       def status_for(subscription)
-        subscription.on_trial? ? "trialing" : "active"
+        subscription.status
       end
   end
 end

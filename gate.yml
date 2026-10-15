@@ -299,7 +299,7 @@ gate:
       # 150 -> 152 is the checkout door: two new `.rb` files (the controller and
       # its request spec), measured the same way. 152 -> 153 is the upcoming
       # invoice's request spec.
-      minimum: 153
+      minimum: 155
     # ---------------------------------------------------------------------
     # The suite. THE load-bearing proof, and the only line that cannot appear
     # unless the suite ran to the end and every assertion in it passed.
@@ -422,7 +422,10 @@ gate:
       # supersedes the comment the receipts packet left on `show`, and the portal
       # carries the two open-redirect refusals, the unknown-customer 422 and the
       # 503. Measured **1209 runs / 3900 assertions**.
-      minimum: 1209
+      #
+      # 1209 -> 1219 is P5: the chart-and-publish assertions (8) and the
+      # first-charge drill (2). Measured **1219 runs / 3968 assertions**.
+      minimum: 1219
     # ---------------------------------------------------------------------
     # The gate reached its own last line. With the five above it, the step
     # markers bracket the run: the toolchain was pinned, the bundle resolved, a
