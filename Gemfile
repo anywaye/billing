@@ -32,29 +32,34 @@ gem "image_processing", "~> 1.2"
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin Ajax possible
 # gem "rack-cors"
 
-# Stripe, the payment processor. This build uses exactly one thing from it:
-# `Stripe::Webhook.construct_event`, the signature verification for inbound
-# webhooks. There is no API client here — this service receives, it does not
-# call out to Stripe. The gem is here because the signature scheme (HMAC-SHA256
-# over `timestamp.body` with a tolerance window) is the processor's contract,
-# and re-implementing it would be a hand-rolled crypto path in the one place a
-# forged amount must never be believed.
+# Stripe, the payment processor. This build uses it for two things:
+# `Stripe::Webhook.construct_event` (the signature verification for inbound
+# webhooks) and the three requests `Processor::StripeClient` makes out. Both are
+# the processor's contract: the signature scheme (HMAC-SHA256 over
+# `<timestamp>.<body>` with a tolerance window) re-implemented by hand would be
+# a hand-rolled crypto path in the one place a forged amount must never be
+# believed, and the three requests are the only outbound surface this service
+# has. Every `Stripe::` call in this repository is one of the three
+# `StripeClient` methods or `construct_event` — a checkable claim about the code
+# rather than a sentence in a README.
 gem "stripe", "~> 19.6"
 
-# Payments. `pay` is the "several processors behind one interface" abstraction:
-# one set of tables (`pay_customers`, `pay_subscriptions`, `pay_charges`) and one
-# API, with a processor behind it. billing already has a hand-rolled Stripe client
-# for exactly three requests; this packet does NOT replace it, and adds no live
-# processor. What it adds is a checkout path that can be exercised end to end with
-# no network and no keys, because `pay` ships `Pay::FakeProcessor` — a processor
-# whose "API" is the database. A checkout path whose only proof is a Stripe test
-# key is a checkout path nobody can run in CI.
+# There is no `pay` gem here any more, and the gap it left is deliberate.
 #
-# `pay` 12.x is the floor and it is a real constraint, not a preference: it is the
-# first line whose FakeProcessor `subscribe` accepts a `quantity`, which is what
-# per-seat pricing needs. See `Checkout::Session` for what this packet did and did
-# not build on top of it.
-gem "pay", "~> 12.2"
+# `pay` was the "several processors behind one interface" abstraction, and what
+# this service used from it was one thing: `FakeProcessor`, a processor whose
+# API was its own Active Record tables, which is what made a checkout path
+# runnable with no network and no keys. Everything else it brought — six STI
+# tables, `Pay::Charge`/`Pay::Subscription` rows this service would then have
+# had to reconcile with its own, and a bigint owner-id default that silently
+# collapsed every uuid onto one row — was cost.
+#
+# `Processor::FakeClient` replaces it: a plain Ruby object, one `subscribe`
+# method, a process-local ledger for the specs, no migration. The production
+# Stripe surface was never pay's — it is `Processor::StripeClient`, three
+# methods — and a second processor arriving is a `Processor::PaddleClient`
+# with the same shape, not a gem that owns its own schema. See
+# `REPORT-billing-fake-client-01.md` for the exit.
 
 # The transactional outbox substrate, from the fleet's shared gem `cafaye-rb`.
 #

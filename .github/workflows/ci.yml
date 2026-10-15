@@ -362,8 +362,20 @@ env:
   # and the CI number are now one number, and a run that reports a different
   # count from CI's is a run that is missing the tier. (1145 / 2919 was the
   # first of these; 1166 / 3727 was this packet's parent.)
-  BASELINE_RUNS: '1175'
-  BASELINE_ASSERTIONS: '3747'
+  #
+  # The fake-client packet: **1176 runs, 3756 assertions**, measured. The 16
+  # checkout specs were retargeted against `Processor::FakeClient` rather than
+  # `pay`'s `FakeProcessor` — a gem leaving should not change what the suite
+  # verifies, only what it verifies it *against* — plus **one new spec**, the
+  # trial guard proved at the request rather than at the answer: the fake
+  # carries its own internal guard, so the checkout's was unobservable until a
+  # processor recorded the kwargs it was handed (the packet's mutation first
+  # ran 0 failures against a guard that was, in effect, dead — the report has
+  # it). The +4 assertions are the recorder's own: the key is absent when there
+  # is no trial, present and correct when there is, and the ledger's two-sided
+  # count on a refused second checkout.
+  BASELINE_RUNS: '1176'
+  BASELINE_ASSERTIONS: '3756'
 
 jobs:
   # ------------------------------------------------------------------ shared

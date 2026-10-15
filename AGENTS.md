@@ -291,9 +291,30 @@ repository.** No new dependency — the `stripe` gem was already here, for
   schemas — that is core's change to make, and it is reported rather than
   shipped around. See `REPORT-billing-outbox-publisher-01.md`.
 
+- **billing-fake-client-01 (2026-10-15) deleted `pay` and moved the fake
+  in-house.** The gem had been here for exactly one thing: `FakeProcessor`, a
+  processor whose "API" was its own Active Record tables, which is what made the
+  checkout path runnable with no network and no keys. Everything else it brought
+  — six STI tables, `Pay::Charge`/`Pay::Subscription` rows to reconcile with
+  this service's own, and a `pay_customers.owner_id` created as a bigint that
+  had to be migrated to uuid — was cost, and its live-processor adapters were
+  never enabled (`enabled_processors = []` was the whole configuration).
+  `Processor::FakeClient` replaces it: a plain Ruby object, one `subscribe`
+  method, a value object back, and a process-local ledger so the specs can
+  still assert the two-sided state a refused checkout produces ("the processor
+  has two, this service holds one"). `Checkout::Session` gains a `processor:`
+  seam — the same shape `StripeClient`'s `api:` keyword already used — and
+  `Outcome`'s field is `processor_subscription` rather than `pay_subscription`.
+  **The claim about Stripe does not change**: every request this service makes to
+  Stripe is one of the methods on `Processor::StripeClient`, and there is no
+  other `Stripe::` call in the repository. A future processor is a
+  `Processor::PaddleClient` beside it plus its own webhook controller, not a gem
+  that owns its schema. See `REPORT-billing-fake-client-01.md`.
+
 There are no invoices, no usage metering, no prepaid credit yet. Do not read
 their absence as something to fix in a side patch; those are later packets with
 their own briefs. The publisher loop is no longer one of the missing pieces.
+The `pay` gem is no longer one either.
 
 ## Layout
 
@@ -334,7 +355,8 @@ billing/
 │       ├── identity/
 │       │   └── token_verifier.rb      # the ONLY place a JWT is read
 │       ├── processor/
-│       │   └── stripe_client.rb       # the three requests this service makes
+│       │   ├── stripe_client.rb       # the three requests this service makes
+│       │   └── fake_client.rb         # the no-network checkout processor
 │       ├── subscriptions/             # the lifecycle, as three pure objects
 │       │   ├── state_machine.rb       # which transitions are possible
 │       │   ├── plan_change.rb         # when a move takes effect
@@ -681,11 +703,11 @@ account genuinely belongs to the new customer, so that rule passes. See
 
 ## Charges and receipts
 
-A `Charge` is billing's own record of a payment, distinct from `Pay::Charge` (the
-processor's record). The rule the whole surface turns on: **a charge is recorded
-when a payment succeeds, and never when it fails or is pending.** The processor
-says so on a signed webhook, and the `charges` table is the record of what it
-said. There is no code path that writes a charge from a cafaye request.
+A `Charge` is billing's own record of a payment, recorded from what the
+processor's signed webhook said. The rule the whole surface turns on: **a charge is
+recorded when a payment succeeds, and never when it fails or is pending.** The
+processor says so on a signed webhook, and the `charges` table is the record of
+what it said. There is no code path that writes a charge from a cafaye request.
 
 - **`Webhooks::Charges::Recorder` is the only writer of a `Charge`.** It is
   called from `payment_emission`, inside the ingestion transaction, so a charge

@@ -282,7 +282,20 @@ gate:
       # `app/services/webhooks/charges/recorder.rb`,
       # `app/controllers/v1/charges_controller.rb`, and the three specs. Same
       # measurement, same command.
-      minimum: 142
+      #
+      # 142 -> 150 is the fake-client packet, and it is the one that proves the
+      # floor had already gone stale again — the same shape as the two the
+      # paragraph above records, and the same lesson: **every packet that lands
+      # invalidates a floor silently.** Between the receipts packet and this
+      # one, four more packets landed (outbox publisher, tenancy, event
+      # payloads, the core-location fix) and the measured count was **153**
+      # while the floor sat at 142 — inferred and then measured: this packet's
+      # net is -3 files (five deleted — the pay initializer and four pay
+      # migrations — and two added: `fake_client.rb` and the drop migration),
+      # and the measurement on this tree is 150. So the floor is raised to 150,
+      # closing a silently-carried 11-file gap. Measured with
+      # `bundle exec rubocop --parallel` on this tree, no margin, same rule.
+      minimum: 150
     # ---------------------------------------------------------------------
     # The suite. THE load-bearing proof, and the only line that cannot appear
     # unless the suite ran to the end and every assertion in it passed.
@@ -378,7 +391,22 @@ gate:
       # suite that quietly lost the assertions saying `/v1` was open — and that
       # is the direction this packet moved, so a decrease here is the honest
       # reading rather than a suspicious one.
-      minimum: 1134
+      #
+      # 1077 -> 1134 was a floor raised by a packet whose measurement is not
+      # this one's to narrate; what matters is what this one measured: the
+      # floor's parent packet recorded **1175 runs / 3747 assertions** as CI's
+      # number (`ci.yml`'s `BASELINE_RUNS`), so the truth had been 1175 while
+      # this floor said 1134 — a silently-carried 41-run gap, the fourth
+      # instance in this file of a floor nobody re-measured. The fake-client
+      # packet measures **1176 runs / 3756 assertions / 0 failures / 0 errors /
+      # 0 skips**: the 16 checkout specs were retargeted against
+      # `Processor::FakeClient` rather than `pay`'s `FakeProcessor`, one
+      # request-level spec was added (the trial guard, proved at the request
+      # rather than at the answer — see the packet's report), and +4 assertions
+      # came with it. So the floor moves 1134 -> 1176 and closes the gap.
+      # The gap existed because a floor never blocks a merge — the reason the
+      # floor and `BASELINE_RUNS` are raised in the same commit.
+      minimum: 1176
     # ---------------------------------------------------------------------
     # The gate reached its own last line. With the five above it, the step
     # markers bracket the run: the toolchain was pinned, the bundle resolved, a

@@ -6,6 +6,49 @@ All notable changes to billing are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- **The `pay` gem, and its six tables with it.** The gem was here for exactly
+  one thing: `FakeProcessor`, a processor whose "API" was its own Active Record
+  tables (`pay_customers`, `pay_subscriptions`, `pay_charges`,
+  `pay_payment_methods`, `pay_merchants`, `pay_webhooks`), which is what made a
+  checkout path runnable end to end with no network, no keys and no Stripe
+  account. Its live-processor adapters were never enabled
+  (`enabled_processors = []` was the whole configuration), so everything else it
+  carried — the STI `type` columns, `Pay::Charge`/`Pay::Subscription` rows that
+  would have needed reconciling with this service's own, and a
+  `pay_customers.owner_id` created as a bigint that collapsed every uuid owner
+  onto one row until a migration fixed it — was cost with no consumer.
+
+  - `Processor::FakeClient` replaces it: a plain Ruby object with one
+    `subscribe` method, a `Subscription` value object back, and a **process-local
+    ledger** so the specs can still assert the two-sided state of a refused
+    second checkout ("the processor has two, this service holds one"). It writes
+    no table, opens no socket, and dies with the process.
+  - `Checkout::Session` gains a `processor:` seam — the same shape
+    `Processor::StripeClient`'s `api:` keyword already used — and `Outcome`'s
+    fourth field is `processor_subscription`, not `pay_subscription`.
+  - The four creating migrations are **deleted, not kept as history**: two call
+    `Pay::Adapter.json_column_type` and one calls `Pay::Customer.find_each`, so a
+    `db:migrate` from zero would die naming a class that no longer exists, and a
+    fresh database would then be built by creating six tables and dropping
+    them. `20261015120000_drop_pay_tables.rb` drops the six with
+    `if_exists: true` and an irreversible `down`; billing has never been
+    deployed, so the only `schema_migrations` that recorded those versions are
+    local and CI databases, where they are inert.
+  - `Customer#pay_customer` is gone, so the polymorphic `pay_customers.owner_*`
+    pair that sat beside `customers.owner_*` — two columns both named owner and
+    never the same thing — no longer exists. A processor customer id for the
+    fake is derived (`cus_fake_<customer id>`), not stored; for Stripe it is
+    still `customers.processor_customer_id`, one column, one lookup.
+  - **The claim about Stripe is unchanged and still checkable**: every request
+    this service makes to Stripe is one of the methods on
+    `Processor::StripeClient`, and there is no other `Stripe::` call in the
+    repository. A second processor arriving is a `Processor::PaddleClient` with
+    the same shape plus its own `POST /v1/webhooks/paddle` controller — not a gem
+    that owns its schema.
+  - Full reasoning and the diff in `REPORT-billing-fake-client-01.md`.
+
 ### Fixed
 
 - **A worktree can now find core, so the contract tier stops skipping in one and
