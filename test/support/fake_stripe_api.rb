@@ -58,10 +58,28 @@ class FakeStripeAPI
     CheckoutSession.new(id, "https://checkout.stripe.test/c/pay/#{id}")
   end
 
+  # The subscription as the CHANGE path reads it: it resolves the item id
+  # from the processor immediately before moving it, so the double answers
+  # with the same shape Stripe does — items.data.first.id.
+  RetrievedItem = Data.define(:id)
+  RetrievedItems = Data.define(:data)
+  RetrievedSubscription = Data.define(:id, :items)
+
+  def retrieve_subscription(id)
+    @requests << { id: id, call: :retrieve }
+
+    refuse_unknown_subscription(id)
+
+    RetrievedSubscription.new(id, RetrievedItems.new([ RetrievedItem.new("si_FAKE#{id.delete_prefix("sub_")}") ]))
+  end
+
   def update_subscription(id, params)
     @requests << params.merge(id: id)
 
-    refuse_unknown_price(params[:items].first) if params[:items]
+    # `items` is a list of `{ price: … }` objects — the shape the real API
+    # demands, and the shape the live recording caught this client getting
+    # wrong (bare strings are refused with "Invalid object").
+    refuse_unknown_price(params[:items].first.fetch(:price)) if params[:items]
     refuse_unknown_subscription(id)
 
     Subscription.new(id, "active", params[:cancel_at_period_end] == true)
@@ -85,9 +103,13 @@ class FakeStripeAPI
   # the plan the fixture subscriptions were created on. `total_excluding_tax`
   # is separate from `total` so the display delta the controller computes is
   # exercised as a subtraction rather than as a zero.
-  InvoiceLine = Data.define(:description, :period, :quantity, :price, :amount, :currency)
+  # The line answers Stripe's 2025 shape — `pricing.unit_amount_decimal` as a
+  # BigDecimal, which is how the gem coerces the wire's decimal string — so
+  # the controller's builder is exercised against the shape production sends
+  # rather than a shape this double used to have.
+  InvoiceLine = Data.define(:description, :period, :quantity, :pricing, :amount, :currency)
   InvoicePeriod = Data.define(:start, :end)
-  InvoicePrice = Data.define(:unit_amount)
+  InvoicePricing = Data.define(:unit_amount_decimal)
   UpcomingInvoice = Data.define(:period_end, :currency, :lines, :subtotal, :total_excluding_tax, :total)
 
   def upcoming_invoice(params)
@@ -107,7 +129,7 @@ class FakeStripeAPI
           description: "Pro monthly",
           period: InvoicePeriod.new(period_start, period_end),
           quantity: 1,
-          price: InvoicePrice.new(amount),
+          pricing: InvoicePricing.new(BigDecimal(amount.to_s)),
           amount: amount,
           currency: "usd"
         )

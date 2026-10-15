@@ -38,6 +38,14 @@ module Processor
     # identifier that was refused both travel with it.
     class RequestFailed < Error; end
 
+    # The processor stated a figure this service cannot carry. Stripe's 2025
+    # line items report `pricing.unit_amount_decimal` as a decimal STRING —
+    # integral for every flat price this service sells, and legitimately
+    # fractional for metered ones. Money here is integer minor units and
+    # nothing rounds, so a fractional unit amount is refused rather than
+    # truncated: a truncated one would be a figure the processor never stated.
+    class Unrepresentable < Error; end
+
     class << self
       # The client the application uses, built from the environment.
       #
@@ -77,7 +85,14 @@ module Processor
     # has no id of ours to match on. `processor_customer_id` is sent when we know
     # it, and nil is passed explicitly when we do not, which asks the processor to
     # create the customer and tell us about it in the subscription.
-    def create_checkout_session(plan_price_id:, customer_reference:, processor_customer_id: nil)
+    # `success_url` and `cancel_url` are REQUIRED BY STRIPE on a hosted
+    # session, and this was a production-breaking omission until the live
+    # recording caught it: the hand-written double accepted a session with
+    # no return URLs and minted a plausible one, while the real API refused
+    # the request outright — the door that takes money could not open. Both
+    # are the CALLER's, because this service is an API: where a buyer lands
+    # after paying is the app's page, not a URL billing may invent.
+    def create_checkout_session(plan_price_id:, customer_reference:, success_url:, cancel_url: nil, processor_customer_id: nil)
       require_configured!
       raise Unpriced, "the plan has no processor_price_id, so there is nothing to check out" if plan_price_id.blank?
 
@@ -87,6 +102,11 @@ module Processor
           line_items: [ { price: plan_price_id, quantity: 1 } ],
           customer: processor_customer_id,
           client_reference_id: customer_reference,
+          success_url: success_url,
+          # Stripe renders its own "cancel" link back to the app; sending the
+          # success URL is the honest default when the caller names no other,
+          # because the alternative is whatever Stripe's dashboard default is.
+          cancel_url: cancel_url.presence || success_url,
           subscription_data: {
             metadata: { cafaye_customer_id: customer_reference }
           }
@@ -101,10 +121,24 @@ module Processor
       require_configured!
       raise Unpriced, "the new plan has no processor_price_id, so there is nothing to move onto" if price_id.blank?
 
+      # **A plan change is two requests, and the live recording is why.**
+      # Stripe's 2025 API no longer replaces a subscription's items from a
+      # price-id list: `items: [{ price: new }]` with no `id` APPENDS a
+      # second item — measured, the fixture subscription came back holding
+      # both prices — so a naive move would silently bill a customer for two
+      # plans. The item being moved has to be named by ITS OWN id, and that
+      # id is the processor's, read immediately before the move: retrieve the
+      # subscription, take the active item, then update that item's price.
+      #
+      # One intent, two calls, and the class doc's claim is still the true
+      # one — every Stripe call this service makes is inside one of these
+      # five methods.
       perform(:apply_plan_change, processor_subscription_id) do
+        item_id = stripe.retrieve_subscription(processor_subscription_id).items.data.first.id
+
         stripe.update_subscription(
           processor_subscription_id,
-          { items: [ price_id ], proration_behavior: proration_behavior }.compact
+          { items: [ { id: item_id, price: price_id } ], proration_behavior: proration_behavior }.compact
         )
       end
     end
@@ -235,6 +269,10 @@ module Processor
         Stripe::Checkout::Session.create(params, api_key: @api_key)
       end
 
+      def retrieve_subscription(id)
+        Stripe::Subscription.retrieve(id, api_key: @api_key)
+      end
+
       def update_subscription(id, params)
         Stripe::Subscription.update(id, params, api_key: @api_key)
       end
@@ -243,8 +281,15 @@ module Processor
         Stripe::Subscription.cancel(id, params, api_key: @api_key)
       end
 
+      # `Invoice.upcoming` was REMOVED from the gem when Stripe replaced
+      # `/v1/invoices/upcoming` with `/v1/invoices/create_preview`; the live
+      # recording found the client calling a method that no longer exists, so
+      # the whole upcoming-invoice route would have raised NoMethodError in
+      # production. `create_preview` is the endpoint that replaced it, takes
+      # the same `customer`/`subscription` pair, and answers the same invoice
+      # shape the response builder reads.
       def upcoming_invoice(params)
-        Stripe::Invoice.upcoming(params, api_key: @api_key)
+        Stripe::Invoice.create_preview(params, api_key: @api_key)
       end
 
       def billing_portal_url(params)

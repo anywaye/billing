@@ -139,6 +139,48 @@ All notable changes to billing are recorded here. The format follows
 
 ### Fixed
 
+- **Five production-breaking defects, found by recording the real Stripe API
+  and then walking the whole loop against it live.** Every previous proof of
+  this client was against a hand-written double, and a double answers with
+  the shape its author imagined — so the client could drift from the API it
+  claims to speak while the suite stayed green. It had:
+
+  1. **A checkout session with no `success_url`.** Stripe requires it; every
+     real session was refused. The door that takes money could not open.
+     `success_url` is now a required field of `POST /v1/subscriptions`
+     (422 naming it when absent or relative), `cancel_url` is optional and
+     defaults to it, and `openapi/v1.yaml` is at **2.5.0**.
+  2. **A plan change sending `items: [price_id]`** — a bare string list,
+     refused with "Invalid object".
+  3. **…and the object form APPENDS instead of replacing.** Measured: the
+     fixture subscription came back holding both prices, so a naive move
+     would have billed two plans at once. A plan change is now two requests:
+     a retrieve naming the item by the PROCESSOR's own item id, then an
+     update of that item.
+  4. **`Stripe::Invoice.upcoming` no longer exists** in stripe 19.6 — the
+     endpoint is `create_preview`. Every real preview raised NoMethodError.
+  5. **Live `invoice.paid` carries no `paid`, `charge`, `payment_intent` or
+     top-level `subscription`** (API 2026-03-25). The charges recorder
+     screened on `paid` = nil and **recorded no charge for any real
+     payment**; a payment event's subject fell back to the customer id. The
+     normalizer now accepts `status == "paid"` beside the old boolean, reads
+     the subscription from `parent.subscription_details`, and the recorder
+     falls back to the invoice's own id when neither charge nor payment
+     intent is inline.
+
+  **The proofs are in the repository, not in a terminal**: the five
+  `Processor::StripeClient` requests are recorded under
+  `test/cassettes/stripe/` (VCR + WebMock; the suite replays them with the
+  network forbidden and no key, verified), and
+  `test/services/webhooks/live_invoice_shape_test.rb` pins both invoice
+  shapes — the old fixture and a verbatim recording of the real payload —
+  so "the tests pass and nobody gets a receipt" cannot return. The live
+  drill that found them is written up in `REPORT-billing-live-stripe-01.md`,
+  including the charge recorded from a real payment and the cancellation
+  arriving through a real webhook.
+
+### Fixed
+
 - **The checkout door no longer decides a status the processor already
   reports.** `Checkout::Session#status_for` re-derived `trialing` from
   `trial_ends_at` and passed its own answer down as the delivery's status —

@@ -1,0 +1,263 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://api.stripe.com/v1/subscriptions/sub_1UQwgHCmN780pAiWxvYd5PVm
+    body:
+      encoding: UTF-8
+      string: cancel_at_period_end=true
+    headers:
+      User-Agent:
+      - Stripe/v1 RubyBindings/19.6.2
+      Authorization:
+      - Bearer <STRIPE_API_KEY>
+      X-Stripe-Client-Telemetry:
+      - '{"last_request_metrics":{"request_id":"req_sYUA0EDo4JU0Zh","request_duration_ms":760}}'
+      Idempotency-Key:
+      - f28079ec-37f0-4a74-a20f-a69112d6053a
+      Stripe-Version:
+      - 2026-08-26.dahlia
+      X-Stripe-Client-User-Agent:
+      - '{"bindings_version":"19.6.2","lang":"ruby","lang_version":"4.0.1 p0 (2026-01-13)","engine":"ruby","platform":"arm64-darwin23","telemetry_id":"6308688ee576525224048d72bb0c5359"}'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Thu, 15 Oct 2026 22:02:53 GMT
+      Content-Type:
+      - application/json
+      Content-Length:
+      - '4666'
+      Connection:
+      - keep-alive
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Allow-Methods:
+      - GET, HEAD, PUT, PATCH, POST, DELETE
+      Access-Control-Allow-Origin:
+      - "*"
+      Access-Control-Expose-Headers:
+      - Request-Id, Stripe-Manage-Version, Stripe-Should-Retry, X-Stripe-External-Auth-Required,
+        X-Stripe-Privileged-Session-Required
+      Access-Control-Max-Age:
+      - '300'
+      Cache-Control:
+      - no-cache, no-store
+      Content-Security-Policy:
+      - base-uri 'none'; default-src 'none'; form-action 'none'; frame-ancestors 'none';
+        img-src 'self'; script-src 'self' 'report-sample'; style-src 'self'; worker-src
+        'none'; upgrade-insecure-requests; report-uri https://q.stripe.com/csp-violation?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G;
+        report-to csp
+      Idempotency-Key:
+      - f28079ec-37f0-4a74-a20f-a69112d6053a
+      Original-Request:
+      - req_lQZmZ3BEN4L2we
+      Report-To:
+      - '{"group":"csp","max_age":8640,"endpoints":[{"url":"https://q.stripe.com/csp-report-v2?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G&t=1"}],"include_subdomains":true}'
+      Reporting-Endpoints:
+      - csp="https://q.stripe.com/csp-report-v2?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G&t=1"
+      Request-Id:
+      - req_lQZmZ3BEN4L2we
+      Stripe-Should-Retry:
+      - 'false'
+      Stripe-Version:
+      - 2026-08-26.dahlia
+      Vary:
+      - Origin
+      X-Stripe-Priority-Routing-Enabled:
+      - 'true'
+      X-Stripe-Routing-Context-Priority-Tier:
+      - api-testmode
+      X-Wc:
+      - 3c3
+      Strict-Transport-Security:
+      - max-age=63072000; includeSubDomains; preload
+    body:
+      encoding: UTF-8
+      string: |-
+        {
+          "id": "sub_1UQwgHCmN780pAiWxvYd5PVm",
+          "object": "subscription",
+          "application": null,
+          "application_fee_percent": null,
+          "automatic_tax": {
+            "disabled_reason": null,
+            "enabled": false,
+            "liability": null
+          },
+          "billing_cycle_anchor": 1792101561,
+          "billing_cycle_anchor_config": null,
+          "billing_mode": {
+            "flexible": {
+              "proration_discounts": "included"
+            },
+            "type": "flexible",
+            "updated_at": 1792101561
+          },
+          "billing_schedules": [],
+          "billing_thresholds": null,
+          "cancel_at": 1794779961,
+          "cancel_at_period_end": true,
+          "canceled_at": 1792101773,
+          "cancellation_details": {
+            "comment": null,
+            "feedback": null,
+            "feedback_option": null,
+            "reason": "cancellation_requested"
+          },
+          "collection_method": "charge_automatically",
+          "created": 1792101561,
+          "currency": "usd",
+          "customer": "cus_VRqHdzgTgwLPA1",
+          "customer_account": null,
+          "days_until_due": null,
+          "default_payment_method": null,
+          "default_source": null,
+          "default_tax_rates": [],
+          "description": null,
+          "discounts": [],
+          "ended_at": null,
+          "invoice_settings": {
+            "account_tax_ids": null,
+            "custom_fields": null,
+            "description": null,
+            "footer": null,
+            "issuer": {
+              "type": "self"
+            }
+          },
+          "items": {
+            "object": "list",
+            "data": [
+              {
+                "id": "si_VRqN8HMJlVxal9",
+                "object": "subscription_item",
+                "billing_thresholds": null,
+                "created": 1792101562,
+                "current_period_end": 1794779961,
+                "current_period_start": 1792101561,
+                "current_trial": null,
+                "discounts": [],
+                "metadata": {},
+                "plan": {
+                  "id": "price_1UQwacCmN780pAiWr0mwVOHB",
+                  "object": "plan",
+                  "active": true,
+                  "amount": 1900,
+                  "amount_decimal": "1900",
+                  "billing_scheme": "per_unit",
+                  "created": 1792101210,
+                  "currency": "usd",
+                  "interval": "month",
+                  "interval_count": 1,
+                  "livemode": false,
+                  "metadata": {},
+                  "meter": null,
+                  "nickname": null,
+                  "product": "prod_VRqH2ekjyrxRIU",
+                  "tiers_mode": null,
+                  "transform_usage": null,
+                  "trial_period_days": null,
+                  "usage_type": "licensed"
+                },
+                "price": {
+                  "id": "price_1UQwacCmN780pAiWr0mwVOHB",
+                  "object": "price",
+                  "active": true,
+                  "billing_scheme": "per_unit",
+                  "created": 1792101210,
+                  "currency": "usd",
+                  "custom_unit_amount": null,
+                  "livemode": false,
+                  "lookup_key": null,
+                  "metadata": {},
+                  "nickname": null,
+                  "product": "prod_VRqH2ekjyrxRIU",
+                  "recurring": {
+                    "interval": "month",
+                    "interval_count": 1,
+                    "meter": null,
+                    "trial_period_days": null,
+                    "usage_type": "licensed"
+                  },
+                  "tax_behavior": "unspecified",
+                  "tiers_mode": null,
+                  "transform_quantity": null,
+                  "type": "recurring",
+                  "unit_amount": 1900,
+                  "unit_amount_decimal": "1900"
+                },
+                "quantity": 1,
+                "subscription": "sub_1UQwgHCmN780pAiWxvYd5PVm",
+                "tax_rates": []
+              }
+            ],
+            "has_more": false,
+            "total_count": 1,
+            "url": "/v1/subscription_items?subscription=sub_1UQwgHCmN780pAiWxvYd5PVm"
+          },
+          "latest_invoice": "in_1UQwgHCmN780pAiWeMkaHqkj",
+          "livemode": false,
+          "managed_payments": {
+            "enabled": false
+          },
+          "metadata": {},
+          "next_pending_invoice_item_invoice": null,
+          "on_behalf_of": null,
+          "pause_collection": null,
+          "payment_settings": {
+            "payment_method_options": null,
+            "payment_method_types": null,
+            "save_default_payment_method": "off"
+          },
+          "pending_invoice_item_interval": null,
+          "pending_setup_intent": null,
+          "pending_update": null,
+          "plan": {
+            "id": "price_1UQwacCmN780pAiWr0mwVOHB",
+            "object": "plan",
+            "active": true,
+            "amount": 1900,
+            "amount_decimal": "1900",
+            "billing_scheme": "per_unit",
+            "created": 1792101210,
+            "currency": "usd",
+            "interval": "month",
+            "interval_count": 1,
+            "livemode": false,
+            "metadata": {},
+            "meter": null,
+            "nickname": null,
+            "product": "prod_VRqH2ekjyrxRIU",
+            "tiers_mode": null,
+            "transform_usage": null,
+            "trial_period_days": null,
+            "usage_type": "licensed"
+          },
+          "quantity": 1,
+          "schedule": null,
+          "start_date": 1792101561,
+          "status": "active",
+          "test_clock": null,
+          "transfer_data": null,
+          "trial_end": null,
+          "trial_settings": {
+            "end_behavior": {
+              "billing_cycle_anchor": "now",
+              "missing_payment_method": "create_invoice"
+            }
+          },
+          "trial_start": null
+        }
+  recorded_at: Thu, 15 Oct 2026 22:02:53 GMT
+recorded_with: VCR 6.4.0

@@ -1,0 +1,103 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://api.stripe.com/v1/billing_portal/sessions
+    body:
+      encoding: UTF-8
+      string: customer=cus_VRqHdzgTgwLPA1&return_url=https%3A%2F%2Fapp.cafaye.com%2Fbilling
+    headers:
+      User-Agent:
+      - Stripe/v1 RubyBindings/19.6.2
+      Authorization:
+      - Bearer <STRIPE_API_KEY>
+      X-Stripe-Client-Telemetry:
+      - '{"last_request_metrics":{"request_id":"req_jiihlXmKA3nrh1","request_duration_ms":1261}}'
+      Idempotency-Key:
+      - 99bbfc0f-da76-4e9a-9257-7edec159d925
+      Stripe-Version:
+      - 2026-08-26.dahlia
+      X-Stripe-Client-User-Agent:
+      - '{"bindings_version":"19.6.2","lang":"ruby","lang_version":"4.0.1 p0 (2026-01-13)","engine":"ruby","platform":"arm64-darwin23","telemetry_id":"6308688ee576525224048d72bb0c5359"}'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Thu, 15 Oct 2026 22:02:50 GMT
+      Content-Type:
+      - application/json
+      Content-Length:
+      - '495'
+      Connection:
+      - keep-alive
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Allow-Methods:
+      - GET, HEAD, PUT, PATCH, POST, DELETE
+      Access-Control-Allow-Origin:
+      - "*"
+      Access-Control-Expose-Headers:
+      - Request-Id, Stripe-Manage-Version, Stripe-Should-Retry, X-Stripe-External-Auth-Required,
+        X-Stripe-Privileged-Session-Required
+      Access-Control-Max-Age:
+      - '300'
+      Cache-Control:
+      - no-cache, no-store
+      Content-Security-Policy:
+      - base-uri 'none'; default-src 'none'; form-action 'none'; frame-ancestors 'none';
+        img-src 'self'; script-src 'self' 'report-sample'; style-src 'self'; worker-src
+        'none'; upgrade-insecure-requests; report-uri https://q.stripe.com/csp-violation?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G;
+        report-to csp
+      Idempotency-Key:
+      - 99bbfc0f-da76-4e9a-9257-7edec159d925
+      Original-Request:
+      - req_3ogjSuHCx8MeiP
+      Report-To:
+      - '{"group":"csp","max_age":8640,"endpoints":[{"url":"https://q.stripe.com/csp-report-v2?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G&t=1"}],"include_subdomains":true}'
+      Reporting-Endpoints:
+      - csp="https://q.stripe.com/csp-report-v2?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G&t=1"
+      Request-Id:
+      - req_3ogjSuHCx8MeiP
+      Stripe-Should-Retry:
+      - 'false'
+      Stripe-Version:
+      - 2026-08-26.dahlia
+      Vary:
+      - Origin
+      X-Stripe-Priority-Routing-Enabled:
+      - 'true'
+      X-Stripe-Routing-Context-Priority-Tier:
+      - api-testmode
+      X-Wc:
+      - 3c3
+      Strict-Transport-Security:
+      - max-age=63072000; includeSubDomains; preload
+    body:
+      encoding: UTF-8
+      string: |-
+        {
+          "id": "bps_1UQwjeCmN780pAiWDeSqslvf",
+          "object": "billing_portal.session",
+          "configuration": "bpc_1UQwbtCmN780pAiWMydgjBVh",
+          "created": 1792101770,
+          "customer": "cus_VRqHdzgTgwLPA1",
+          "customer_account": null,
+          "flow": null,
+          "livemode": false,
+          "locale": null,
+          "on_behalf_of": null,
+          "return_url": "https://app.cafaye.com/billing",
+          "url": "https://billing.stripe.com/p/session?secret=test_YWNjdF8xVEYyamRDbU43ODBwQWlXLF9WUnFROUFIMVNxV0VpYmpoY05uNk0zdlBLaElGT3A0010062RsEyPr"
+        }
+  recorded_at: Thu, 15 Oct 2026 22:02:50 GMT
+recorded_with: VCR 6.4.0

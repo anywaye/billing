@@ -233,13 +233,46 @@ module V1
       end
 
       def checkout_for(customer, plan)
+        success_url = return_url(:success_url)
+        cancel_url = return_url(:cancel_url)
+        return if refused?
+
         ask_processor do
           processor.create_checkout_session(
             plan_price_id: plan.processor_price_id,
             customer_reference: customer.id,
+            success_url: success_url,
+            cancel_url: cancel_url,
             processor_customer_id: customer.processor_customer_id.presence
           )
         end
+      end
+
+      # Where the buyer lands after paying (or backing out), and it is the
+      # CALLER's URL because it is the app's page. Required by Stripe on a
+      # hosted session — the omission was a production-breaking defect the
+      # live recording caught — and validated here as an absolute http(s)
+      # URL so a relative path is a 422 naming the field rather than a
+      # session Stripe refuses with a message about its own parameters.
+      #
+      # `cancel_url` is optional: the client sends the success URL when the
+      # caller names no other, which is a page the buyer can use rather than
+      # whatever a dashboard default happens to be.
+      def return_url(field)
+        value = params[field]
+        return nil if field == :cancel_url && value.blank?
+        return refuse(:validation_failed, field.to_s, "is required") if value.blank?
+
+        uri = begin
+          URI.parse(value.to_s)
+        rescue URI::InvalidURIError
+          nil
+        end
+        unless uri && %w[http https].include?(uri.scheme) && uri.host.present?
+          return refuse(:validation_failed, field.to_s, "must be an absolute http(s) URL")
+        end
+
+        value.to_s
       end
 
       # One place the processor is asked, and the one place its refusals become
@@ -407,10 +440,19 @@ module V1
         }
       end
 
-      # One line of the invoice, in the same minor-unit shape. The unit amount is
-      # the processor's own `price.unit_amount`, read rather than derived from
-      # the line total: a quantity greater than one is where a derived figure
-      # would go wrong, and the processor states it outright.
+      # One line of the invoice, in the same minor-unit shape. The unit amount
+      # is the processor's own figure, read rather than derived from the line
+      # total: a quantity greater than one is where a derived figure would go
+      # wrong, and the processor states it outright.
+      #
+      # **Stripe's 2025 line items have no `price` object at all** — the
+      # recording caught this builder reading `line.price.unit_amount`, an
+      # accessor that no longer exists, so every real preview would have
+      # raised NoMethodError in production. The figure now lives at
+      # `pricing.unit_amount_decimal` as a decimal STRING in minor units
+      # ("1900"), and `unit_amount_of` is the one place it becomes an
+      # Integer — refusing rather than truncating a fractional one, because
+      # a truncated figure is one the processor never stated.
       def upcoming_invoice_line(line)
         {
           "description" => line.description,
@@ -419,10 +461,20 @@ module V1
             "end" => Time.at(line.period.end).utc.iso8601
           },
           "quantity" => line.quantity,
-          "unit_amount" => line.price.unit_amount,
+          "unit_amount" => unit_amount_of(line),
           "amount" => line.amount,
           "currency" => line.currency.upcase
         }
+      end
+
+      def unit_amount_of(line)
+        decimal = BigDecimal(line.pricing.unit_amount_decimal.to_s)
+        unless decimal.frac.zero?
+          raise Processor::StripeClient::Unrepresentable,
+            "the processor stated a unit amount of #{decimal.to_s("F")}, which is not a whole number of minor units"
+        end
+
+        decimal.to_i
       end
 
       # What the processor said, in the two words a client can act on. `immediately`

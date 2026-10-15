@@ -382,8 +382,11 @@ env:
   # Both floors in gate.yml moved with them.
   # The deploy-artifact assertions and the first-charge drill: **1219 runs,
   # 3968 assertions**, measured. Both floors in gate.yml moved with them.
-  BASELINE_RUNS: '1219'
-  BASELINE_ASSERTIONS: '3968'
+  # The live-Stripe packet — cassettes, the five-request replay, and both
+  # invoice shapes: **1227 runs, 4001 assertions**, measured with no key in
+  # the environment. Both floors in gate.yml moved with them.
+  BASELINE_RUNS: '1227'
+  BASELINE_ASSERTIONS: '4001'
 
 jobs:
   # ------------------------------------------------------------------ shared

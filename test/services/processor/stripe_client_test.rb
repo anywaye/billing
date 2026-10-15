@@ -92,13 +92,13 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a checkout session is created in subscription mode, because that is what a plan is" do
     client_for(@api).create_checkout_session(**checkout_params)
 
-    assert_equal "subscription", @api.requests.sole.fetch(:mode)
+    assert_equal "subscription", @api.requests.last.fetch(:mode)
   end
 
   test "a checkout session is created for one plan at its processor price" do
     client_for(@api).create_checkout_session(**checkout_params)
 
-    assert_equal [ { price: "price_1PZQaBcDeFgHiJkLmNoPqR2", quantity: 1 } ], @api.requests.sole.fetch(:line_items)
+    assert_equal [ { price: "price_1PZQaBcDeFgHiJkLmNoPqR2", quantity: 1 } ], @api.requests.last.fetch(:line_items)
   end
 
   # The reference is how a later webhook is tied back to a cafaye customer, and it
@@ -109,26 +109,26 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a checkout session carries this service's own customer id in the subscription's metadata" do
     client_for(@api).create_checkout_session(**checkout_params)
 
-    metadata = @api.requests.sole.fetch(:subscription_data).fetch(:metadata)
+    metadata = @api.requests.last.fetch(:subscription_data).fetch(:metadata)
     assert_equal "11111111-1111-4111-8111-111111111111", metadata.fetch(:cafaye_customer_id)
   end
 
   test "a checkout session also carries it as the reference the processor echoes back" do
     client_for(@api).create_checkout_session(**checkout_params)
 
-    assert_equal "11111111-1111-4111-8111-111111111111", @api.requests.sole.fetch(:client_reference_id)
+    assert_equal "11111111-1111-4111-8111-111111111111", @api.requests.last.fetch(:client_reference_id)
   end
 
   test "a checkout session with no customer reference says it is empty, not that it is absent" do
     client_for(@api).create_checkout_session(**checkout_params(customer_reference: nil))
 
-    assert_nil @api.requests.sole.fetch(:subscription_data).fetch(:metadata).fetch(:cafaye_customer_id)
+    assert_nil @api.requests.last.fetch(:subscription_data).fetch(:metadata).fetch(:cafaye_customer_id)
   end
 
   test "a checkout session tells the processor which customer to charge, when we know their processor id" do
     client_for(@api).create_checkout_session(**checkout_params(processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0"))
 
-    assert_equal "cus_R1pQKz9xLp2mN4vB6yH8jL0", @api.requests.sole.fetch(:customer)
+    assert_equal "cus_R1pQKz9xLp2mN4vB6yH8jL0", @api.requests.last.fetch(:customer)
   end
 
   # A customer whose processor id we do not have is normal in v0, not an error:
@@ -138,7 +138,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a checkout session for a customer with no processor id asks the processor to create one" do
     client_for(@api).create_checkout_session(**checkout_params(processor_customer_id: nil))
 
-    assert_nil @api.requests.sole.fetch(:customer)
+    assert_nil @api.requests.last.fetch(:customer)
   end
 
   test "a checkout session returns the processor's own session id" do
@@ -171,13 +171,18 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a plan change is applied to the processor's own subscription" do
     client_for(@api).apply_plan_change(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", price_id: "price_new")
 
-    assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", @api.requests.sole.fetch(:id)
+    assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", @api.requests.last.fetch(:id)
   end
 
   test "a plan change moves the subscription onto the new processor price" do
     client_for(@api).apply_plan_change(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", price_id: "price_new")
 
-    assert_equal [ "price_new" ], @api.requests.sole.fetch(:items)
+    # The item being moved is named by the PROCESSOR's own item id, read in
+    # the retrieve immediately before — the live recording measured that a
+    # price-only item list APPENDS a second item instead of replacing one, so
+    # the id is what makes this a move rather than a double-billing.
+    update = @api.requests.last
+    assert_equal [ { id: "si_FAKE1PZQaBcDeFgHiJkLmNoPqR1", price: "price_new" } ], update.fetch(:items)
   end
 
   # The whole point of the seam: a behaviour goes out, never a figure. These three
@@ -189,7 +194,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
       proration_behavior: Subscriptions::PlanChange::ALWAYS_INVOICE
     )
 
-    request = @api.requests.sole
+    request = @api.requests.last
     assert_equal "always_invoice", request.fetch(:proration_behavior)
     refute request.key?(:amount)
     refute request.key?(:credit)
@@ -202,7 +207,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a plan change with no proration behaviour sends no key at all" do
     client_for(@api).apply_plan_change(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", price_id: "price_new")
 
-    refute_includes @api.requests.sole.keys, :proration_behavior
+    refute_includes @api.requests.last.keys, :proration_behavior
   end
 
   test "a plan change returns the processor's own subscription" do
@@ -225,19 +230,19 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a cancellation names the processor's own subscription" do
     client_for(@api).cancel_subscription(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", at_period_end: true)
 
-    assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", @api.requests.sole.fetch(:id)
+    assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", @api.requests.last.fetch(:id)
   end
 
   test "a cancellation at period end says so to the processor" do
     client_for(@api).cancel_subscription(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", at_period_end: true)
 
-    assert_equal true, @api.requests.sole.fetch(:cancel_at_period_end)
+    assert_equal true, @api.requests.last.fetch(:cancel_at_period_end)
   end
 
   test "a cancellation now does not say to keep it to the period end" do
     client_for(@api).cancel_subscription(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", at_period_end: false)
 
-    assert_equal false, @api.requests.sole.fetch(:cancel_at_period_end)
+    assert_equal false, @api.requests.last.fetch(:cancel_at_period_end)
   end
 
   # A cancellation is the one place a service is most tempted to compute a refund
@@ -247,7 +252,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a cancellation asks for no refund and no proration, because this service computes neither" do
     client_for(@api).cancel_subscription(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", at_period_end: false)
 
-    request = @api.requests.sole
+    request = @api.requests.last
     refute request.key?(:refund)
     refute request.key?(:prorate)
     refute request.key?(:amount)
@@ -270,7 +275,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
       processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0"
     )
 
-    request = @api.requests.sole
+    request = @api.requests.last
     assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", request.fetch(:subscription)
     assert_equal "cus_R1pQKz9xLp2mN4vB6yH8jL0", request.fetch(:customer)
   end
@@ -284,7 +289,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
       processor_customer_id: "cus_R1pQKz9xLp2mN4vB6yH8jL0"
     )
 
-    request = @api.requests.sole
+    request = @api.requests.last
     assert_empty request.keys - %i[subscription customer],
       "the projection sent something other than the two identifiers: #{request.keys.inspect}"
   end
@@ -302,7 +307,11 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_equal 1, invoice.lines.size
     line = invoice.lines.first
     assert_equal "Pro monthly", line.description
-    assert_equal 1900, line.price.unit_amount
+    # The unit amount at the shape Stripe's 2025 API actually sends it in —
+    # `pricing.unit_amount_decimal`, a decimal the gem hands back as a
+    # BigDecimal — not the `price.unit_amount` the live recording proved no
+    # longer exists.
+    assert_equal 1900, BigDecimal(line.pricing.unit_amount_decimal.to_s).to_i
     assert_equal 1900, line.amount
     assert_equal 1, line.quantity
   end
@@ -371,6 +380,10 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
       {
         plan_price_id: "price_1PZQaBcDeFgHiJkLmNoPqR2",
         customer_reference: "11111111-1111-4111-8111-111111111111",
+        # Required by Stripe on a hosted session — the omission was one of
+        # the three defects the live recording caught — and it is the
+        # caller's URL, because the page a buyer lands on is the app's.
+        success_url: "https://app.cafaye.com/billing",
         processor_customer_id: nil
       }.merge(overrides)
     end

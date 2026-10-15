@@ -151,4 +151,14 @@ group :development, :test do
 
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
+
+  # VCR + WebMock: the two halves of one rule — a test may reach Stripe only
+  # through a RECORDING of Stripe. `stripe_client_live_test.rb` records the
+  # five requests against the real test-mode API once; every later run of the
+  # suite replays those bytes with the network forbidden, so the suite is
+  # hermetic AND the request shapes are the processor's own answers rather
+  # than this repository's guess at them. The alternative — hand-written
+  # doubles only — is how a client drifts from the API it claims to speak.
+  gem "vcr"
+  gem "webmock"
 end

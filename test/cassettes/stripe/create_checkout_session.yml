@@ -1,0 +1,213 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://api.stripe.com/v1/checkout/sessions
+    body:
+      encoding: UTF-8
+      string: mode=subscription&line_items[0][price]=price_1UQwacCmN780pAiWr0mwVOHB&line_items[0][quantity]=1&customer=cus_VRqHdzgTgwLPA1&client_reference_id=11111111-1111-4111-8111-111111111111&success_url=https%3A%2F%2Fapp.cafaye.com%2Fbilling&cancel_url=https%3A%2F%2Fapp.cafaye.com%2Fbilling&subscription_data[metadata][cafaye_customer_id]=11111111-1111-4111-8111-111111111111
+    headers:
+      User-Agent:
+      - Stripe/v1 RubyBindings/19.6.2
+      Authorization:
+      - Bearer <STRIPE_API_KEY>
+      X-Stripe-Client-Telemetry:
+      - '{"last_request_metrics":{"request_id":"req_GSehETq26H7FKh","request_duration_ms":782}}'
+      Idempotency-Key:
+      - d2e6cd5b-6cb9-480e-9a1c-ef924fc00323
+      Stripe-Version:
+      - 2026-08-26.dahlia
+      X-Stripe-Client-User-Agent:
+      - '{"bindings_version":"19.6.2","lang":"ruby","lang_version":"4.0.1 p0 (2026-01-13)","engine":"ruby","platform":"arm64-darwin23","telemetry_id":"6308688ee576525224048d72bb0c5359"}'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Thu, 15 Oct 2026 22:02:52 GMT
+      Content-Type:
+      - application/json
+      Content-Length:
+      - '3455'
+      Connection:
+      - keep-alive
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Allow-Methods:
+      - GET, HEAD, PUT, PATCH, POST, DELETE
+      Access-Control-Allow-Origin:
+      - "*"
+      Access-Control-Expose-Headers:
+      - Request-Id, Stripe-Manage-Version, Stripe-Should-Retry, X-Stripe-External-Auth-Required,
+        X-Stripe-Privileged-Session-Required
+      Access-Control-Max-Age:
+      - '300'
+      Cache-Control:
+      - no-cache, no-store
+      Content-Security-Policy:
+      - base-uri 'none'; default-src 'none'; form-action 'none'; frame-ancestors 'none';
+        img-src 'self'; script-src 'self' 'report-sample'; style-src 'self'; worker-src
+        'none'; upgrade-insecure-requests; report-uri https://q.stripe.com/csp-violation?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G;
+        report-to csp
+      Idempotency-Key:
+      - d2e6cd5b-6cb9-480e-9a1c-ef924fc00323
+      Original-Request:
+      - req_sYUA0EDo4JU0Zh
+      Report-To:
+      - '{"group":"csp","max_age":8640,"endpoints":[{"url":"https://q.stripe.com/csp-report-v2?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G&t=1"}],"include_subdomains":true}'
+      Reporting-Endpoints:
+      - csp="https://q.stripe.com/csp-report-v2?q=rSmzX4qqQ1YcAghytetNZM7JWi5_9TG0nQtybzmK_By5pjSmMA0djl4ZlGh9HCtbQs8iFdUClRLasg2G&t=1"
+      Request-Id:
+      - req_sYUA0EDo4JU0Zh
+      Stripe-Should-Retry:
+      - 'false'
+      Stripe-Version:
+      - 2026-08-26.dahlia
+      Vary:
+      - Origin
+      X-Stripe-Priority-Routing-Enabled:
+      - 'true'
+      X-Stripe-Routing-Context-Priority-Tier:
+      - api-testmode
+      X-Wc:
+      - 3c3
+      Strict-Transport-Security:
+      - max-age=63072000; includeSubDomains; preload
+    body:
+      encoding: UTF-8
+      string: |-
+        {
+          "id": "cs_test_a1WLE71i4BFLREiaYbwr3sxF4v78O0uVhuGOzL8zws1bLlK84EengCWnHj",
+          "object": "checkout.session",
+          "adaptive_pricing": {
+            "enabled": true
+          },
+          "after_expiration": null,
+          "allow_promotion_codes": null,
+          "allowed_payment_method_types": null,
+          "amount_subtotal": 1900,
+          "amount_total": 1900,
+          "automatic_tax": {
+            "enabled": false,
+            "liability": null,
+            "provider": null,
+            "status": null
+          },
+          "billing_address_collection": null,
+          "branding_settings": {
+            "background_color": "#ffffff",
+            "border_style": "rounded",
+            "button_color": "#0074d4",
+            "display_name": "Cafaye",
+            "font_family": "default",
+            "icon": null,
+            "logo": null
+          },
+          "cancel_url": "https://app.cafaye.com/billing",
+          "client_reference_id": "11111111-1111-4111-8111-111111111111",
+          "client_secret": null,
+          "collected_information": {
+            "business_name": null,
+            "individual_name": null,
+            "shipping_details": null
+          },
+          "consent": null,
+          "consent_collection": null,
+          "created": 1792101772,
+          "currency": "usd",
+          "currency_conversion": null,
+          "custom_fields": [],
+          "custom_text": {
+            "after_submit": null,
+            "shipping_address": null,
+            "submit": null,
+            "terms_of_service_acceptance": null
+          },
+          "customer": "cus_VRqHdzgTgwLPA1",
+          "customer_account": null,
+          "customer_creation": null,
+          "customer_details": {
+            "address": null,
+            "business_name": null,
+            "email": "billing-live-test@cafaye.com",
+            "individual_name": null,
+            "name": null,
+            "phone": null,
+            "tax_exempt": "none",
+            "tax_ids": null
+          },
+          "customer_email": null,
+          "discounts": [],
+          "expires_at": 1792188172,
+          "integration_identifier": null,
+          "invoice": null,
+          "invoice_creation": null,
+          "livemode": false,
+          "locale": null,
+          "managed_payments": {
+            "enabled": false
+          },
+          "marketing_attributions": null,
+          "metadata": {},
+          "mode": "subscription",
+          "origin_context": null,
+          "payment_intent": null,
+          "payment_link": null,
+          "payment_method_collection": "always",
+          "payment_method_configuration_details": {
+            "id": "pmc_1TF2k9CmN780pAiWJeABRIjU",
+            "parent": null
+          },
+          "payment_method_options": {
+            "card": {
+              "request_three_d_secure": "automatic"
+            }
+          },
+          "payment_method_types": [
+            "card",
+            "klarna",
+            "link",
+            "cashapp",
+            "amazon_pay"
+          ],
+          "payment_status": "unpaid",
+          "permissions": null,
+          "phone_number_collection": {
+            "enabled": false
+          },
+          "recovered_from": null,
+          "saved_payment_method_options": {
+            "allow_redisplay_filters": [
+              "always"
+            ],
+            "payment_method_remove": "disabled",
+            "payment_method_save": null
+          },
+          "setup_intent": null,
+          "shipping_address_collection": null,
+          "shipping_cost": null,
+          "shipping_options": [],
+          "status": "open",
+          "submit_type": null,
+          "subscription": null,
+          "success_url": "https://app.cafaye.com/billing",
+          "total_details": {
+            "amount_discount": 0,
+            "amount_shipping": 0,
+            "amount_tax": 0
+          },
+          "ui_mode": "hosted_page",
+          "url": "https://checkout.stripe.com/c/pay/cs_test_a1WLE71i4BFLREiaYbwr3sxF4v78O0uVhuGOzL8zws1bLlK84EengCWnHj#fidnandhYHdWcXxpYCc%2FJ2FgY2RwaXEnKSdicyc%2FNSknZHVsTmB8Jz8ndW5acWB2cVowNFFDN29hRmhLMj01dURsUmRqPG1tdXZXMmFXYGdwVVBPSmFfT0FHNXxSVX1RaTM9PWxHNmhJcmh9N0tLS3B8YnVTf1Zkd2RQV2RVRmZga0xPXzRESGJTQzU1Z1FmSHBNf0cnKSdjd2poVmB3c2B3Jz9xd3BgKSdnZGZuYndqcGthRmppancnPycmY2NjY2NjJyknaWR8anBxUXx1YCc%2FJ3Zsa2JpYFpscWBoJyknYGtkZ2lgVWlkZmBtamlhYHd2Jz9xd3BgeCUl",
+          "wallet_options": null
+        }
+  recorded_at: Thu, 15 Oct 2026 22:02:52 GMT
+recorded_with: VCR 6.4.0

@@ -224,8 +224,15 @@ module Webhooks
         # share one, and a redelivery of the same event carries the same value,
         # which is the property the index needs. The column is named for the
         # common case and holds the processor's id in both.
+        # The processor's own id for this payment, and the live API left
+        # three shapes to read it from. A subscription invoice used to carry
+        # `charge`; a live one (API 2026-03-25) carries NEITHER `charge` NOR
+        # `payment_intent` inline — measured on the drill's real invoice —
+        # so the invoice's own id is the third fallback. It is unique per
+        # invoice, stable across redeliveries, and the same identifier the
+        # processor's dashboard shows for the payment.
         def processor_charge_id
-          payload.dig("data", "object", "charge") || data["payment_intent_id"]
+          payload.dig("data", "object", "charge") || data["payment_intent_id"] || payload.dig("data", "object", "id")
         end
     end
   end

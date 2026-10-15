@@ -299,7 +299,7 @@ gate:
       # 150 -> 152 is the checkout door: two new `.rb` files (the controller and
       # its request spec), measured the same way. 152 -> 153 is the upcoming
       # invoice's request spec.
-      minimum: 155
+      minimum: 158
     # ---------------------------------------------------------------------
     # The suite. THE load-bearing proof, and the only line that cannot appear
     # unless the suite ran to the end and every assertion in it passed.
@@ -425,7 +425,11 @@ gate:
       #
       # 1209 -> 1219 is P5: the chart-and-publish assertions (8) and the
       # first-charge drill (2). Measured **1219 runs / 3968 assertions**.
-      minimum: 1219
+      #
+      # 1219 -> 1227 is the live-Stripe packet: cassettes and replay for the
+      # five client requests (5) and both live invoice shapes (3). Measured
+      # **1227 runs / 4001 assertions** with `STRIPE_API_KEY` unset.
+      minimum: 1227
     # ---------------------------------------------------------------------
     # The gate reached its own last line. With the five above it, the step
     # markers bracket the run: the toolchain was pinned, the bundle resolved, a

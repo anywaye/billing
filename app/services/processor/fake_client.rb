@@ -99,7 +99,7 @@ module Processor
     )
 
     PreviewLine = Data.define(
-      :description, :period, :quantity, :price, :amount, :currency
+      :description, :period, :quantity, :pricing, :amount, :currency
     )
 
     # A period answers `.start` and `.end` because that is what a processor's own
@@ -107,7 +107,13 @@ module Processor
     # whichever processor is behind the call.
     PreviewPeriod = Data.define(:start, :end)
 
-    PreviewPrice = Data.define(:unit_amount)
+    # **The pricing shape is Stripe's 2025 shape, and that is deliberate.**
+    # The controller's builder reads `line.pricing.unit_amount_decimal` — a
+    # decimal string — because the real API stopped exposing a `price` object
+    # on a line item, and a fake that answered the old shape would be a
+    # second vocabulary for one field: the dev door and CI would exercise a
+    # builder that cannot read what production sends.
+    PreviewPricing = Data.define(:unit_amount_decimal)
 
     # The ledger, and it exists for one assertion.
     #
@@ -240,7 +246,7 @@ module Processor
               end: Time.current + interval_length(subscription.interval)
             ),
             quantity: subscription.quantity,
-            price: PreviewPrice.new(unit_amount: subscription.price.minor_units),
+            pricing: PreviewPricing.new(unit_amount_decimal: subscription.price.minor_units.to_s),
             amount: amount,
             currency: subscription.price.currency
           )

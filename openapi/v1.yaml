@@ -109,6 +109,18 @@ info:
   # which is a fact about the response and not a break for a client that never
   # called it. A minor bump under the unchanged `/v1` prefix, per core's rule.
   #
+  # 2.5.0 is the checkout door's return URLs — one added field, and the
+  # reason it is not "additive": `POST /v1/subscriptions` could not succeed
+  # without them. Stripe requires `success_url` on a hosted Checkout
+  # Session, and the request this service sent omitted it, so the real API
+  # refused every session the door tried to open. The live recording
+  # (`test/services/processor/stripe_client_live_test.rb`, cassettes under
+  # `test/cassettes/stripe/`) is what caught it, because the hand-written
+  # double accepted the incomplete session happily. The field is REQUIRED
+  # now and a request without it is a 422 naming it — a breaking change to
+  # an operation that never worked, recorded here rather than hidden in a
+  # patch note.
+  #
   # 2.4.0 is the money history and the portal: **two additive operations**,
   # `GET /v1/charges` (the index the receipts packet recorded as deliberately
   # absent — its two reasons have moved; see the operation) and `POST
@@ -133,7 +145,7 @@ info:
   # unless the deployment enabled it, because a door that fabricates an
   # `active` subscription from a request body is a free-subscription door the
   # day it is reachable.
-  version: 2.4.0
+  version: 2.5.0
   description: >-
     Plans, customers, the subscription lifecycle, and one inbound
     payment-processor webhook for cafaye. This document describes every client
@@ -1710,7 +1722,7 @@ components:
     # it is buying, because there is no hosted page that would have asked.
     CheckoutRequest:
       type: object
-      required: [customer_id, plan_id]
+      required: [customer_id, plan_id, success_url]
       additionalProperties: false
       properties:
         customer_id:
@@ -1723,6 +1735,23 @@ components:
           type: string
           format: uuid
           description: A plan that is active and has a processor price.
+        success_url:
+          type: string
+          format: uri
+          description: >-
+            Where the processor sends the buyer after paying. REQUIRED —
+            Stripe refuses a hosted session without it — and it is the
+            caller's URL because the page a buyer lands on is the app's, not
+            one this service may invent. Must be an absolute http(s) URL; a
+            relative path is a 422 naming this field.
+        cancel_url:
+          type: string
+          format: uri
+          description: >-
+            Where the processor sends the buyer who backs out. Optional; the
+            success URL is sent when the caller names no other, which is a
+            page the buyer can use rather than whatever a dashboard default
+            happens to be.
         quantity:
           type: integer
           minimum: 1

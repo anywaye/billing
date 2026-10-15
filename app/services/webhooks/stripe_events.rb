@@ -140,16 +140,31 @@ module Webhooks
       )
     end
 
+    # **Every field here was re-measured against the live API on 2026-10-15,
+    # and three of them had moved.** The committed fixtures carry the old
+    # shape; a live `invoice.paid` (API 2026-03-25) carries:
+    #
+    #   * no `paid` boolean at all — its `status` is `"paid"`, so the
+    #     recorder's screen on `paid` read nil and **recorded no charge for
+    #     any real payment**. Both shapes are accepted now; the fixture
+    #     proves the old one and the drill proves the new one.
+    #   * no top-level `subscription` — it is
+    #     `parent.subscription_details.subscription`, so the payment event's
+    #     subject fell back to the customer id instead of the processor's
+    #     subscription id.
+    #   * no `charge` and no `payment_intent` on the object (see the
+    #     recorder's `processor_charge_id`, which reads the invoice's own id
+    #     when neither is present).
     def self.invoice_of(payload)
       invoice = object_of(payload)
 
       provenance(payload).merge(
         "kind" => "payment",
         "customer_id" => invoice["customer"],
-        "subscription_id" => invoice["subscription"],
+        "subscription_id" => invoice["subscription"] || invoice.dig("parent", "subscription_details", "subscription"),
         "invoice_id" => invoice["id"],
         "payment_intent_id" => invoice["payment_intent"],
-        "paid" => invoice["paid"],
+        "paid" => invoice["paid"] == true || invoice["status"] == "paid",
         "amount" => money(settled_or_due(invoice), invoice["currency"]),
         "attempt_count" => invoice["attempt_count"],
         "next_payment_attempt" => time_of(invoice["next_payment_attempt"])

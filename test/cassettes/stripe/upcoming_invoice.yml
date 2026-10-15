@@ -1,0 +1,88 @@
+---
+http_interactions:
+- request:
+    method: post
+    uri: https://api.stripe.com/v1/invoices/create_preview
+    body:
+      encoding: UTF-8
+      string: customer=cus_VRqHdzgTgwLPA1&subscription=sub_1UQwgQCmN780pAiWTjQDKffS
+    headers:
+      User-Agent:
+      - Stripe/v1 RubyBindings/19.6.2
+      Authorization:
+      - Bearer <STRIPE_API_KEY>
+      Idempotency-Key:
+      - caad6fdc-d173-4476-b70e-a317343c83f3
+      Stripe-Version:
+      - 2026-08-26.dahlia
+      X-Stripe-Client-User-Agent:
+      - '{"bindings_version":"19.6.2","lang":"ruby","lang_version":"4.0.1 p0 (2026-01-13)","engine":"ruby","platform":"arm64-darwin23","telemetry_id":"6308688ee576525224048d72bb0c5359"}'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Server:
+      - nginx
+      Date:
+      - Thu, 15 Oct 2026 22:02:49 GMT
+      Content-Type:
+      - application/json
+      Content-Length:
+      - '4015'
+      Connection:
+      - keep-alive
+      Access-Control-Allow-Credentials:
+      - 'true'
+      Access-Control-Allow-Methods:
+      - GET, HEAD, PUT, PATCH, POST, DELETE
+      Access-Control-Allow-Origin:
+      - "*"
+      Access-Control-Expose-Headers:
+      - Request-Id, Stripe-Manage-Version, Stripe-Should-Retry, X-Stripe-External-Auth-Required,
+        X-Stripe-Privileged-Session-Required
+      Access-Control-Max-Age:
+      - '300'
+      Cache-Control:
+      - no-cache, no-store
+      Content-Security-Policy:
+      - base-uri 'none'; default-src 'none'; form-action 'none'; frame-ancestors 'none';
+        img-src 'self'; script-src 'self' 'report-sample'; style-src 'self'; worker-src
+        'none'; upgrade-insecure-requests; report-uri https://q.stripe.com/csp-violation?q=lE2eWPwnY_L0-NWctf_16UZpJU4Meq09bg7rKrOLh6NhK8LeqAiBUBqB17Q4wk8HCtjDwXUKQnNfsx-5;
+        report-to csp
+      Idempotency-Key:
+      - caad6fdc-d173-4476-b70e-a317343c83f3
+      Original-Request:
+      - req_jiihlXmKA3nrh1
+      Report-To:
+      - '{"group":"csp","max_age":8640,"endpoints":[{"url":"https://q.stripe.com/csp-report-v2?q=lE2eWPwnY_L0-NWctf_16UZpJU4Meq09bg7rKrOLh6NhK8LeqAiBUBqB17Q4wk8HCtjDwXUKQnNfsx-5&t=1"}],"include_subdomains":true}'
+      Reporting-Endpoints:
+      - csp="https://q.stripe.com/csp-report-v2?q=lE2eWPwnY_L0-NWctf_16UZpJU4Meq09bg7rKrOLh6NhK8LeqAiBUBqB17Q4wk8HCtjDwXUKQnNfsx-5&t=1"
+      Request-Id:
+      - req_jiihlXmKA3nrh1
+      Stripe-Should-Retry:
+      - 'false'
+      Stripe-Version:
+      - 2026-08-26.dahlia
+      Vary:
+      - Origin
+      X-Stripe-Priority-Routing-Enabled:
+      - 'true'
+      X-Stripe-Routing-Context-Priority-Tier:
+      - api-testmode
+      X-Wc:
+      - 3c3
+      Strict-Transport-Security:
+      - max-age=63072000; includeSubDomains; preload
+    body:
+      encoding: ASCII-8BIT
+      string: !binary |-
+        ewogICJpZCI6ICJ1cGNvbWluZ19pbl8xVVF3amRDbU43ODBwQWlXeW1NeTk1OEwiLAogICJvYmplY3QiOiAiaW52b2ljZSIsCiAgImFjY291bnRfY291bnRyeSI6ICJVUyIsCiAgImFjY291bnRfbmFtZSI6ICJDYWZheWUiLAogICJhY2NvdW50X3RheF9pZHMiOiBudWxsLAogICJhbW91bnRfZHVlIjogMTkwMCwKICAiYW1vdW50X292ZXJwYWlkIjogMCwKICAiYW1vdW50X3BhaWQiOiAwLAogICJhbW91bnRfcmVtYWluaW5nIjogMTkwMCwKICAiYW1vdW50X3NoaXBwaW5nIjogMCwKICAiYXBwbGljYXRpb24iOiBudWxsLAogICJhdHRlbXB0X2NvdW50IjogMCwKICAiYXR0ZW1wdGVkIjogZmFsc2UsCiAgImF1dG9fYWR2YW5jZSI6IHRydWUsCiAgImF1dG9tYXRpY190YXgiOiB7CiAgICAiZGlzYWJsZWRfcmVhc29uIjogbnVsbCwKICAgICJlbmFibGVkIjogZmFsc2UsCiAgICAibGlhYmlsaXR5IjogbnVsbCwKICAgICJwcm92aWRlciI6IG51bGwsCiAgICAic3RhdHVzIjogbnVsbAogIH0sCiAgImF1dG9tYXRpY2FsbHlfZmluYWxpemVzX2F0IjogbnVsbCwKICAiYmlsbGluZ19yZWFzb24iOiAidXBjb21pbmciLAogICJjb2xsZWN0aW9uX21ldGhvZCI6ICJjaGFyZ2VfYXV0b21hdGljYWxseSIsCiAgImNyZWF0ZWQiOiAxNzk0Nzc5OTcwLAogICJjdXJyZW5jeSI6ICJ1c2QiLAogICJjdXN0b21fZmllbGRzIjogbnVsbCwKICAiY3VzdG9tZXIiOiAiY3VzX1ZScUhkemdUZ3dMUEExIiwKICAiY3VzdG9tZXJfYWNjb3VudCI6IG51bGwsCiAgImN1c3RvbWVyX2FkZHJlc3MiOiBudWxsLAogICJjdXN0b21lcl9lbWFpbCI6ICJiaWxsaW5nLWxpdmUtdGVzdEBjYWZheWUuY29tIiwKICAiY3VzdG9tZXJfbmFtZSI6IG51bGwsCiAgImN1c3RvbWVyX3Bob25lIjogbnVsbCwKICAiY3VzdG9tZXJfc2hpcHBpbmciOiBudWxsLAogICJjdXN0b21lcl90YXhfZXhlbXB0IjogIm5vbmUiLAogICJjdXN0b21lcl90YXhfaWRzIjogW10sCiAgImRlZmF1bHRfcGF5bWVudF9tZXRob2QiOiBudWxsLAogICJkZWZhdWx0X3NvdXJjZSI6IG51bGwsCiAgImRlZmF1bHRfdGF4X3JhdGVzIjogW10sCiAgImRlc2NyaXB0aW9uIjogbnVsbCwKICAiZGlzY291bnRzIjogW10sCiAgImR1ZV9kYXRlIjogbnVsbCwKICAiZWZmZWN0aXZlX2F0IjogbnVsbCwKICAiZW5kaW5nX2JhbGFuY2UiOiAwLAogICJmb290ZXIiOiBudWxsLAogICJmcm9tX2ludm9pY2UiOiBudWxsLAogICJob3N0ZWRfaW52b2ljZV91cmwiOiBudWxsLAogICJpbnZvaWNlX3BkZiI6IG51bGwsCiAgImlzc3VlciI6IHsKICAgICJ0eXBlIjogInNlbGYiCiAgfSwKICAibGFzdF9maW5hbGl6YXRpb25fZXJyb3IiOiBudWxsLAogICJsYXRlc3RfcmV2aXNpb24iOiBudWxsLAogICJsaW5lcyI6IHsKICAgICJvYmplY3QiOiAibGlzdCIsCiAgICAiZGF0YSI6IFsKICAgICAgewogICAgICAgICJpZCI6ICJpbF90bXBfMVVjQlNRQ21ONzgwcEFpV3UzeTBFNDNsIiwKICAgICAgICAib2JqZWN0IjogImxpbmVfaXRlbSIsCiAgICAgICAgImFtb3VudCI6IDE5MDAsCiAgICAgICAgImN1cnJlbmN5IjogInVzZCIsCiAgICAgICAgImRlc2NyaXB0aW9uIjogIjEgw5cgQ2FmYXllIFBybyAobGl2ZS10ZXN0KSAoYXQgJDE5LjAwIC8gbW9udGgpIiwKICAgICAgICAiZGlzY291bnRfYW1vdW50cyI6IFtdLAogICAgICAgICJkaXNjb3VudGFibGUiOiB0cnVlLAogICAgICAgICJkaXNjb3VudHMiOiBbXSwKICAgICAgICAiaW52b2ljZSI6ICJ1cGNvbWluZ19pbl8xVVF3amRDbU43ODBwQWlXeW1NeTk1OEwiLAogICAgICAgICJsaXZlbW9kZSI6IGZhbHNlLAogICAgICAgICJtZXRhZGF0YSI6IHt9LAogICAgICAgICJwYXJlbnQiOiB7CiAgICAgICAgICAiaW52b2ljZV9pdGVtX2RldGFpbHMiOiBudWxsLAogICAgICAgICAgInN1YnNjcmlwdGlvbl9pdGVtX2RldGFpbHMiOiB7CiAgICAgICAgICAgICJpbnZvaWNlX2l0ZW0iOiBudWxsLAogICAgICAgICAgICAicHJvcmF0aW9uIjogZmFsc2UsCiAgICAgICAgICAgICJwcm9yYXRpb25fZGV0YWlscyI6IHsKICAgICAgICAgICAgICAiY3JlZGl0ZWRfaXRlbXMiOiBudWxsCiAgICAgICAgICAgIH0sCiAgICAgICAgICAgICJzdWJzY3JpcHRpb24iOiAic3ViXzFVUXdnUUNtTjc4MHBBaVdUalFES2ZmUyIsCiAgICAgICAgICAgICJzdWJzY3JpcHRpb25faXRlbSI6ICJzaV9WUnFOcUlPeFlzZTN2MSIKICAgICAgICAgIH0sCiAgICAgICAgICAidHlwZSI6ICJzdWJzY3JpcHRpb25faXRlbV9kZXRhaWxzIgogICAgICAgIH0sCiAgICAgICAgInBlcmlvZCI6IHsKICAgICAgICAgICJlbmQiOiAxNzk3MzcxOTcwLAogICAgICAgICAgInN0YXJ0IjogMTc5NDc3OTk3MAogICAgICAgIH0sCiAgICAgICAgInByZXRheF9jcmVkaXRfYW1vdW50cyI6IFtdLAogICAgICAgICJwcmljaW5nIjogewogICAgICAgICAgInByaWNlX2RldGFpbHMiOiB7CiAgICAgICAgICAgICJwcmljZSI6ICJwcmljZV8xVVF3YWNDbU43ODBwQWlXcjBtd1ZPSEIiLAogICAgICAgICAgICAicHJvZHVjdCI6ICJwcm9kX1ZScUgyZWtqeXJ4UklVIgogICAgICAgICAgfSwKICAgICAgICAgICJ0eXBlIjogInByaWNlX2RldGFpbHMiLAogICAgICAgICAgInVuaXRfYW1vdW50X2RlY2ltYWwiOiAiMTkwMCIKICAgICAgICB9LAogICAgICAgICJxdWFudGl0eSI6IDEsCiAgICAgICAgInF1YW50aXR5X2RlY2ltYWwiOiAiMSIsCiAgICAgICAgInN1YnRvdGFsIjogMTkwMCwKICAgICAgICAidGF4ZXMiOiBbXQogICAgICB9CiAgICBdLAogICAgImhhc19tb3JlIjogZmFsc2UsCiAgICAidG90YWxfY291bnQiOiAxLAogICAgInVybCI6ICIvdjEvaW52b2ljZXMvdXBjb21pbmdfaW5fMVVRd2pkQ21ONzgwcEFpV3ltTXk5NThML2xpbmVzIgogIH0sCiAgImxpdmVtb2RlIjogZmFsc2UsCiAgIm1ldGFkYXRhIjoge30sCiAgIm5leHRfcGF5bWVudF9hdHRlbXB0IjogMTc5NDc4MzU3MCwKICAibnVtYmVyIjogbnVsbCwKICAib25fYmVoYWxmX29mIjogbnVsbCwKICAicGFyZW50IjogewogICAgInF1b3RlX2RldGFpbHMiOiBudWxsLAogICAgInN1YnNjcmlwdGlvbl9kZXRhaWxzIjogewogICAgICAibWV0YWRhdGEiOiB7fSwKICAgICAgInN1YnNjcmlwdGlvbiI6ICJzdWJfMVVRd2dRQ21ONzgwcEFpV1RqUURLZmZTIgogICAgfSwKICAgICJ0eXBlIjogInN1YnNjcmlwdGlvbl9kZXRhaWxzIgogIH0sCiAgInBheW1lbnRfc2V0dGluZ3MiOiB7CiAgICAiZGVmYXVsdF9tYW5kYXRlIjogbnVsbCwKICAgICJwYXltZW50X21ldGhvZF9vcHRpb25zIjogbnVsbCwKICAgICJwYXltZW50X21ldGhvZF90eXBlcyI6IG51bGwKICB9LAogICJwZXJpb2RfZW5kIjogMTc5NDc3OTk3MCwKICAicGVyaW9kX3N0YXJ0IjogMTc5MjEwMTU3MCwKICAicG9zdF9wYXltZW50X2NyZWRpdF9ub3Rlc19hbW91bnQiOiAwLAogICJwcmVfcGF5bWVudF9jcmVkaXRfbm90ZXNfYW1vdW50IjogMCwKICAicmVjZWlwdF9udW1iZXIiOiBudWxsLAogICJyZW5kZXJpbmciOiBudWxsLAogICJzaGlwcGluZ19jb3N0IjogbnVsbCwKICAic2hpcHBpbmdfZGV0YWlscyI6IG51bGwsCiAgInN0YXJ0aW5nX2JhbGFuY2UiOiAwLAogICJzdGF0ZW1lbnRfZGVzY3JpcHRvciI6IG51bGwsCiAgInN0YXR1cyI6ICJkcmFmdCIsCiAgInN0YXR1c190cmFuc2l0aW9ucyI6IHsKICAgICJmaW5hbGl6ZWRfYXQiOiBudWxsLAogICAgIm1hcmtlZF91bmNvbGxlY3RpYmxlX2F0IjogbnVsbCwKICAgICJwYWlkX2F0IjogbnVsbCwKICAgICJ2b2lkZWRfYXQiOiBudWxsCiAgfSwKICAic3VidG90YWwiOiAxOTAwLAogICJzdWJ0b3RhbF9leGNsdWRpbmdfdGF4IjogMTkwMCwKICAidGVzdF9jbG9jayI6IG51bGwsCiAgInRvdGFsIjogMTkwMCwKICAidG90YWxfZGlzY291bnRfYW1vdW50cyI6IFtdLAogICJ0b3RhbF9leGNsdWRpbmdfdGF4IjogMTkwMCwKICAidG90YWxfcHJldGF4X2NyZWRpdF9hbW91bnRzIjogW10sCiAgInRvdGFsX3RheGVzIjogW10sCiAgIndlYmhvb2tzX2RlbGl2ZXJlZF9hdCI6IG51bGwKfQ==
+  recorded_at: Thu, 15 Oct 2026 22:02:49 GMT
+recorded_with: VCR 6.4.0
