@@ -149,6 +149,27 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     refute_includes data.keys, "email"
   end
 
+  # The FIRST payment of an account, which is the case the resolution order
+  # exists for: the cafaye customer row was created before Stripe was asked for
+  # a session, so it has an address but no `processor_customer_id` yet — Stripe
+  # creates its customer at the hosted checkout and the id arrives on a later
+  # event — and the address has to be found through the cafaye id the
+  # subscription's metadata carries. The fixture is a real recorded first
+  # checkout, so the metadata is where the processor actually puts it.
+  test "a first payment carries the email even though the customer has no processor id yet" do
+    Customer.create!(
+      id: "df15dff4-b274-460d-84e5-1ee8ba4532e7",
+      owner_type: "Account",
+      owner_id: "11111111-1111-4111-8111-111111111111",
+      processor: "stripe",
+      email: "billing@example.com"
+    )
+
+    data = Webhooks::StripeEvents.with_recipient(normalize("invoice.paid.live-first-checkout"))
+
+    assert_equal "billing@example.com", data.fetch("email")
+  end
+
   # The failed-payment path resolves the customer the same way the settled one
   # does: a warning about a decline is mailed to the same address a receipt is,
   # and the two events are built by the same builder.

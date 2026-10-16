@@ -261,11 +261,16 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # --- the recipient fact: the payment payload's one lookup (billing-event-payloads-01)
     # The payment events carry the customer's billing email because the fleet's
     # consumer cannot read it anywhere else, and this is the read that fact costs:
-    # one indexed lookup on `customers.processor_customer_id` (unique, billing-13),
-    # per payment event. It is the same lookup the recorder's `find_customer` makes
-    # for the charge, made here for the event — a failed payment records no charge,
-    # so the recorder's resolution cannot be the one the event relies on.
-    [ "app/services/webhooks/stripe_events.rb", "recipient_email", "read" ] => "resolves the cafaye customer a payment is for, by the processor's customer id, for the recipient fact on the event",
+    # the customer resolved by cafaye id first, by processor id second — the same
+    # resolution the recorder's `find_customer` makes, and for the same measured
+    # reason (2026-10-16): on an account's FIRST payment the row has no
+    # `processor_customer_id` yet, so a lookup by the processor's id alone misses
+    # exactly the payment that opens the relationship and the receipt event goes
+    # out unaddressed. A failed payment records no charge, so the recorder's
+    # resolution cannot be the one the event relies on; the scanner files the
+    # lookup under this method because the innermost `def` is what it attributes
+    # to, and the row names that method rather than the caller.
+    [ "app/services/webhooks/stripe_events.rb", "find_customer", "read" ] => "resolves the cafaye customer a payment is for, by cafaye id or by processor id, for the recipient fact on the event",
 
     # --- the keyset every list goes through ----------------------------------
     [ "app/controllers/concerns/cursor_paging.rb", "apply_cursor", "list" ] => "applies a client-supplied keyset to a relation the caller chose",
@@ -643,9 +648,10 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # A single number would have hidden all three, and all three are the shape of the code.
   #
   # billing-event-payloads-01's 44 became 45, and the new one is the recipient
-  # fact's lookup: `StripeEvents.recipient_email` resolves the cafaye customer a
-  # payment is for, by the processor's customer id, so the payment events can
-  # carry the customer's billing email. It is the same lookup the recorder's
+  # fact's lookup: `StripeEvents.find_customer` resolves the cafaye customer a
+  # payment is for — by cafaye id first, by processor id second, the order the
+  # cafaye-first packet measured (2026-10-16) — so the payment events can carry
+  # the customer's billing email. It is the same resolution the recorder's
   # `find_customer` makes for the charge, made for the event — a failed payment
   # records no charge, so the recorder's resolution cannot be the one the event
   # relies on. The file left `NO_DATA_ACCESS` the same day: a file that performs

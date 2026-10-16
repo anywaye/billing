@@ -324,13 +324,13 @@ module Webhooks
     #
     # ## What it costs, stated rather than hidden
     #
-    # This is the one query the payment path makes that the normalizer does not:
-    # one indexed lookup on `customers.processor_customer_id` (unique, partial —
-    # billing-13), per payment event, on the processor's own customer id. The
-    # webhook path is not a user-facing request, and the ingestion transaction
-    # is already writing three rows; one more indexed read against a unique
-    # column is noise beside them. It is here because the alternative — a receipt
-    # event with no address — is the gap this packet exists to close.
+    # This is the one lookup the payment path makes that the normalizer does
+    # not: one or two indexed reads per payment event — the cafaye id's primary
+    # key first, the processor's id (unique, partial — billing-13) when the
+    # event names one. The webhook path is not a user-facing request, and the
+    # ingestion transaction is already writing three rows; a couple of indexed
+    # reads are noise beside them. It is here because the alternative — a
+    # receipt event with no address — is the gap this packet exists to close.
     #
     # ## Absent, never null
     #
@@ -342,16 +342,36 @@ module Webhooks
     # is worse than one that carries no address at all, and a consumer refuses
     # the latter by design.
     def self.with_recipient(data)
-      email = recipient_email(data["customer_id"])
+      email = recipient_email(data)
       email ? data.merge("email" => email) : data
     end
 
-    def self.recipient_email(processor_customer_id)
-      return nil if processor_customer_id.blank?
-
-      Customer.find_by(processor_customer_id: processor_customer_id)&.email.presence
+    # Resolved the way the charge recorder resolves the customer — the cafaye id
+    # first, the processor's id second — and the order is the same measured fix
+    # on the other half of the payment path (see `Charges::Recorder`): on an
+    # account's FIRST payment the row has no `processor_customer_id` yet, because
+    # Stripe creates its customer at the hosted checkout and the id is written
+    # back by an event that lands around the same time. A lookup by the
+    # processor's id alone therefore finds nothing on exactly the payment that
+    # opens the relationship, and the receipt event goes out unaddressed — which
+    # the fleet's consumer refuses by design (measured on the launch stack,
+    # 2026-10-16: a real $49 first payment's event was refused ten times for a
+    # missing address). The cafaye id is the one our own Checkout session put on
+    # the subscription's metadata, so it is present on every event from this
+    # service's checkout path; the processor's id remains the fallback for a
+    # customer created in the dashboard.
+    def self.recipient_email(data)
+      customer = find_customer(data["cafaye_customer_id"]) || find_customer(data["customer_id"])
+      customer&.email.presence
     end
     private_class_method :recipient_email
+
+    def self.find_customer(identifier)
+      return nil if identifier.blank?
+
+      Customer.find_by(id: identifier) || Customer.find_by(processor_customer_id: identifier)
+    end
+    private_class_method :find_customer
 
     class << self
       # The handler for a processor event type, or nil when this build does not
