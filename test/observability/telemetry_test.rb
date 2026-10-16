@@ -25,7 +25,7 @@ class ObservabilityTelemetryTest < ActiveSupport::TestCase
                  "the endpoint variable is named differently from the fleet's contract, so a " \
                  "deployment that set <SERVICE>_OTEL_ENDPOINT for its other services would set " \
                  "one here that nothing reads"
-    assert_equal "http://otel-collector:4318", Kit::Telemetry::DEFAULT_ENDPOINT
+    assert_equal "http://otel-collector:4318/v1/traces", Kit::Telemetry::DEFAULT_ENDPOINT
   end
 
   test "docker-compose.yml and the code agree on the default endpoint" do
@@ -39,10 +39,25 @@ class ObservabilityTelemetryTest < ActiveSupport::TestCase
 
   test "an unset endpoint falls back to the collector, and a set one is used verbatim" do
     unset = Kit::Exporter.endpoint(->(name) { "" })
-    set = Kit::Exporter.endpoint(->(name) { "http://elsewhere:4318" })
+    set = Kit::Exporter.endpoint(->(name) { "http://elsewhere:4318/v1/traces" })
 
     assert_equal Kit::Telemetry::DEFAULT_ENDPOINT, unset
-    assert_equal "http://elsewhere:4318", set
+    assert_equal "http://elsewhere:4318/v1/traces", set
+  end
+
+  # The endpoint must name the traces resource, not the collector's base. The
+  # gem uses a handed-in endpoint VERBATIM (`prepare_endpoint` joins
+  # `v1/traces` onto its own default and nothing else), so a base address
+  # builds a request with an empty path and every export raises inside
+  # `span.on_finish` — measured on the whole stack, 2026-10-16: one error per
+  # request and zero spans exported, invisible to this suite because the test
+  # environment installs the in-process exporter.
+  test "the endpoint is the traces resource URL, which is the shape the exporter can use" do
+    assert_equal "/v1/traces", URI(Kit::Telemetry::DEFAULT_ENDPOINT).path
+
+    configured = Kit::Exporter.endpoint(->(name) { "http://elsewhere:4318/v1/traces" })
+    assert_equal "/v1/traces", URI(configured).path,
+                 "a base URL here is a request the exporter cannot build"
   end
 
   test "the exporter name is a closed vocabulary and anything else RAISES" do

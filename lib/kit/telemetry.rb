@@ -57,7 +57,18 @@ module Kit
     # The address that endpoint variable defaults to. Written here as well as in
     # `docker-compose.yml` because the value is a claim about two places agreeing,
     # and `test/observability/telemetry_test.rb` holds the two to one value.
-    DEFAULT_ENDPOINT = "http://otel-collector:4318"
+    #
+    # **The traces RESOURCE URL, not the collector's base address, and the
+    # difference was measured** (2026-10-16, running this service beside the
+    # whole stack): `OpenTelemetry::Exporter::OTLP::Exporter` uses an endpoint it
+    # is handed VERBATIM — `prepare_endpoint` only joins `v1/traces` onto the
+    # gem's own default — so the base `http://otel-collector:4318` produced a
+    # request with an empty path and **every export raised "HTTP request path is
+    # empty" inside `span.on_finish`**: one error logged per request, and not one
+    # span ever left the process, in a container too. The suite never saw it
+    # because the test environment installs the in-process exporter instead of
+    # this one.
+    DEFAULT_ENDPOINT = "http://otel-collector:4318/v1/traces"
 
     # `tenant_id` is a RESOURCE attribute and never a span attribute — see
     # `resource/1` and the cardinality note on `ALLOWED_SPAN_ATTRIBUTES`.

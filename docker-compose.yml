@@ -278,7 +278,7 @@ services:
       # Ruby code alone, so a reader of this file can see where telemetry goes
       # without reading the source. `Kit::Telemetry::DEFAULT_ENDPOINT` is the same
       # value, and `test/observability/telemetry_test.rb` holds the two to one.
-      BILLING_OTEL_ENDPOINT: http://otel-collector:4318
+      BILLING_OTEL_ENDPOINT: http://otel-collector:4318/v1/traces
       OTEL_SERVICE_VERSION: "0.0.0-dev"
 
       # `tenant_id` goes on the RESOURCE, never on a measurement. Unset by default: a

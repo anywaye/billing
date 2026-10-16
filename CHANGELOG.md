@@ -35,6 +35,12 @@ All notable changes to billing are recorded here. The format follows
     does not exist, and the wiring test passed `logger: nil`, which skips the
     argument). It boots and names the broker; the test passes a logger and
     asserts the line.
+  - The OTLP default endpoint was the collector's BASE address
+    (`http://otel-collector:4318`), and the Ruby exporter uses a handed-in
+    endpoint verbatim — so every export raised "HTTP request path is empty"
+    inside `span.on_finish` and **no span had ever left the process**, in a
+    container too. It is the traces resource URL now
+    (`…/v1/traces`), and a test holds the shape the exporter needs.
 
   Payload: the two payment events carry `cafaye_customer_id`, recorded in
   `PENDING_PAYLOAD_ALIGNMENT` and `cafaye.yml` because core's payment schemas

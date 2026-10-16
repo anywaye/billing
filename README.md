@@ -643,7 +643,7 @@ variable only matters if you are pointing billing at a backend you already run.
 
 | Variable | Meaning |
 | --- | --- |
-| `BILLING_OTEL_ENDPOINT` | the OTLP endpoint, default `http://otel-collector:4318` — which is the collector that ships with kit's stack. **The only contract** (core D16), so a self-hoster on Datadog or Grafana Cloud sets this one variable and kit's stack goes quiet. Unset costs spans and nothing else: no queue, no retry loop, no dial at boot. |
+| `BILLING_OTEL_ENDPOINT` | the OTLP endpoint, default `http://otel-collector:4318/v1/traces` — the collector that ships with kit's stack, at its traces resource URL (the Ruby OTLP exporter uses a handed-in endpoint verbatim, so the resource path has to be here). **The only contract** (core D16), so a self-hoster on Datadog or Grafana Cloud sets this one variable and kit's stack goes quiet. Unset costs spans and nothing else: no queue, no retry loop, no dial at boot. |
 | `BILLING_OTEL_DISABLED` | set to anything, and telemetry is not installed at all. The startup line says so and names the reason. |
 | `BILLING_TENANT_ID` | the `tenant_id` **resource** attribute. Never a span attribute — see [Observability](AGENTS.md#observability). Unset by default, because an empty one is a second service row in every collector's service list. |
 | `DEPLOYMENT_ENVIRONMENT` | the `deployment.environment` resource attribute; an enum in core's schema, so there is no fourth spelling to invent. |
