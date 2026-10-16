@@ -122,7 +122,20 @@ bundle exec rails db:prepare
 
 if bundle exec rubocop --version >/dev/null 2>&1; then
   step "rubocop"
-  bundle exec rubocop --parallel
+  _rubocop_log="$(mktemp)"
+  set +e
+  bundle exec rubocop --parallel 2>&1 | tee "$_rubocop_log"
+  _rubocop_rc=${PIPESTATUS[0]}
+  set -e
+  _rubocop_inspected="$(grep -oE '[0-9]+ files? inspected' "$_rubocop_log" | grep -oE '^[0-9]+' | head -n1)"
+  rm -f "$_rubocop_log"
+  if [ "$_rubocop_rc" -ne 0 ]; then
+    exit "$_rubocop_rc"
+  fi
+  if [ -z "$_rubocop_inspected" ] || [ "$_rubocop_inspected" -eq 0 ]; then
+    echo "bin/prime: rubocop inspected 0 files — the lint step is vacuous (check AllCops/Exclude and the working directory)" >&2
+    exit 1
+  fi
 else
   echo "bin/prime: rubocop is not in the bundle — skipping lint (add it to the Gemfile)" >&2
 fi
