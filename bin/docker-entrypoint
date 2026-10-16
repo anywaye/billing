@@ -1,7 +1,25 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
-if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
+# If running the rails server then create or migrate existing database.
+#
+# ONLY WHEN ASKED, and the default is OFF — this is the fix for the substrate
+# install of 2026-10-16, where the stock behaviour crash-looped every pod:
+# the entrypoint ran `db:prepare`, `db:prepare` invokes `db:tenancy:install`,
+# and that task emits DDL (row-level-security policies, grants) through
+# `Tenancy::Substrate.install!`. On the box the pods connect as `billing_app`,
+# which OWNS NOTHING, so the first statement would fail with "must be owner of
+# table" and the container died before serving a request.
+#
+# THE FLEET'S CONTRACT is that the application never migrates: the substrate
+# runs migrations as a separate step, as the OWNER (kit's step 10, connected
+# via `postgres-role-billing`), and every other service's image is built so a
+# boot cannot touch the schema at all. A boot-time prepare is a Heroku-era
+# habit that only works when the app's role owns the database.
+#
+# `BILLING_BOOT_PREPARE=1` keeps that habit for deployments where the app DOES
+# connect as the owner — the local compose stack, a developer's machine — and
+# is what such a deployment must set explicitly. It is not set on the box.
+if [ "${BILLING_BOOT_PREPARE:-0}" = "1" ] && [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
   ./bin/rails db:prepare
 fi
 
