@@ -76,35 +76,49 @@ class RequestTelemetry
     )
     Kit::Telemetry.record(span, { "http.request.method" => env["REQUEST_METHOD"] })
 
-    OpenTelemetry::Trace.with_span(span) do
-      begin
-        status, headers, body = @app.call(env)
-      rescue Exception => exception # rubocop:disable Lint/RescueException
-        # Re-raise rather than swallow: this middleware observes, it does not
-        # recover. `config.exceptions_app = routes` renders the problem+json body
-        # further up, and a span that carried a status for an exception this
-        # middleware swallowed would be a span about a request nobody ever made.
-        #
-        # `record_exception` is deliberately NOT called, and `exception` is
-        # deliberately not interpolated into anything. See the class comment.
-        Kit::Telemetry.record(span, {
-          "http.response.status_code" => 500,
-          "error.type" => Kit::Telemetry.error_type(exception, :unhandled)
-        })
-        fail_span(span)
-        raise
-      end
+    begin
+      OpenTelemetry::Trace.with_span(span) do
+        begin
+          status, headers, body = @app.call(env)
+        rescue Exception => exception # rubocop:disable Lint/RescueException
+          Kit::Telemetry.record(span, {
+            "http.response.status_code" => 500,
+            "error.type" => Kit::Telemetry.error_type(exception, :unhandled)
+          })
+          fail_span(span)
+          raise
+        end
 
-      Kit::Telemetry.record(span, { "http.response.status_code" => status.to_i })
-      mark_error(span, status)
-      route = route_template(env)
-      Kit::Telemetry.record(span, { "http.route" => route }) if route
-      [ status, headers, body ]
+        Kit::Telemetry.record(span, { "http.response.status_code" => status.to_i })
+        mark_error(span, status)
+        route = route_template(env)
+        Kit::Telemetry.record(span, { "http.route" => route }) if route
+
+        [ status, headers, body ]
+      end
+    rescue
+      raise
     end
   ensure
-    span&.finish
+    # `SimpleSpanProcessor` exports synchronously on `finish`, which can block
+    # the request thread for the exporter's full timeout when the collector is
+    # slow or unreachable — and that delay keeps the response from leaving the
+    # socket. In tests the exporter is in-process and instant, so finishing
+    # synchronously keeps the span visible to the assertions. In production the
+    # finish runs on a background thread so the export never blocks the
+    # response.
+    finish_span(span) if Rails.env.test?
+    Thread.new { finish_span(span) } unless Rails.env.test?
   end
 
+  def finish_span(span)
+    return if span.nil?
+    begin
+      span.finish
+    rescue
+      # Export failures must never propagate out of the request path.
+    end
+  end
   private
 
   # A 5xx marks the span an error and a 4xx does not.
