@@ -107,12 +107,17 @@ billing and gets a 200 on `/readyz` — the token dialects do not meet. That is
 the recorded DECISION NEEDED and it is unchanged by this work; the walk's
 contribution is the exact failure, in place, with both services live.
 
-## Smaller findings, recorded rather than fixed
+### What the fake-door gap became
 
-- The fake door's subscriptions cannot be managed: cancel/change/preview/portal
-  always dial Stripe, so a `sub_FAKE…` row answers 422 ("has no upcoming
-  invoice at the payment processor"). In production the door 404s, so this is a
-  dev-loop wart; the honest shape is to use the real door for management.
+The fake door's subscriptions could not be managed: the row-addressed actions
+dialled Stripe whatever processor owned the row, so a `sub_FAKE…` subscription
+answered "has no upcoming invoice at the payment processor" for a projection
+the fake could have given. Fixed in the same round: the projection now comes
+from the fake's own ledger — the method that existed for exactly this ("the
+controller's builder is one code path for both") and had no caller — and
+cancel/change/portal are refused BY NAME on a fake row, saying which processor
+holds it, because a pretend-Stripe is the failure `FakeClient`'s own class
+comment forbids.
 - Courier has no `billing.*` consumers (its four are `identity.*`), so billing's
   events land in the stream and nobody acts on them — the recorded
   receipt/welcome gap, unchanged.
@@ -125,6 +130,20 @@ contribution is the exact failure, in place, with both services live.
   Stripe customer for the same cafaye customer before the backfill landed
   (each checkout creates one when `processor_customer_id` is absent — now it
   will be present after the first subscription event).
+
+## The follow-up round (the same day)
+
+The user's "fix those issues" round landed three of the reported items:
+identity's `POST /v1/session/tokens` — the exchange that closes the 401, in
+which the account is named by a party allowed to name it, membership is checked
+before signing, one account goes into the token and nothing anywhere picks
+`accounts[0]` — parlor's BFF sending the minted bearer for billing calls (its
+own test pinned the broken forwarding), and courier's
+`Courier.Consumers.PaymentSucceeded`: the receipt the money event was waiting
+for since billing-event-payloads-01. The telemetry endpoint and the blocked
+host were fixed in the first round; the fake-door management warts are above.
+The image build — the publish blocker — was fixed by another agent in the same
+window.
 
 ## Numbers
 

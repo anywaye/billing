@@ -28,6 +28,20 @@ All notable changes to billing are recorded here. The format follows
   lockfile wants 4.0.18) was **not** pinned: the self-install was measured
   working and was never the cause. See `REPORT-fix-image-copy.md`.
 
+- **The development processor's subscriptions answer to their own
+  processor.** The row-addressed actions dialled Stripe whatever processor owned
+  the row, so a checkout completed through the fake door was managed at a
+  processor that never held it: the walk's own subscription answered "has no
+  upcoming invoice at the payment processor" and a cancel was translated into
+  Stripe's error for a subscription Stripe never saw. The projection now comes
+  from the fake's own ledger — the method that existed for exactly this and had
+  no caller — and the verbs the fake does not have (cancel, change, the portal)
+  are refused by name, saying which processor holds the row. A pretend-Stripe is
+  the failure `FakeClient`'s own class comment forbids, so the verbs the fake
+  does not have are named rather than invented. `Processor::FakeClient::owns?`
+  is the marker the fleet's test support has been reading for a year, not a new
+  column.
+
 - **The money the local whole-stack walk showed going missing** (2026-10-16,
   launch four + billing on the shared cluster). A real test-mode checkout paid
   and billing recorded no subscription and no charge:
