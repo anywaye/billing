@@ -8,6 +8,43 @@ All notable changes to billing are recorded here. The format follows
 
 ### Added
 
+- **The account boundary, enforced by Postgres as well as by Ruby** (2026-10-16,
+  branch `worker/billing-rls-tenancy`). Until now scoping was a property of the
+  query — `scope :for_account` on `Customer`, `Subscription` and `Charge` — so one
+  forgotten predicate, or one `find_by_sql`, was a cross-tenant read with a green
+  suite. `db/tenancy/substrate.sql` (kit's template at ref `46d08f2`, kept as a
+  standalone file so the copy stays comparable by hash) and
+  `db/tenancy/account_isolation.sql` (this service's half: `cafaye.protect_table`
+  for the two tables whose key is a column, and five hand-written policies for
+  `customers`, whose key is `owner_type`/`owner_id`) are installed by
+  `db/migrate/20261016120000_account_isolation.rb`, which refuses to finish unless
+  `cafaye.unprotected_tables()` is empty. Every request runs inside a transaction
+  whose `cafaye.begin_account/1` the policies read — `V1::BaseController` for the
+  token-authenticated surface, and `Webhooks::StripeController` for the
+  signature-authenticated one, which resolves its own account through
+  `customers_cafaye_resolve` and `Webhooks::AccountResolution` because a webhook
+  has no claim to be given (without it every delivery would be recorded
+  `unknown_customer` and answered 200: a money service silently billing nobody).
+  A third path is closed with it: `db/schema.rb` cannot express a policy, and
+  `db:prepare` builds a fresh database by LOADING the schema rather than migrating
+  — so `lib/tasks/tenancy_substrate.rake` enhances `db:schema:load` and
+  `db:prepare` with the same install, and a first deploy onto an empty database
+  can no longer come up unprotected.
+
+  `test/tenancy/database_isolation_test.rb` proves it in raw SQL, as `billing`
+  (the owner) and as `billing_app` (the login role that owns nothing), for every
+  protected table: another account's row reads as zero rows, no identity reads
+  zero rows, a write into another account is refused with SQLSTATE **42501** with
+  the same write under the row's own account as the control, the app role is
+  refused `alter table … disable row level security` / `drop policy` / `truncate` /
+  `create policy`, the sweep is empty with a planted unprotected table as its
+  control, and both roles are asserted to be neither SUPERUSER nor BYPASSRLS. The
+  suite was shown red for five planted mutations (policy absent, the read
+  predicate's `owner_type` arm dropped, the insert's `with check` widened, FORCE
+  removed, and `customers` un-forced) and green again after each restore.
+  `tenancy.yml` moves to `databaseEnforced: true` with the three tables declared;
+  `bin/prime` exits 0 with 1257 runs and 0 failures.
+
 - **The instabox backend switch** (`ci/backend` containing `instabox`, and an
   executable `ci/pipeline.sh` copied from kit's
   `backends/instabox/pipeline.template.sh` and edited for this repository).

@@ -23,6 +23,19 @@
 # cannot render a 403 at all, because `Problem::CATALOG` is a frozen table with
 # no entry at that status).
 #
+# # And Postgres holds the same boundary, as of the database-isolation packet
+#
+# The application layer above is unchanged and is still what decides a status code.
+# What the packet added is the second half: `db/tenancy/substrate.sql` (kit's
+# template) plus `db/tenancy/account_isolation.sql` (this service's three tables),
+# installed by `db/migrate/20261016120000_account_isolation.rb`, with every request
+# running inside a transaction that calls `cafaye.begin_account/1`. A forgotten
+# `for_account` — or one `find_by_sql` — now reads zero rows rather than another
+# account's, and a write into somebody else's account is refused with SQLSTATE
+# 42501. `rls:` below declares it table by table, and
+# `test/tenancy/database_isolation_test.rb` proves it in raw SQL, as `billing` and
+# as `billing_app`.
+#
 # # What is NOT account-scoped, and is therefore NOT declared here
 #
 # Declared, never inferred — which cuts both ways: a declaration that claims a
@@ -37,6 +50,21 @@
 #       (`stripe_event_id`, `processor_subscription_id`, `processor_customer_id`,
 #       `processor_charge_id`), and authenticated by signature rather than by
 #       token. A processor's event is not a tenant's request.
+#
+#       **AND IT IS THE ONE PLACE THE DATABASE HALF NEEDED AN EXEMPTION.** A
+#       signature-authenticated request has no claim to hand
+#       `cafaye.begin_account/1`, and the query that would tell it which account an
+#       event belongs to is a read of `customers` — so with the boundary in place
+#       every delivery would be recorded `unknown_customer` and answered 200, which
+#       is a money service silently billing nobody. The answer is kit's MD24
+#       mechanism rather than a hole: `customers_cafaye_resolve`
+#       (`rls.tables[customers]`, fifth policy) widens a SELECT to exactly the row
+#       whose value the caller PRESENTS, and `Webhooks::AccountResolution` presents
+#       the ids the payload carried. The event still is not an entry point — it
+#       carries no account and this declaration does not pretend otherwise — but
+#       the read it makes is declared, and `test/tenancy/database_isolation_test.rb`
+#       measures both directions: the same signed webhook writes its charge with
+#       the policy and writes nothing without it.
 #   3. **The lifecycle's own resolution of a processor id to a row**
 #       (`Subscriptions::Lifecycle#customer`). It answers "which row does this
 #       delivery belong to", and the id it looks up is the processor's. What
@@ -98,18 +126,199 @@ scope:
     - app
 
 rls:
-  # **Postgres holds no part of this boundary, and that is the design rather than
-  # an omission.** scoping is a property of the query — `scope :for_account` —
-  # and every migration under `db/migrate/` is an ordinary `create_table` with a
-  # `uuid` column and an index. There is no `create policy`, no
-  # `alter table … enable row level security` and no `security definer` function
-  # anywhere in this repository, so `databaseEnforced: false` with an empty table
-  # list is the truth, and it is checked the same way `accountScoped` is: the day
-  # somebody writes the first policy, `tenancy.rls-undeclared` is a FAILURE.
-  databaseEnforced: false
+  # **Postgres holds this boundary too, as of the database-isolation packet.**
+  # Until then this block said `false` and it was the truth: scoping was a property
+  # of the query — `scope :for_account` — and every migration under `db/migrate/`
+  # was an ordinary `create_table`. Now `db/tenancy/account_isolation.sql` calls
+  # `cafaye.protect_table` for the two tables whose key is a column and writes the
+  # five policies of the one whose key is not, `db/tenancy/substrate.sql` is kit's
+  # template installed beside it, and every request runs inside a transaction whose
+  # `cafaye.begin_account/1` the policies read.
+  #
+  # WHAT CHANGED, in the direction that matters: a forgotten `for_account` — or one
+  # `find_by_sql` — now reads zero rows rather than another account's, and a write
+  # into somebody else's account is refused with SQLSTATE 42501. What did NOT
+  # change: the application's own scoping, which is what decides a status code and
+  # is what `entryPoints` below still declares. RLS is defence in depth, not a
+  # licence to delete a predicate.
+  databaseEnforced: true
+  # The substrate's own function, and the one every policy below reads.
+  # `protect_table` writes `account_id = (select cafaye.current_account_id())` and
+  # the hand-written policies write the same call; naming anything else here would
+  # make `tenancy.rls-permissive` correct.
+  #
+  # It is the WRAPPED spelling that matters and this field cannot express the
+  # wrapper, because the schema's pattern requires the bare name ending in `()`.
+  # The wrap is `(select …)`, and it is why a policy is evaluated once per
+  # statement rather than once per row: measured on this cluster, two rows,
+  # identity unset —
+  #
+  #   using (account_id = (select probe_id()))   ->  1 call
+  #   using (account_id = probe_id())            ->  2 calls
+  identity: cafaye.current_account_id()
+  # The DDL tree. `db/migrate` is deliberately NOT in this list: the migration reads
+  # the two `.sql` files and executes them, so the policies are written in the files
+  # below and nowhere else. `db/tenancy/substrate.sql` is kit's template at ref
+  # `46d08f2` (sha256 `eaab2893…` — billing's own `kit.ref` predates the template's
+  # existence, so the copy names the ref it came from rather than the pin), and
+  # `db/tenancy/account_isolation.sql` is this service's half.
   sources:
-    - db/migrate
-  tables: []
+    - db/tenancy
+  # THREE TABLES. Each carries the four account policies — one per command, so a
+  # later grant can only widen a command it names — and `customers` carries a fifth,
+  # which is the one exemption in this file and is reasoned out at the bottom.
+  #
+  # `roles` names `billing` and `billing_app` and neither is `PUBLIC`. The two
+  # generated policies bind `to current_user, billing_app` — the login role is
+  # named in the call rather than derived from the session, for the reason
+  # `db/tenancy/account_isolation.sql` records (CI's `db:prepare` runs as the
+  # `postgres` superuser, whose derived `_app` role does not exist) — and the
+  # hand-written policies write the same two names literally. Neither role carries
+  # BYPASSRLS and neither is a superuser, which
+  # `test/tenancy/database_isolation_test.rb` asserts by name.
+  tables:
+    - table: subscriptions
+      forced: true
+      policies:
+        - name: subscriptions_cafaye_select
+          command: select
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/substrate.sql
+            line: 897
+        - name: subscriptions_cafaye_insert
+          command: insert
+          clause: with check
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/substrate.sql
+            line: 898
+        - name: subscriptions_cafaye_update
+          command: update
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/substrate.sql
+            line: 899
+        - name: subscriptions_cafaye_delete
+          command: delete
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/substrate.sql
+            line: 900
+    - table: charges
+      forced: true
+      policies:
+        - name: charges_cafaye_select
+          command: select
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/substrate.sql
+            line: 897
+        - name: charges_cafaye_insert
+          command: insert
+          clause: with check
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/substrate.sql
+            line: 898
+        - name: charges_cafaye_update
+          command: update
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/substrate.sql
+            line: 899
+        - name: charges_cafaye_delete
+          command: delete
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/substrate.sql
+            line: 900
+    # THE ONE TABLE WHOSE POLICIES ARE HAND-WRITTEN, because its tenancy key is not
+    # a column: `cafaye.protect_table` REFUSES it, measured —
+    #
+    #   ERROR:  cafaye.protect_table(customers, billing_app): the table has no
+    #           account_id column, so there is nothing to scope it by.
+    #
+    # — and the four policies below are the predicate `Customer.for_account` uses,
+    # spelled the way this table spells it. The mismatch between the key's name and
+    # the column's is the one place in this boundary a mistake is possible, which is
+    # why `test/tenancy/database_isolation_test.rb` has more cases for this table
+    # than for the other two.
+    #
+    # `owner_type = 'Account'` is in the `with check` as well as in the `using`, and
+    # the isolation suite asserts the difference: without it a row could be written
+    # with `owner_type = 'User'` and an `owner_id` equal to the caller's account id —
+    # a row the read policies then hide from every account, including the one that
+    # wrote it, while it holds the unique `(owner_type, owner_id, processor)` key.
+    - table: customers
+      forced: true
+      policies:
+        - name: customers_cafaye_select
+          command: select
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/account_isolation.sql
+            line: 125
+        - name: customers_cafaye_insert
+          command: insert
+          clause: with check
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/account_isolation.sql
+            line: 126
+        - name: customers_cafaye_update
+          command: update
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/account_isolation.sql
+            line: 127
+        - name: customers_cafaye_delete
+          command: delete
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/account_isolation.sql
+            line: 128
+        # THE FIFTH POLICY, AND THE ONLY EXEMPTION IN THIS DECLARATION. It is
+        # `for select` and its qualifier is the value a caller PRESENTS rather than
+        # an account:
+        #
+        #   using (id::text = (select cafaye.current_credential_digest())
+        #          or processor_customer_id = (select cafaye.current_credential_digest()))
+        #
+        # WHY IT EXISTS: `POST /v1/webhooks/stripe` is authenticated by signature,
+        # so it has no token claim to hand `cafaye.begin_account/1` — and the query
+        # that would tell it which account an event belongs to is a read of
+        # `customers` (`Subscriptions::Lifecycle#customer`, `Charges::Recorder`).
+        # Without this policy every delivery would be recorded `unknown_customer`
+        # and answered 200: a money service silently billing nobody, which
+        # `test/tenancy/database_isolation_test.rb` measures in both directions —
+        # the same signed webhook writes its charge with the policy and writes
+        # nothing without it.
+        #
+        # WHAT IT CANNOT DO: it cannot write (`for select`, so every write policy
+        # still demands an account identity); it cannot open another table
+        # (`subscriptions`, `charges` and `plans` are untouched by it); and it is
+        # not a table-wide read — the policy carries the same predicate the caller's
+        # lookup carries, so a resolution session reads exactly the one row whose
+        # value it presented, which the isolation suite asserts by row count. The
+        # `id::text` cast is measured rather than stylistic: `uuid = text` is not an
+        # operator, so the bare comparison is `operator does not exist: uuid = text`.
+        - name: customers_cafaye_resolve
+          command: select
+          clause: using
+          roles: [billing, billing_app]
+          constrained:
+            file: db/tenancy/account_isolation.sql
+            line: 132
 
 entryPoints:
   # --- customers ------------------------------------------------------------
@@ -126,7 +335,7 @@ entryPoints:
     enforced:
       mechanism: query-filter
       file: app/models/customer.rb
-      line: 95
+      line: 79
     negative:
       asserts: absent
       cases:
@@ -169,7 +378,7 @@ entryPoints:
       # claim and never a body field, so there is no second way in.
       mechanism: query-filter
       file: app/models/customer.rb
-      line: 95
+      line: 79
     negative:
       asserts: absent
       cases:
@@ -229,7 +438,7 @@ entryPoints:
           # The row's own `status`, read off the caller's own subscription.
           expects: status
           file: test/requests/v1/subscriptions_test.rb
-          line: 268
+          line: 269
 
   - id: subscription-write
     operation: update
@@ -264,7 +473,7 @@ entryPoints:
           # is left as it was, because taking effect is the webhook's business.
           expects: status
           file: test/requests/v1/subscriptions_test.rb
-          line: 341
+          line: 342
 
   # --- charges --------------------------------------------------------------
 
@@ -274,7 +483,7 @@ entryPoints:
     enforced:
       mechanism: query-filter
       file: app/models/charge.rb
-      line: 49
+      line: 51
     negative:
       asserts: absent
       cases:
@@ -285,12 +494,12 @@ entryPoints:
           # one whose cross-tenant arm needed its own file.
           expects: unauthorized
           file: test/requests/v1/charges_test.rb
-          line: 127
+          line: 193
         - id: other-account
           asserts: absent
           expects: not_found
           file: test/requests/v1/charges_test.rb
-          line: 92
+          line: 158
         - id: own-account
           asserts: present
           # The row's own `processor_charge_id`, read off the account's own
@@ -299,4 +508,4 @@ entryPoints:
           # proof that the row that came back is the caller's own.
           expects: ch_FAKEchargesrequestAAAAAAAAA
           file: test/requests/v1/charges_test.rb
-          line: 74
+          line: 140
