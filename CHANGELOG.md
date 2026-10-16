@@ -8,6 +8,26 @@ All notable changes to billing are recorded here. The format follows
 
 ### Fixed
 
+- **The image build, and with it the publish** (2026-10-16, branch
+  `fix/image-copy`). The `build` stage copied the vendored `cafaye` gem with
+  `COPY vendor/* ./vendor/`, and Docker copies the **contents** of a source
+  directory into the destination while dropping the directory's own name. The
+  glob matched `cafaye/`, a directory, so its contents were flattened into
+  `vendor/` and `/rails/vendor/cafaye` never existed in the image. `bundle
+  install` then failed with **exit code 13**
+  (``The path `/rails/vendor/cafaye` does not exist``), the image was never
+  built, so the packages were never published, so the substrate's billing
+  `Application` pointed at artifacts that do not exist and every box install was
+  forced down the credential path. The destination is now spelled out
+  (`COPY vendor/cafaye/ ./vendor/cafaye/`, with `vendor/.keep` on its own line),
+  so the directory name survives. Reproduced and fixed locally from this
+  checkout: `docker build --target build .` exits **0** and reports `Bundle
+  complete! 22 Gemfile dependencies, 125 gems now installed`; `docker build .`
+  exits **0** and the final image's `bundle check` reports `The Gemfile's
+  dependencies are satisfied`. The bundler version mismatch (image ships 4.0.3,
+  lockfile wants 4.0.18) was **not** pinned: the self-install was measured
+  working and was never the cause. See `REPORT-fix-image-copy.md`.
+
 - **The money the local whole-stack walk showed going missing** (2026-10-16,
   launch four + billing on the shared cluster). A real test-mode checkout paid
   and billing recorded no subscription and no charge:
