@@ -43,12 +43,17 @@ Rails.application.configure do
   # Don't log any deprecations.
   config.active_support.report_deprecations = false
 
-  # Replace the default in-process memory cache store with a durable alternative.
-  config.cache_store = :solid_cache_store
-
-  # Replace the default in-process and non-durable queuing backend for Active Job.
-  config.active_job.queue_adapter = :solid_queue
-  config.solid_queue.connects_to = { database: { writing: :queue } }
+  # THE CACHE IS IN-PROCESS AND THE JOB ADAPTER IS :async, and that is a
+  # decision rather than the template's default. Rails 8's stock block points
+  # both at SOLID components backed by their own databases — four databases
+  # per service, which the fleet's substrate does not provision and this
+  # build does not use: nothing in app/ reads Rails.cache, and
+  # app/jobs/ holds only the base class. Writing them into `billing`'s one
+  # database would create tables nothing reads; a durable queue for zero
+  # jobs is machinery with no load. The first real job changes this line and
+  # brings its own table and grant.
+  config.cache_store = :memory_store
+  config.active_job.queue_adapter = :async
 
   # Ignore bad email addresses and do not raise email delivery errors.
   # Set this to true and configure the email server for immediate delivery to raise delivery errors.

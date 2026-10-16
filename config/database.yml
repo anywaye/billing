@@ -107,21 +107,29 @@ test:
 # Read https://guides.rubyonrails.org/configuring.html#configuring-a-database
 # for a full overview on how database connection configuration can be specified.
 #
+# ONE database, named by the environment — the fleet's contract.
+#
+# The stock Rails 8 block this replaced named four databases
+# (`billing_production` + the solid_cache/queue/cable trio) and a hardcoded
+# `username: billing` with `BILLING_DATABASE_PASSWORD`. That shape cannot run
+# anywhere in this fleet, and the measured proof is a substrate install
+# (2026-10-16): a migrate Job given a complete `DATABASE_URL` connected to
+# **/var/run/postgresql/.s.PGSQL.5432** and died with "No such file or
+# directory" — keys written in this file WIN over the URL Rails merges it
+# with, so `host` fell back to the local socket and the username to a role
+# nothing provisions. The service was never production-runnable.
+#
+# So production reads the URL and nothing else. The role in it is
+# `<svc>_app`, which owns nothing: the migrations run as the OWNER (DDL) and
+# a migration in this repo's history grants the app role its runtime DML —
+# the same split identity and courier carry.
+#
+# The solid_cache/queue/cable entries are gone because this build uses
+# neither: `config.cache_store` is the memory store and the job adapter is
+# `:async` (no job class exists in app/ yet). When the first durable job
+# lands, it gets its own decision — and its own tables, granted to the app
+# role by the same pattern.
 production:
-  primary: &primary_production
+  primary:
     <<: *default
-    database: billing_production
-    username: billing
-    password: <%= ENV["BILLING_DATABASE_PASSWORD"] %>
-  cache:
-    <<: *primary_production
-    database: billing_production_cache
-    migrations_paths: db/cache_migrate
-  queue:
-    <<: *primary_production
-    database: billing_production_queue
-    migrations_paths: db/queue_migrate
-  cable:
-    <<: *primary_production
-    database: billing_production_cable
-    migrations_paths: db/cable_migrate
+    url: <%= ENV["DATABASE_URL"] %>

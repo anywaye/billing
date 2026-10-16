@@ -43,3 +43,7 @@
 # Ignore key files for decrypting credentials and more.
 /config/*.key
 
+# Git worktrees created inside the checkout (the fleet's worker layout).
+# Their files are another branch's working copies, not this tree's: untracked
+# here, invisible to `git add -A`, and never committed by accident.
+wt/

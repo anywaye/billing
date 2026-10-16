@@ -1,6 +1,16 @@
 # Omakase Ruby styling for Rails
 inherit_gem: { rubocop-rails-omakase: rubocop.yml }
 
+# Worktrees created inside the checkout (`wt/<branch>/`, the fleet's worker
+# layout) hold ANOTHER branch's working copies — including generated files
+# like `db/schema.rb` that the omakase style has opinions about. Linting them
+# from this tree reports another branch's half-finished work as this one's
+# offenses (measured: a worker's in-flight schema.rb failed this repo's gate
+# from the main checkout). They are excluded here and in `.gitignore`.
+AllCops:
+  Exclude:
+    - "wt/**/*"
+
 # Overwrite or add rules to create your own house style
 #
 # # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
