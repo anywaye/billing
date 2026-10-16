@@ -758,6 +758,43 @@ jobs:
           fi
           echo "::notice::no processor credential in this job's environment"
 
+      - name: the two roles the account boundary is made of
+        # `cafaye.protect_table` writes its policies `to current_user,
+        # current_user || '_app'` and REFUSES to run when that login role is missing
+        # — by name, with the fix in the hint — so a cluster without `billing_app`
+        # cannot install the boundary at all. kit's cluster provisions both roles
+        # from `KIT_POSTGRES_DATABASES` (`templates/compose/postgres/initdb/
+        # 10-cluster.sh`), which is why a compose stack needs nothing here; this
+        # job's postgres service is a plain image, so it does.
+        #
+        # The credential is the same throwaway the service block above already
+        # declares for this job's container, and it exists for the length of this
+        # run.
+        #
+        # The two attributes are read back and asserted rather than assumed: a
+        # `billing` created with SUPERUSER or BYPASSRLS would make every isolation
+        # assertion in `test/tenancy/database_isolation_test.rb` pass for the reason
+        # that makes them worthless, and that suite asserts the same two facts from
+        # inside — this is the half that fails in the place the mistake was made.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql=(psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1)
+          for role in billing billing_app; do
+            if [ "$("${psql[@]}" -tAc "select 1 from pg_roles where rolname = '$role'")" != "1" ]; then
+              "${psql[@]}" -c "create role $role login nosuperuser nocreatedb nocreaterole noreplication"
+            fi
+          done
+          "${psql[@]}" -c "grant billing_app to billing"
+          "${psql[@]}" -tAc "select rolname, rolcanlogin, rolsuper, rolbypassrls from pg_roles where rolname in ('billing', 'billing_app') order by rolname"
+          logins="$("${psql[@]}" -tAc "select count(*) from pg_roles where rolname in ('billing', 'billing_app') and rolcanlogin")"
+          bypass="$("${psql[@]}" -tAc "select count(*) from pg_roles where rolname in ('billing', 'billing_app') and (rolsuper or rolbypassrls)")"
+          if [ "$logins" != "2" ] || [ "$bypass" != "0" ]; then
+            echo "::error::the boundary's two roles are not what the policies assume: $logins login role(s), $bypass superuser/BYPASSRLS" >&2
+            exit 1
+          fi
+
       - name: bin/prime — the gate
         # `bin/prime`, unmodified: `bundle install`, `rails db:prepare`,
         # `rubocop --parallel`, `rails test`. Not a CI-only variant of it, and not

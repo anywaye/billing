@@ -6,6 +6,22 @@ require "openssl"
 # Spec helpers. Plain modules, no framework gem.
 Dir[Rails.root.join("test/support/**/*.rb")].sort.each { |file| require file }
 
+# The test database's account boundary, installed before any test runs.
+#
+# Rails builds this database from `db/schema.rb`, which cannot express a policy, a
+# row level security bit, a function or a grant — so the three account-scoped
+# tables arrive with no boundary at all, and `test/tenancy/database_isolation_test.rb`,
+# which is the only place the boundary is proven, would be asserting against a
+# database where every denial is absent (and where "zero rows" means the same thing
+# for a missing policy as for a working one).
+#
+# `Tenancy::Substrate.install!` runs the SAME two DDL files the migration runs, as
+# the `billing` role — the role that owns those tables in production, and the only
+# role whose ownership makes the owner arm of those assertions mean anything. It is
+# the same install the rake task runs after `db:schema:load`, so there is one
+# implementation of "install the boundary" and three callers.
+Tenancy::Substrate.install!
+
 # Fake collaborators for a single test.
 #
 # minitest 6 dropped `Object#stub` (it moved to the separate minitest-mock gem,
@@ -96,6 +112,17 @@ module ActiveSupport
 
     # Run tests in parallel with specified workers
     parallelize(workers: :number_of_processors)
+
+    # The boundary again, in each worker's OWN database.
+    #
+    # Rails creates `…_test_0` … `…_test_7` and loads `db/schema.rb` into them in the
+    # PARENT process, before forking — so the install at the top of this file reached
+    # only the primary test database, and every worker's database had the three
+    # tables and no `cafaye` schema at all. Measured, with that install alone: 285 of
+    # 1256 tests failed with `schema "cafaye" does not exist`, which is a missing
+    # boundary reported as a missing function. `parallelize_setup` is the
+    # after-fork hook, so it runs in the worker, against the worker's connection.
+    parallelize_setup { Tenancy::Substrate.install! }
 
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all

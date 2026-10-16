@@ -50,12 +50,26 @@ module Webhooks
 
     def create
       payload = verified_payload
-      Webhooks::Ingestion.new(
-        processor: :stripe,
-        event_id: payload["id"],
-        type: payload["type"],
-        payload: payload
-      ).call
+      # The account the event belongs to, and the request's own transaction —
+      # because the database half of the boundary needs an identity before the
+      # first row is read, and this request has no token to read one from. The
+      # resolution presents an id the payload carried (see
+      # `Webhooks::AccountResolution`); a payload that names no customer this
+      # service knows resolves to nil, and the ingestion then reads nothing and
+      # records the delivery as `unknown_customer`, which is what it did for a
+      # dashboard-created customer before any of this existed.
+      #
+      # AFTER `verified_payload`, never before: an unverified body is not an event
+      # and must not be interpreted — not even well enough to present one of its
+      # ids to the database.
+      Tenancy.with_resolved_account(Webhooks::AccountResolution.new(payload)) do
+        Webhooks::Ingestion.new(
+          processor: :stripe,
+          event_id: payload["id"],
+          type: payload["type"],
+          payload: payload
+        ).call
+      end
       head :ok
     rescue SignaturesUnconfigured => e
       unavailable(e)

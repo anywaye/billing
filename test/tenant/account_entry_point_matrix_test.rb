@@ -275,6 +275,26 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # --- the keyset every list goes through ----------------------------------
     [ "app/controllers/concerns/cursor_paging.rb", "apply_cursor", "list" ] => "applies a client-supplied keyset to a relation the caller chose",
 
+    # --- the webhook's account resolution (the Postgres-boundary packet) -----
+    # The one read on this surface with NO account to be scoped by, and it is here
+    # rather than exempted because that is exactly what it is: `POST
+    # /v1/webhooks/stripe` is authenticated by signature, not by a token, so it has
+    # no claim to hand `cafaye.begin_account/1` — and the query that would tell it
+    # which account the event belongs to is a read of `customers`. It performs the
+    # same two lookups `Recorder#find_customer` makes (cafaye id first, the
+    # processor's id second) for the same measured reason, and it is a third copy
+    # rather than a call to one of the others because of a difference that matters:
+    # the value it looks up comes straight off a processor payload, so a value that
+    # cannot be a uuid must be looked up as the processor's id and never handed to
+    # `find_by(id:)`, where Postgres would answer 22P02 rather than a miss.
+    #
+    # What keeps it inside the boundary is `customers_cafaye_resolve`
+    # (`db/tenancy/account_isolation.sql`): a `for select` policy whose qualifier is
+    # the value this method presents, so the read is widened to exactly the row
+    # that value names and nothing else — asserted, in raw SQL, by
+    # `test/tenancy/database_isolation_test.rb`.
+    [ "app/services/webhooks/account_resolution.rb", "find_customer", "read" ] => "resolves the customer a verified processor event names, by the value the payload carried — the lookup the resolve policy widens to one row, and the only read in app/ that runs with no account identity at all",
+
     # --- the two declared joins, counted because an association is a query ----
     [ "app/models/subscription.rb", "belongs_to :customer", "read" ] => "declares the join to the account-scoped customer row",
     [ "app/models/subscription.rb", "belongs_to :plan", "read" ] => "declares the join to the catalogue row the subscription is billed against",
@@ -335,6 +355,13 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     "app/lib/money_params.rb" => "turns a request body into an amount; it reads no model",
     "app/lib/parameter_error.rb" => "the error a bad query parameter raises; it holds no query",
     "app/lib/problem.rb" => "the problem vocabulary, a frozen table of codes and no model access",
+    # The file the Postgres-boundary packet added. It writes the transaction-local
+    # GUC the policies read — `cafaye.begin_account/1` and `cafaye.begin_credential/1`
+    # — and reaches no table: the boundary it serves is the database's, and the
+    # scanner's "no data access" is the right answer for it rather than a miss.
+    # Naming it here is what keeps the list closed, exactly as the comment above the
+    # others says.
+    "app/lib/tenancy.rb" => "writes the transaction-local identity the row level security policies read; it opens no query of its own and touches no table",
     "app/mailers/application_mailer.rb" => "the abstract base class; it declares no query",
     "app/models/application_record.rb" => "the abstract base class; it declares no scope",
     "app/models/idempotency_key.rb" => "keyed on the request's own idempotency key, which is a client's, not an account's. Its `scope :expired` is a ttl and touches no tenant row, which is why a scope on a non-tenant model is not counted.",
@@ -656,15 +683,23 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # records no charge, so the recorder's resolution cannot be the one the event
   # relies on. The file left `NO_DATA_ACCESS` the same day: a file that performs
   # a read does not belong among the files that perform none.
-  test "there are 50 account-scoped data accesses in 47 methods, filed under 48 keys" do
-    assert_equal 50, self.class.accesses.size
-    assert_equal 47, classified_sites.size
-    assert_equal 48, DATA_ACCESSES.size
+  #
+  # The Postgres-boundary packet's 45 became 47, and the new method is
+  # `Webhooks::AccountResolution#find_customer` — the webhook's own resolution,
+  # which performs the same two lookups under one description for the same reason
+  # and is the first access in this table that runs with NO account identity. It is
+  # declared above rather than exempted because a read that is deliberately not
+  # scoped by an account is the thing this matrix exists to make visible.
+  test "there are 52 account-scoped data accesses in 48 methods, filed under 49 keys" do
+    assert_equal 52, self.class.accesses.size
+    assert_equal 48, classified_sites.size
+    assert_equal 49, DATA_ACCESSES.size
 
-    assert_equal 2, self.class.accesses.size - DATA_ACCESSES.size,
-      "the gap between accesses and keys has changed. It is 2 because `Lifecycle#customer` " \
-      "and `Recorder#find_customer` each do two lookups under one description; a different " \
-      "number means a method is doing something the table no longer describes."
+    assert_equal 3, self.class.accesses.size - DATA_ACCESSES.size,
+      "the gap between accesses and keys has changed. It is 3 because `Lifecycle#customer`, " \
+      "`Recorder#find_customer` and `AccountResolution#find_customer` each do two lookups under " \
+      "one description; a different number means a method is doing something the table no longer " \
+      "describes."
 
     assert_equal 1, DATA_ACCESSES.size - classified_sites.size,
       "the gap between keys and methods has changed. It is 1 because `Lifecycle#apply` " \
@@ -677,8 +712,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # zero kinds are filled in explicitly because `tally` omits an absent key, and
   # a breakdown that quietly lost `delete` is the one breakdown this file exists
   # to keep honest.
-  test "the data-access breakdown is read 22, list 13, write 9, update 6, delete 0" do
-    assert_equal({ "read" => 22, "list" => 13, "write" => 9, "update" => 6, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
+  test "the data-access breakdown is read 24, list 13, write 9, update 6, delete 0" do
+    assert_equal({ "read" => 24, "list" => 13, "write" => 9, "update" => 6, "delete" => 0 }, breakdown(self.class.accesses.map(&:kind)))
   end
 
   # **15 account-scoped routes**, derived from the router, in the same four kinds.
@@ -713,7 +748,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # double-counts a route against the method that serves it.
   test "the two layers are counted separately, because a route and the method that serves it overlap" do
     assert_equal 19, ACCOUNT_SCOPED_ROUTES.size
-    assert_equal 50, self.class.accesses.size
+    assert_equal 52, self.class.accesses.size
     refute_equal ACCOUNT_SCOPED_ROUTES.size, self.class.accesses.size,
       "the two layers have converged, which means one of them is counting the other's rows"
   end
