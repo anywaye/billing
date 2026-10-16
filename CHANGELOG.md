@@ -6,6 +6,18 @@ All notable changes to billing are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The instabox backend switch** (`ci/backend` containing `instabox`, and an
+  executable `ci/pipeline.sh` copied from kit's
+  `backends/instabox/pipeline.template.sh` and edited for this repository).
+  The gate is `bin/prime`, verbatim — no flags, no CI-only variant. The
+  pipeline's comments carry the concurrency note the backend's supervisor
+  needs: Ruby gates are serial on one machine (the `pg` gem's known fork
+  segfault). Shipping is not wired yet: the tree has a chart but no
+  `bin/publish`, so the gate is the whole run. `.github/workflows/` is
+  untouched; `github-actions` remains the fallback.
+
 ### Fixed
 
 - **The image build, and with it the publish** (2026-10-16, branch
