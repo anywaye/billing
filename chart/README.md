@@ -23,7 +23,7 @@ substrate is closed source and a pull-based system needs somewhere to
 pull from:
 
     helm package chart
-    helm push chart-0.1.0.tgz oci://ghcr.io/cafaye/charts/billing
+    helm push chart-0.1.1.tgz oci://ghcr.io/cafaye/charts/billing
 
 The box pulls it with the read-only secret `values.yaml` names
 (`imagePullSecrets`), created on the box once, out of band. The chart

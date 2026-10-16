@@ -20,7 +20,7 @@
 # Set it at release time; the default is the chart's own version.
 image:
   repository: ghcr.io/cafaye/billing
-  tag: "0.1.0"
+  tag: "0.1.1"
   pullPolicy: IfNotPresent
 
 # The read-only pull secret on the box, created once, out of band:

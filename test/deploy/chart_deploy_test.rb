@@ -18,7 +18,7 @@ require "test_helper"
 # `cafe gen chart` from this repository's own `cafaye.yml`, packaged and pushed
 # by kit's publish workflow, and pulled by the substrate's `Application`, which
 # names `oci://ghcr.io/cafaye/charts` chart `billing` at
-# `targetRevision: 0.1.0`. So this file asserts the chart's content and the
+# `targetRevision: 0.1.1`. So this file asserts the chart's content and the
 # publish loop's seam: the facts that make the loop work, not that files exist.
 #
 # It reads four files and renders nothing. No database, no boot.
@@ -33,12 +33,12 @@ class ChartDeployTest < ActiveSupport::TestCase
   # --- the seam between the chart and the substrate ---------------------------
 
   # The two facts the substrate pins, and the two this chart must carry: the
-  # `Application` names `chart: billing` and `targetRevision: 0.1.0`. A chart
+  # `Application` names `chart: billing` and `targetRevision: 0.1.1`. A chart
   # version that moves without the Application moving is a service that never
   # deploys — the OCI tag IS the chart version.
   test "chart name and version are what the substrate's Application pulls" do
     assert_equal "billing", @chart.fetch("name")
-    assert_equal "0.1.0", @chart.fetch("version")
+    assert_equal "0.1.1", @chart.fetch("version")
   end
 
   # Readiness, and the fleet's contract: the rollout waits on `/readyz`, which
