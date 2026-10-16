@@ -1,8 +1,24 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
-if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
-  ./bin/rails db:prepare
-fi
-
+# The image's entrypoint, and the one thing it deliberately does NOT do: migrate.
+#
+# THE `db:prepare` THIS FILE USED TO RUN IS GONE, and it is a change to the deploy
+# story rather than a tidy-up. It ran `db:prepare` whenever the command was
+# `./bin/rails server`, which meant the serving process needed a credential that
+# could create and alter tables — and the fleet's rule, stated in identity's
+# `docker-compose.yml`, is that it must not have one: "the service must never
+# migrate itself at boot, so nothing the running process reads gives it the owner
+# role. A DSN that did would put the migration credential and the request
+# credential in the same environment, one variable away from each other."
+#
+# The application's pool now logs in as `billing_app`, which owns nothing and is
+# named in every policy but cannot `ALTER TABLE … DISABLE ROW LEVEL SECURITY`,
+# cannot `DROP POLICY` and cannot `DROP TABLE` — so a compromised connection string
+# is a read-only one. `db:prepare` under that role is not slow, it is impossible:
+# it would fail on the first `CREATE TABLE` of a fresh database.
+#
+# WHO MIGRATES INSTEAD. A one-shot container: `billing-migrate` in
+# `docker-compose.yml` for a compose stack, and an operator step against the box
+# for a chart deployment (`chart/README.md`, "Secrets"). Both use the owner DSN,
+# and neither puts it in the service's environment.
 exec "${@}"

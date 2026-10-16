@@ -228,6 +228,57 @@ services:
       - "-c"
       - "max_connections=${KIT_POSTGRES_MAX_CONNECTIONS:-200}"
 
+  # THE MIGRATION, AND THE ONLY PLACE THE OWNER CREDENTIAL APPEARS.
+  #
+  # One-shot: `db:prepare` runs, the container exits 0, and the app's
+  # `depends_on: service_completed_successfully` is what sequences them. It is a
+  # separate service rather than a line in the app's environment because the fleet
+  # rule is that nothing the serving process reads may name the owner — see the
+  # `DATABASE_URL` comment below, which quotes identity's compose.
+  #
+  # `DATABASE_URL` here is the OWNER (`billing`) for the same reason darkroom's
+  # `DATABASE_URL` stays the owner: it owns the database and every table, it is what
+  # `cafaye.protect_table` binds as the policies' owner side, and a service that runs
+  # its own migrations cannot stop needing it. It is also what `db:prepare` needs to
+  # create a database that does not exist yet, which `billing_app` cannot do.
+  #
+  # WHY IT RUNS `db:prepare` AND NOT `db:migrate`: `db:prepare` is what creates the
+  # database on a fresh volume, loads `db/schema.rb` into it when there is nothing
+  # there, and then migrates — and on this service it also installs the account
+  # boundary, because `lib/tasks/tenancy_substrate.rake` enhances it. A `db:migrate`
+  # alone would leave a fresh volume with no schema at all.
+  billing-migrate:
+    build:
+      context: .
+    image: cafaye/billing:dev
+    command: ["./bin/rails", "db:prepare"]
+    environment:
+      RAILS_ENV: development
+      DATABASE_URL: postgresql://billing:${KIT_POSTGRES_PASSWORD:-cafaye}@postgres:5432/billing
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    # ON KIT'S `platform` NETWORK, and this line is not optional tidiness. kit puts
+    # every service it ships on a network called `platform`; a service in the SECOND
+    # compose file that declares no `networks:` lands on the project's `default`
+    # network instead, and the two are different networks in different DNS domains —
+    # so `postgres` stops resolving for this container. Measured on the migrate
+    # service below, which is the first thing in this file to open a connection:
+    #
+    #   $ docker compose -p <probe> -f <kit>/templates/compose/docker-compose.yml \
+    #       -f ./docker-compose.yml up -d --wait
+    #   billing-migrate-1  | PG::ConnectionBad: could not translate host name
+    #                        "postgres" to address: Name or service not known
+    #
+    # The app service had the same defect and it was invisible, which is the worse
+    # shape: the container starts, `/healthz` answers (it touches nothing), and the
+    # first query that reaches storage fails on a lookup — a container that starts
+    # looks like a container that works. darkroom and courier carry the same line
+    # with the same reasoning.
+    networks:
+      - platform
+
   billing:
     build:
       context: .
@@ -266,16 +317,38 @@ services:
       # it is not worth a percent-encoder to keep a development default out of a
       # comment.)
       #
-      # The role is `billing` and NOT the cluster's administrator: the init script
-      # creates it `LOGIN NOSUPERUSER` and owns the `billing` database with it, and
-      # that is the whole of billing's credential on this cluster. It is also the
-      # credential that is refused at the door of every other database in it.
+      # THE ROLE IS `billing_app` AND NOT `billing`, and this is the half of the
+      # account boundary that survives a compromised connection string. `billing`
+      # owns the database and every table in it and runs the migrations;
+      # `billing_app` owns NOTHING and is named in all thirteen policies
+      # (`db/tenancy/account_isolation.sql`, `db/tenancy/app_role.sql`).
+      #
+      # With row level security FORCEd the owner is already bound by the policies, so
+      # what the split adds is not row visibility — it is that the running process
+      # cannot `ALTER TABLE … DISABLE ROW LEVEL SECURITY`, cannot `DROP POLICY` and
+      # cannot `DROP TABLE`. darkroom's compose states the consequence in one line:
+      # "One compromised connection string is then a read-only one." Both refusals
+      # are asserted by `test/tenancy/database_isolation_test.rb`, as `billing_app`.
+      #
+      # THE OWNER DSN IS NOT IN THIS SERVICE'S ENVIRONMENT, and that is the fleet
+      # rule rather than a preference. identity's compose: "the service must never
+      # migrate itself at boot, so nothing the running process reads gives it the
+      # owner role. A DSN that did would put the migration credential and the request
+      # credential in the same environment, one variable away from each other." The
+      # migration is `billing-migrate` below — a one-shot container, the only place
+      # the owner DSN appears — and `bin/docker-entrypoint` no longer runs
+      # `db:prepare` at boot, because under this role it could not: the first
+      # `CREATE TABLE` of a fresh database is refused.
+      #
+      # Neither role is the cluster's administrator: the init script creates both
+      # `LOGIN NOSUPERUSER`, and `billing_app` is additionally refused at the door of
+      # every other database in the cluster.
       #
       # The database name is a LITERAL rather than the `:-billing` above, and
       # deliberately so: the name here has to match the ROLE name, and the role
       # name is the first entry of a list. Interpolating the list would hand a
       # comma-separated string to a URL path.
-      DATABASE_URL: postgresql://billing:${KIT_POSTGRES_PASSWORD:-cafaye}@postgres:5432/billing
+      DATABASE_URL: postgresql://billing_app:${KIT_POSTGRES_PASSWORD:-cafaye}@postgres:5432/billing
 
       # ---------------------------------------------------------------------
       # OBSERVABILITY, ON BY DEFAULT
@@ -357,8 +430,32 @@ services:
     # is lost on that axis either.
 
     # The database, and ONLY the database. Not the collector, for the reason at the
-    # top of this file.
+    # top of this file. `billing-migrate` is in the list because the app no longer
+    # prepares its own schema (see `bin/docker-entrypoint`): the one-shot container
+    # has to have finished, and `service_completed_successfully` is what makes the
+    # app wait for it rather than race it.
     depends_on:
       postgres:
         condition: service_healthy
+      billing-migrate:
+        condition: service_completed_successfully
+    # ON KIT'S `platform` NETWORK, and this line is not optional tidiness. kit puts
+    # every service it ships on a network called `platform`; a service in the SECOND
+    # compose file that declares no `networks:` lands on the project's `default`
+    # network instead, and the two are different networks in different DNS domains —
+    # so `postgres` stops resolving for this container. Measured on the migrate
+    # service below, which is the first thing in this file to open a connection:
+    #
+    #   $ docker compose -p <probe> -f <kit>/templates/compose/docker-compose.yml \
+    #       -f ./docker-compose.yml up -d --wait
+    #   billing-migrate-1  | PG::ConnectionBad: could not translate host name
+    #                        "postgres" to address: Name or service not known
+    #
+    # The app service had the same defect and it was invisible, which is the worse
+    # shape: the container starts, `/healthz` answers (it touches nothing), and the
+    # first query that reaches storage fails on a lookup — a container that starts
+    # looks like a container that works. darkroom and courier carry the same line
+    # with the same reasoning.
+    networks:
+      - platform
     restart: unless-stopped

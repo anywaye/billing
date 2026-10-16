@@ -40,6 +40,33 @@ it on the box:
 Rotate a value by replacing the secret and restarting the pods — not
 by editing a generated file.
 
+### Two DSNs, and only one of them belongs in that secret
+
+`DATABASE_URL` in `billing-secrets` is the APPLICATION's credential:
+`billing_app`, the login role that owns nothing and is named in every
+row-level-security policy. That is the role the pods serve as, and with the
+policies FORCEd it cannot `ALTER TABLE … DISABLE ROW LEVEL SECURITY`, cannot
+`DROP POLICY` and cannot `DROP TABLE` — a compromised connection string is a
+read-only one. `docker-compose.yml` carries the same split for a compose
+stack, where it is one line of `DATABASE_URL` and a one-shot
+`billing-migrate` container.
+
+The OWNER's DSN (`billing`) is the migration and operator credential and
+belongs nowhere in this secret. The pods no longer prepare their own schema
+(`bin/docker-entrypoint` says why, and quotes identity's compose for the
+rule), so a deploy runs the migration out of band, with the owner credential
+in the operator's hand rather than in the Deployment:
+
+    kubectl run billing-migrate --rm -it --restart=Never \
+      --image=ghcr.io/cafaye/billing:0.1.1 \
+      --env=RAILS_ENV=production --env=DATABASE_URL=<owner DSN> \
+      -- ./bin/rails db:prepare
+
+`db:prepare` and not `db:migrate`: on an empty database it creates the
+schema, and it is also what installs the account boundary
+(`lib/tasks/tenancy_substrate.rake` enhances it). It is idempotent, so
+running it on every deploy is correct.
+
 ## Reaching the service
 
 The chart installs no Ingress until a values commit says so:
