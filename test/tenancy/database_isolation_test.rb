@@ -62,6 +62,10 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
   OWNER_ROLE = TestSupport::DatabaseTenancy::OWNER_ROLE
   APP_ROLE = TestSupport::DatabaseTenancy::APP_ROLE
 
+  # The four privileges a table's DML is made of, in the order Postgres sorts them.
+  # Named once because two tests ask the same question about different table sets.
+  DML = %w[DELETE INSERT SELECT UPDATE].freeze
+
   # Every table the boundary covers, and the number of policies each must carry.
   # `customers` has five: the four commands plus the webhook path's resolve
   # policy, which is `for select` and predicated on the value a caller presents
@@ -202,6 +206,76 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
         "every assertion about the app role below would fail for a reason that has nothing to do with " \
         "the boundary"
     end
+  end
+
+  test "billing_app can reach every table the application queries, and the list is derived" do
+    # THE GRANT HALF OF THE SPLIT, GENERALISED — and derived in BOTH directions, so a
+    # table added next month without a grant fails here rather than in production:
+    #
+    #   * the tables this DATABASE holds, from the catalog: every base table in
+    #     `public` except Rails' own bookkeeping, which no request reads (the `db:*`
+    #     tasks do, and those run as the owner, on the migration credential);
+    #   * the tables the APPLICATION names, from the models themselves — and from
+    #     `app/models/`, not from `ActiveRecord::Base.descendants`, which after an
+    #     eager load is every model the FRAMEWORK brings too (Active Storage,
+    #     Action Mailbox/Text, Solid Queue/Cache/Cable). Those twenty tables are not
+    #     in this database at all, and a derivation that counted them would be
+    #     asking a question about Rails rather than about this service.
+    #
+    # The CONTROL is as load-bearing as the derivation: a list that came back empty
+    # would make every assertion below pass over nothing, which is the shape
+    # `TestSpans.rendered!` refuses for the same reason. `customers` is the control
+    # table because the whole boundary is built on it.
+    app_models = Dir[Rails.root.join("app/models/*.rb")].sort.filter_map do |path|
+      klass = File.basename(path, ".rb").camelize.constantize
+      klass if klass.is_a?(Class) && klass < ActiveRecord::Base && !klass.abstract_class?
+    end
+    models = app_models.map(&:table_name).uniq.sort
+
+    catalog = rows(<<~SQL).flatten
+      select table_name from information_schema.tables
+      where table_schema = 'public' and table_type = 'BASE TABLE'
+        and table_name not in ('schema_migrations', 'ar_internal_metadata')
+      order by table_name
+    SQL
+
+    assert_includes models, "customers",
+      "the derivation found no application models, so every assertion below would pass on an empty list"
+
+    assert_empty models - catalog,
+      "these models' tables are not in this database, so the derivation is not looking at the schema the " \
+      "application runs against"
+
+    missing = catalog.to_h { |table| [ table, DML - table_privileges(table) ] }.reject { |_, absent| absent.empty? }
+    assert_empty missing,
+      "#{APP_ROLE} cannot reach these tables, and the application queries all of them: " \
+      "#{missing.map { |table, absent| "#{table} (missing #{absent.join(', ')})" }.join('; ')}"
+
+    # And the control ON THE CHECKER: the privilege query above must be able to
+    # answer "no" about a privilege the role does not hold. `TRUNCATE` is the one to
+    # test it with because holding it would be a real defect and not just a
+    # surprise: it empties a table for every account, so it is a way around a policy
+    # that no `USING` clause can stop.
+    truncatable = catalog.select { |table| table_privileges(table).include?("TRUNCATE") }
+    assert_empty truncatable,
+      "#{APP_ROLE} holds TRUNCATE on #{truncatable.join(', ')}: it is not DML, and it is a way around " \
+      "row level security rather than a way through it"
+
+    # AND THE TWO TABLES THE APPLICATION MUST NOT WRITE. `20261016190000_grant_app_role_runtime_dml.rb`
+    # grants the app role its DML in bulk and revokes these two out of it, and the
+    # reason is identity's: an application that can rewrite its own migration history
+    # can make the next migrate re-run against live data. Asserted here as well as
+    # there because the installer's path (`db/tenancy/app_role.sql`) does not grant
+    # them either, and the claim is about the DATABASE rather than about which file
+    # was last run against it. `SELECT` is deliberately not asserted against: a
+    # development boot reads its own migration versions for the pending-migration
+    # check, and reading a version list is not writing one.
+    writable = %w[schema_migrations ar_internal_metadata].select do |table|
+      (table_privileges(table) & %w[INSERT UPDATE DELETE]).any?
+    end
+    assert_empty writable,
+      "#{APP_ROLE} can write #{writable.join(', ')}: an application that can rewrite its own migration " \
+      "history can make the next migrate re-run against live data"
   end
 
   # === the read denials: another account's row, and no identity at all ========
@@ -546,27 +620,39 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
 
   # === the request's identity actually reaches Postgres ======================
 
-  test "a /v1 write for account A succeeds under the owner role, where the same write with no identity is refused" do
+  test "a /v1 read under the app role sees exactly the caller's account" do
+    # THE READ HALF, as the role the application's pool logs in as. Nothing here
+    # touches the database directly: this is a real request through the middleware
+    # stack, the router and the controller, on a connection that is `billing_app` and
+    # has no identity set — so the listing is what the policies answer for the
+    # account the token names.
+    without_identity do
+      as_app_role do
+        acts_as(ACCOUNT_A)
+        get "/v1/customers"
+
+        assert_response :ok
+        ids = json_body.fetch("data").map { |row| row.fetch("id") }
+        assert_equal [ @customer_a ], ids,
+          "the listing is not exactly the caller's own customer"
+        refute_includes ids, @customer_b,
+          "another account's customer is in the listing, so the request's own identity is not reaching Postgres"
+      end
+    end
+  end
+
+  test "a /v1 write for account A succeeds under the app role, where the same write with no identity is refused" do
     # THE PROPERTY THE REQUEST BINDING EXISTS FOR, and the one nothing else in this
     # file can see: that `V1::BaseController#with_account_scope` puts the token's
     # claim into the database's identity before the action's first query.
     #
-    # AS THE ROLE THE SERVICE ACTUALLY RUNS AS, and the role is measured rather than
-    # assumed: `docker-compose.yml` and `chart/` carry
-    # `DATABASE_URL: …://billing:…`, the OWNER, and `billing_app` appears nowhere in
-    # this repository's deployment. That is still a bounded posture — the tables are
-    # FORCEd, so the owner is subject to the same policies a request's role would be
-    # — but it is worth stating, because the second half of the split (the login
-    # role that owns nothing) is asserted here and NOT yet in the request path:
-    # driving this request as `billing_app` fails with `permission denied for table
-    # processor_webhooks`, because the four tables that are deliberately not
-    # account-scoped are not granted to it. Moving the application onto `billing_app`
-    # is a deployment change and needs those grants with it.
-    #
-    # With the connection's identity CLEARED, so the request's own `begin_account` is
-    # the only thing that can make this write legal.
+    # AS THE ROLE THE APPLICATION'S POOL LOGS IN AS — `billing_app`, the login role
+    # that owns nothing — and with the connection's identity CLEARED, so the request's
+    # own `begin_account` is the only thing that can make this write legal. It is the
+    # posture the composed stack runs in (`docker-compose.yml`'s app URL) and the one
+    # `bin/docker-entrypoint` no longer contradicts by migrating as the owner first.
     without_identity do
-      as_owner_role do
+      as_app_role do
         # The control first: the row the request is about to write, written by raw
         # SQL with no identity, is refused.
         assert_equal "42501", refusal(<<~SQL), "a customer was written with no identity at all"
@@ -596,7 +682,7 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
     # the account has to come out of the payload — through
     # `customers_cafaye_resolve` and `Webhooks::AccountResolution`. Under the owner
     # role with no identity, which is both the posture a webhook runs in and the role
-    # a request logs in as today; the suite's own connection would bypass the
+    # a request logs in as today — the suite's own connection would bypass the
     # policies and hide a broken resolution behind a green test.
     #
     # `FRESH_A`, because the account can hold exactly one customer row (see the
@@ -604,7 +690,7 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
     insert_customer(FRESH_A, INVOICE_CUSTOMER)
 
     without_identity do
-      as_owner_role do
+      as_app_role do
         # The resolution is the only thing that can see this row: with no identity
         # and no presented value, the customer the invoice names is invisible.
         assert_equal 0, count("select count(*) from customers where processor_customer_id = #{quote(INVOICE_CUSTOMER)}"),
@@ -643,7 +729,7 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
     # emitted — which is the documented gap in `Webhooks::Charges::Recorder` and not
     # something this file can assert a refusal for.
     without_identity do
-      as_owner_role do
+      as_app_role do
         post_stripe_webhook(stripe_fixture("customer.subscription.created"))
 
         assert_response :ok
@@ -674,6 +760,18 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
 
   def charges_of(account_id)
     count("select count(*) from charges where account_id = #{quote(account_id)}")
+  end
+
+  # The privileges `role` holds on `table`, asked of Postgres rather than read out
+  # of `information_schema.table_privileges` — `has_table_privilege` answers for
+  # inherited and PUBLIC-granted privileges too, so a grant that arrived by a route
+  # this file does not write is still counted.
+  def table_privileges(table, role = APP_ROLE)
+    %w[SELECT INSERT UPDATE DELETE TRUNCATE].select do |privilege|
+      ActiveRecord::Base.connection.select_value(
+        "select has_table_privilege(#{quote(role)}, #{quote("public.#{table}")}, #{quote(privilege)})"
+      )
+    end
   end
 
   def customers_of(account_id)

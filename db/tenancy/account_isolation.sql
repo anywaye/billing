@@ -131,22 +131,18 @@ create policy customers_cafaye_delete on customers for delete to billing, billin
 
 create policy customers_cafaye_resolve on customers for select to billing, billing_app using (id::text = (select cafaye.current_credential_digest()) or processor_customer_id = (select cafaye.current_credential_digest()));
 
--- The GRANTS, which `protect_table` writes for the two tables below and which
--- therefore have to be written here for this one. They are the other half of the
--- two-role split and not an afterthought: `billing_app` owns nothing, so a policy
--- is only half of what lets it through the door, and without these four grants it
--- is refused a PLAIN `select` on this table — with SQLSTATE 42501, the SAME code a
--- policy raises. A database missing the grants therefore looks exactly like one
--- with a working boundary, which is why the isolation suite asserts the grants
--- arrived rather than inferring them from a green denial.
---
--- The isolation suite is what found the omission: every policy was in place and
--- every denial was green, and the app role was refused `select … from customers`
--- for a reason that had nothing to do with the boundary.
+-- The REVOKE belongs with the policies — `protect_table` does the same thing, right
+-- after ENABLE and before its own `grant`s, so that "who can read this table" is
+-- not "whoever the last migration remembered". The GRANTS to `billing_app` are
+-- deliberately NOT here: every grant the app role holds lives in
+-- `db/tenancy/app_role.sql`, so "what can the running process reach" has one answer
+-- in one file — including the four tables the account boundary does not cover,
+-- which need grants too because a grant is what lets a role through the door at
+-- all. A missing one is refused with SQLSTATE 42501, the SAME code a policy raises,
+-- and the isolation suite asserts them rather than inferring them from a green
+-- denial: the suite is what found the omission when these four lines were the only
+-- ones that existed.
 revoke all on table customers from public;
-grant select, insert, update, delete on table customers to billing_app;
-grant usage on schema public to billing_app;
-grant usage on schema cafaye to billing_app;
 
 -- No `owner_id` index, unlike the two tables below. `protect_table` creates one
 -- because a policy is a filter on every candidate row, and this table already has

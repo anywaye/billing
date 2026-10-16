@@ -68,6 +68,12 @@ module Tenancy
         connection.execute("set local role #{OWNER_ROLE}")
         connection.execute(read("substrate.sql"))
         connection.execute(read("account_isolation.sql"))
+        # And the app role's door: the DML grants that let the role the application
+        # logs in as reach the tables at all — including the four the account
+        # boundary deliberately does not cover. A policy says which rows a role may
+        # see; a grant is what lets it through the door, and a missing one is
+        # refused with the same 42501 a policy raises. See `db/tenancy/app_role.sql`.
+        connection.execute(read("app_role.sql"))
 
         unprotected = connection.select_rows("select table_schema, table_name, why from cafaye.unprotected_tables()")
         next if unprotected.empty?

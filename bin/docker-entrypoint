@@ -14,11 +14,27 @@
 # runs migrations as a separate step, as the OWNER (kit's step 10, connected
 # via `postgres-role-billing`), and every other service's image is built so a
 # boot cannot touch the schema at all. A boot-time prepare is a Heroku-era
-# habit that only works when the app's role owns the database.
+# habit that only works when the app's role owns the database. identity's
+# compose states the rule and the reason: "the service must never migrate
+# itself at boot, so nothing the running process reads gives it the owner
+# role. A DSN that did would put the migration credential and the request
+# credential in the same environment, one variable away from each other."
 #
-# `BILLING_BOOT_PREPARE=1` keeps that habit for deployments where the app DOES
-# connect as the owner — the local compose stack, a developer's machine — and
-# is what such a deployment must set explicitly. It is not set on the box.
+# WHO MIGRATES INSTEAD, and neither path puts the owner DSN in the serving
+# process's environment:
+#
+#   * a compose stack runs the one-shot `billing-migrate` service
+#     (`docker-compose.yml`) before the app starts, and the app service's
+#     `depends_on: service_completed_successfully` is what sequences them;
+#   * a chart deployment runs it as an operator step against the box
+#     (`chart/README.md`, "Secrets").
+#
+# `BILLING_BOOT_PREPARE=1` keeps the old habit for a deployment whose app role
+# DOES own the database. The local compose stack is deliberately NOT one of
+# those any more: its app URL is `billing_app`, so this flag would fail there
+# exactly as it fails on the box — the first `CREATE TABLE` of a fresh database
+# is refused by a role that owns nothing — and `billing-migrate` is what the
+# stack uses instead. It is not set on the box.
 if [ "${BILLING_BOOT_PREPARE:-0}" = "1" ] && [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
   ./bin/rails db:prepare
 fi

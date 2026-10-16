@@ -385,8 +385,23 @@ env:
   # The live-Stripe packet — cassettes, the five-request replay, and both
   # invoice shapes: **1227 runs, 4001 assertions**, measured with no key in
   # the environment. Both floors in gate.yml moved with them.
-  BASELINE_RUNS: '1227'
-  BASELINE_ASSERTIONS: '4001'
+  #
+  # 1227 -> **1259 runs, 4191 assertions**, measured with `CI=true bundle exec
+  # rails test` (the environment this job runs in; the same tree without CI
+  # reports 1257/4177, because eager loading changes two tests' shape). The 32
+  # runs are two packets' worth and the number was stale for both of them
+  # before this one: the Postgres-boundary packet's isolation suite (+20) and
+  # the app-role packet's two tests (+2), plus ten runs a packet before them
+  # that this number never carried. Measured on master before this change:
+  #
+  #   $ CI=true bundle exec rails test        # at ec7f40c, the merge this branched from
+  #   1257 runs, 4177 assertions, 0 failures, 0 errors, 0 skips
+  #
+  # so the guard below would have failed the job on a green suite. It is
+  # raised to the measured number here, which is the same rule the comment
+  # above states.
+  BASELINE_RUNS: '1259'
+  BASELINE_ASSERTIONS: '4191'
 
 jobs:
   # ------------------------------------------------------------------ shared
@@ -776,6 +791,19 @@ jobs:
         # assertion in `test/tenancy/database_isolation_test.rb` pass for the reason
         # that makes them worthless, and that suite asserts the same two facts from
         # inside — this is the half that fails in the place the mistake was made.
+        #
+        # WHICH ROLE THE GATE ITSELF RUNS AS, since the task this step belongs to is
+        # about roles and this is the honest statement of it: `bin/prime` connects as
+        # the `postgres` superuser, which is this job's database OWNER, so
+        # `db:prepare` runs as the owner (DDL, migrations, the boundary install) —
+        # the same half of the split production runs its migrate Job with. The
+        # SUITE cannot run as the app role without rewriting `test/tenant/**`
+        # (cross-account fixtures and `User`-owned customers are writes the policies
+        # refuse, and those tests are the application-level proof this packet must
+        # not touch), so the app-role posture is proven by the two steps below
+        # instead: the boundary tier drives every request path under `set local role
+        # billing_app`, and the app-boot step runs the real server with the app role
+        # as its pool.
         env:
           PGPASSWORD: postgres
         run: |
@@ -895,6 +923,123 @@ jobs:
             exit 1
           fi
           echo "::notice::$runs runs, $assertions assertions, nothing skipped — master's baseline exactly"
+
+      - name: tier — the database boundary, as billing and as billing_app (22 tests)
+        # THE TIER THIS PACKET EXISTS FOR, and it is a tier rather than part of the
+        # whole-suite count for the reason the observability tier is one: the thing
+        # it proves is invisible from outside the suite. Every assertion in it runs
+        # under `set local role` — `billing`, the owner, and `billing_app`, the login
+        # role the application's pool now uses — and a CI runner where the two roles
+        # were missing, or where the grants had not arrived, would otherwise produce
+        # a green whole suite in which the boundary was never exercised as the roles
+        # that are bound by it.
+        #
+        # Equality, not a floor, and zero skips, for the same reasons as every other
+        # tier here.
+        shell: bash
+        env:
+          LOG: ${{ runner.temp }}/boundary.log
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/boundary.log"
+          status=0
+          bin/rails test test/tenancy 2>&1 | tee "$log" || status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "::error::the boundary tier exited $status" >&2
+            exit "$status"
+          fi
+          pattern='[0-9]+ runs, [0-9]+ assertions,'
+          pattern="$pattern"' [0-9]+ failures, [0-9]+ errors, [0-9]+ skips'
+          summary="$(grep -oE "$pattern" "$log" | tail -1)"
+          if [ -z "$summary" ]; then
+            echo "::error::no minitest summary in the boundary log; the guard read nothing." >&2
+            exit 1
+          fi
+          read -r runs _r assertions _a failures _f errors _e skips _s <<< "$summary"
+          runs=${1%;}; assertions=${3%,}; failures=${5%,}; errors=${7%,}; skips=${9%,}
+          echo "$summary"
+          if [ "$skips" != 0 ]; then
+            echo "::error::$skips test(s) skipped in the boundary tier. A skipped denial is" >&2
+            echo "  a boundary nobody proved: name them with --verbose." >&2
+            exit 1
+          fi
+          if [ "$failures" != 0 ] || [ "$errors" != 0 ]; then
+            echo "::error::$failures failure(s), $errors error(s) in the boundary tier." >&2
+            exit 1
+          fi
+          if [ "$runs" != "22" ] || [ "$assertions" != "146" ]; then
+            echo "::error::the boundary tier ran $runs/$assertions; this file says 22/146." >&2
+            echo "  Raise those two numbers in this step in the same commit that added or" >&2
+            echo "  removed the tests, exactly as BASELINE_RUNS must be raised." >&2
+            exit 1
+          fi
+          echo "::notice::22 runs, 146 assertions, 0 skips — the boundary was exercised as both roles"
+
+      - name: the app serves as billing_app — readiness, and a signed webhook
+        # THE ONE FACT NO TEST IN THIS JOB CAN ESTABLISH, because the suite's own
+        # connection is the environment's role: "the application's POOL is the login
+        # role". `set local role billing_app` is the suite pretending, and a
+        # deployment is a process whose DSN names the role. So this step starts the
+        # real server with the app URL and asks it for what a deploy asks for.
+        #
+        # THE WEBHOOK IS THE SHARPEST OF THE THREE REQUESTS: it is the one path that
+        # writes a table the account boundary does not cover
+        # (`processor_webhooks`), which is precisely what was refused before the app
+        # role's grants existed — measured then, on the development database:
+        #
+        #   ERROR:  permission denied for table processor_webhooks
+        #
+        # The secret is GENERATED here and never written anywhere: the signature is
+        # the only credential this endpoint has, and a CI log is a bad place for one.
+        shell: bash
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgres://billing_app@localhost:5432/billing_ci_${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          export STRIPE_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+          ./bin/rails server -p 3001 > "$RUNNER_TEMP/server.log" 2>&1 &
+          server=$!
+          trap 'kill $server 2>/dev/null || true' EXIT
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/healthz > /dev/null 2>&1; then break; fi
+            if ! kill -0 $server 2>/dev/null; then
+              echo "::error::the server exited before answering /healthz" >&2
+              tail -30 "$RUNNER_TEMP/server.log" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3001/healthz > /dev/null
+          curl -fsS http://127.0.0.1:3001/readyz > /dev/null
+          echo "::notice::/healthz and /readyz answered"
+
+          usename="$(psql -h localhost -U postgres -d postgres -tAc \
+            "select distinct usename from pg_stat_activity where datname = 'billing_ci_${{ github.run_id }}'")"
+          echo "connections to this database: $usename"
+          if [ "$usename" != "billing_app" ]; then
+            echo "::error::the application's connection is \"$usename\", not billing_app" >&2
+            exit 1
+          fi
+
+          body="$(cat test/fixtures/stripe/ping.json)"
+          ts="$(date +%s)"
+          sig="$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$STRIPE_WEBHOOK_SECRET" -r | cut -d' ' -f1)"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3001/v1/webhooks/stripe \
+            -H 'Content-Type: application/json' -H "Stripe-Signature: t=$ts,v1=$sig" --data-binary "$body")"
+          if [ "$code" != "200" ]; then
+            echo "::error::the signed webhook answered $code, not 200" >&2
+            tail -30 "$RUNNER_TEMP/server.log" >&2
+            exit 1
+          fi
+          receipts="$(psql -h localhost -U postgres -d "billing_ci_${{ github.run_id }}" -tAc \
+            "select count(*) from processor_webhooks")"
+          if [ "$receipts" != "1" ]; then
+            echo "::error::the delivery wrote $receipts receipt row(s), not 1 — the app role cannot" >&2
+            echo "  write processor_webhooks, which is the table the boundary does not cover." >&2
+            exit 1
+          fi
+          echo "::notice::a signed delivery was accepted and its receipt written, as billing_app"
 
       - name: tier — the observability tier, the redaction boundary (48 tests)
         # THE TIER THIS PACKET EXISTS FOR, and it is a tier rather than part of the
