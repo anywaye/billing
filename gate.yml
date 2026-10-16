@@ -429,7 +429,17 @@ gate:
       # 1219 -> 1227 is the live-Stripe packet: cassettes and replay for the
       # five client requests (5) and both live invoice shapes (3). Measured
       # **1227 runs / 4001 assertions** with `STRIPE_API_KEY` unset.
-      minimum: 1227
+      # 1227 -> **1259 runs / 4191 assertions**, measured with `CI=true bundle
+      # exec rails test` on the merged tree, and the raise is also a repair: this
+      # floor and CI's `BASELINE_RUNS` had both gone stale by 32 runs (the
+      # Postgres-boundary packet's isolation suite, the app-role packet's two
+      # tests, and ten runs a packet before them), which is the "every packet
+      # that lands invalidates a floor silently" shape the paragraph above
+      # records — measured on master before the raise:
+      #
+      #   $ CI=true bundle exec rails test
+      #   1257 runs, 4177 assertions, 0 failures, 0 errors, 0 skips
+      minimum: 1259
     # ---------------------------------------------------------------------
     # The gate reached its own last line. With the five above it, the step
     # markers bracket the run: the toolchain was pinned, the bundle resolved, a
