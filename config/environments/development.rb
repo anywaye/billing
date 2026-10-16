@@ -66,16 +66,28 @@ Rails.application.configure do
   # config.action_cable.disable_request_forgery_protection = true
 
   # THE HOST A CONTAINER REACHES A HOST-RUN BILLING BY, and the line is
-  # measured rather than anticipated. The whole-stack walk (2026-10-16) runs
-  # billing from source on the host beside the launch stack, and parlor — in
-  # its container, with `BILLING_URL=http://host.docker.internal:3000` — was
-  # refused by Rails' host authorization before the app saw the request:
-  # "Blocked hosts: host.docker.internal:3000". Rails allows `localhost` in
-  # development, and this is a different name for the same loopback, so the
-  # allowlist gains exactly that one name. It is development-only and cannot
-  # narrow anything: the alternative a deployment might reach for, disabling
-  # host authorization outright, is the blanket version of this line.
-  config.hosts << "host.docker.internal"
+  # THE TWO NAMES A CALLER USES, and both were measured rather than
+  # anticipated — one in each of the two shapes a caller can arrive in:
+  #
+  # * `host.docker.internal` — billing from source on the HOST beside the
+  #   launch stack, with parlor in its container dialing
+  #   `BILLING_URL=http://host.docker.internal:3000`. The walk of 2026-10-16
+  #   was refused by Rails' host authorization before the app saw the request:
+  #   "Blocked hosts: host.docker.internal:3000". Rails allows `localhost` in
+  #   development, and this is a different name for the same loopback.
+  # * `billing` — billing IN the launch stack as the fifth service, whose
+  #   neighbouring parlor dials `BILLING_URL=http://billing:3000` by compose
+  #   service name. Measured on the launch bring-up of 2026-10-16: billing
+  #   answered `200` inside its own container, its runner answered 200 on the
+  #   loopback, and the neighbouring forwarder's request earned
+  #   "Blocked hosts: billing:3000" — the service name is a host header the
+  #   app does not know, exactly as host.docker.internal was.
+  #
+  # Both are development-only and neither can narrow anything: an operator
+  # who wants a stricter list still sets `config.hosts` themselves, and the
+  # alternative a deployment might reach for — disabling host authorization
+  # outright — is the blanket version of these two lines.
+  config.hosts.concat([ "host.docker.internal", "billing" ])
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true

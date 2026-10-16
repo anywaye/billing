@@ -241,6 +241,17 @@ services:
     environment:
       RAILS_ENV: development
       PORT: "3000"
+      # THE BIND, and why it is an environment line rather than a line in
+      # config/puma.rb: `railties`' server command defaults the host to
+      # `localhost` in development, reads `BINDING` to override it, and hands
+      # Puma its own `-b` on the COMMAND LINE — which wins over anything the
+      # config file says. A container has no loopback a request from outside
+      # it can reach, so without this the published `3000:3000` maps to a
+      # listener nothing outside the container answers for: the stack came up
+      # `healthy`, rails' own runner answered 200 inside, and the host's curl
+      # earned `Connection reset by peer`. See the paragraph in config/puma.rb
+      # for why the fix is here and not there.
+      BINDING: "0.0.0.0"
       # Over the compose network, by service name. The host mapping above is for the
       # developer and the host-side suite.
       #
