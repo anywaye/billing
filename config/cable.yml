@@ -8,12 +8,16 @@ development:
 test:
   adapter: test
 
+# THE CACHE, QUEUE AND CABLE TRIO ARE IN-PROCESS HERE, and the reason is the
+# same for all three: this build uses none of them, and the stock SOLID block
+# points each at a database of its own — the four-database shape the
+# substrate does not provision. Measured on the box (2026-10-16): pods now
+# boot but die with "The `cable` database is not configured for the
+# `production` environment", raised while resolving the reader connection
+# for a stream this API-only build never opens.
+#
+# Async is correct rather than merely convenient at one replica and zero
+# streams. The first real broadcast brings its own decision — and, with it,
+# its own table and grant.
 production:
-  adapter: solid_cable
-  connects_to:
-    database:
-      writing: cable
-  polling_interval: 0.1.seconds
-  message_retention: 1.day
-  writer_batch_size: 4
-  writer_batch_delay: 0.001.seconds
+  adapter: async

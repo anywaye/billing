@@ -12,5 +12,11 @@ test:
   <<: *default
 
 production:
-  database: cache
+  # The PRIMARY connection, not a database of its own: the substrate
+  # provisions one database per service, and this build does not use
+  # the component (cache_store is :memory_store, the job adapter is
+  # :async) — the config must merely RESOLVE, and resolving to a
+  # database that does not exist is a boot error (measured on the
+  # box, 2026-10-16: "The `cache` database is not configured").
+  database: primary
   <<: *default
