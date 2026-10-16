@@ -194,6 +194,71 @@ class V1CheckoutsTest < ActionDispatch::IntegrationTest
     assert_response :conflict
   end
 
+  # --- the development loop, after the door has completed ----------------------
+  #
+  # What the walk on the whole stack (2026-10-16) found after this door: the
+  # subscription completes, and then every management action asked STRIPE about
+  # a subscription Stripe never held — "has no upcoming invoice at the payment
+  # processor" for a projection the fake could have answered, and the same
+  # translation for a cancel. Two answers here, and each is the honest one: the
+  # projection comes from the fake's own books, and the verbs the fake does not
+  # have are refused by name, saying which processor holds the row.
+
+  test "the projection comes from the fake's own books and never reaches for Stripe" do
+    # A real double on the Stripe seat, so "the fake answered it" is measured
+    # rather than assumed: the request the real client would have asked for is
+    # absent, and the response is the fake's own projection of the plan the
+    # door sold.
+    @api = FakeStripeAPI.new
+    @previous_processor = Processor::StripeClient.current
+    Processor::StripeClient.current = Processor::StripeClient.new(api_key: "sk_test", api: @api)
+
+    post "/v1/checkouts", params: { customer_id: @customer.id, plan_id: @plan.id }, as: :json
+    assert_response :created
+    subscription = Subscription.sole
+
+    get "/v1/subscriptions/#{subscription.id}/upcoming_invoice"
+
+    assert_response :ok
+    assert_equal 1_900, json_body.fetch("subtotal")
+    assert_empty @api.requests, "the fake's own subscription must not be asked of the real processor"
+  ensure
+    Processor::StripeClient.current = @previous_processor
+  end
+
+  test "cancel is refused by name, naming the processor that holds the row" do
+    post "/v1/checkouts", params: { customer_id: @customer.id, plan_id: @plan.id }, as: :json
+    subscription = Subscription.sole
+
+    post "/v1/subscriptions/#{subscription.id}/cancel", params: { at_period_end: true }, as: :json
+
+    assert_response :unprocessable_entity
+    assert_includes problem_fields, "subscription_id"
+    assert_match(/development processor/, json_body.fetch("detail"))
+  end
+
+  test "a plan change is refused by name on the same terms" do
+    post "/v1/checkouts", params: { customer_id: @customer.id, plan_id: @plan.id }, as: :json
+    subscription = Subscription.sole
+    other_plan = create_stripe_plan(price: Money.new(4900, "USD"))
+
+    post "/v1/subscriptions/#{subscription.id}/change_plan", params: { plan_id: other_plan.id }, as: :json
+
+    assert_response :unprocessable_entity
+    assert_includes problem_fields, "subscription_id"
+  end
+
+  test "the portal is refused by name too: a card form is the processor's" do
+    post "/v1/checkouts", params: { customer_id: @customer.id, plan_id: @plan.id }, as: :json
+    subscription = Subscription.sole
+
+    post "/v1/subscriptions/#{subscription.id}/payment_method",
+      params: { return_url: "https://app.cafaye.com/billing" }, as: :json
+
+    assert_response :unprocessable_entity
+    assert_includes problem_fields, "subscription_id"
+  end
+
   private
     # Production and the door disabled, for the duration of the block, and the
     # previous values back afterwards — including "was not set at all", which

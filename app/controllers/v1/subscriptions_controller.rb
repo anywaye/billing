@@ -89,7 +89,7 @@ module V1
       # client sent no plan, and the refusal is about the subscription's state
       # at the processor, so the field names the one thing the client did send.
       invoice = ask_processor(field: "subscription_id", message: "has no upcoming invoice at the payment processor") do
-        processor.upcoming_invoice(
+        processor_for(subscription).upcoming_invoice(
           processor_subscription_id: subscription.processor_subscription_id,
           processor_customer_id: subscription.customer.processor_customer_id
         )
@@ -144,11 +144,13 @@ module V1
     # the same validator.
     def payment_method
       subscription = subscription_record
+      guard_owned_by_the_real_processor!(subscription)
+      return render_refusals if refused?
       return_url = return_url(:return_url)
       return render_refusals if refused?
 
       url = ask_processor(field: "subscription_id", message: "has no portal session at the payment processor") do
-        processor.billing_portal_url(
+        processor_for(subscription).billing_portal_url(
           processor_customer_id: subscription.customer.processor_customer_id,
           return_url: return_url
         )
@@ -166,6 +168,7 @@ module V1
       subscription = subscription_record
       at_period_end = at_period_end_param
       guard_cancellable!(subscription, at_period_end)
+      guard_owned_by_the_real_processor!(subscription)
       return render_refusals if refused?
       return if performed?
 
@@ -190,6 +193,7 @@ module V1
       subscription = subscription_record
       target = sellable_plan
       guard_changeable!(subscription)
+      guard_owned_by_the_real_processor!(subscription)
       return render_refusals if refused?
       return if performed?
 
@@ -499,6 +503,47 @@ module V1
       # `Plan#price` is a `Money` and `Money#to_h` is the crossing shape.
       def serialize(subscription)
         subscription.as_json.merge("price" => subscription.plan.price.to_h)
+      end
+
+      # THE PROCESSOR THAT OWNS THIS ROW, resolved per row rather than per
+      # request, and the reason is a defect this service has already had: asking
+      # the wrong processor produces the processor's error for a subscription
+      # that processor never held. The walk's own fake-door subscription
+      # answered "has no upcoming invoice at the payment processor", when the
+      # truth was that the FAKE held it and Stripe knew nothing.
+      #
+      # The marker is the processor's own id prefix
+      # (`Processor::FakeClient::SUBSCRIPTION_PREFIX`), not a column: a second
+      # place for "who holds this row" to live is a second thing to disagree.
+      def processor_for(subscription)
+        return Processor::FakeClient.new if Processor::FakeClient.owns?(subscription.processor_subscription_id)
+
+        processor
+      end
+
+      # THE VERBS THE DEVELOPMENT PROCESSOR DOES NOT HAVE, refused here rather
+      # than at a real one.
+      #
+      # The fake answers two things — its own checkout, which completes now by
+      # design, and the projection of a renewal it was sold a price book for.
+      # It has no portal (a card form is the processor's, and the fake holds no
+      # cards) and no cancel or change: both are state changes only a
+      # processor's webhook can state, and the fake's own class comment is
+      # explicit that it must not become a pretend Stripe, because a pretend
+      # Stripe is eventually invoked by something that believes it.
+      #
+      # So these verbs on a fake subscription are refused BY NAME, saying which
+      # processor holds and why, instead of going to Stripe and coming back
+      # translated into a processor's error for a subscription Stripe never saw.
+      def guard_owned_by_the_real_processor!(subscription)
+        return unless Processor::FakeClient.owns?(subscription.processor_subscription_id)
+
+        refuse(
+          :validation_failed,
+          "subscription_id",
+          "is held by the development processor, which cannot manage a subscription: " \
+          "cancel, change and the portal belong to a real one"
+        )
       end
 
       def refuse(code, field, message)

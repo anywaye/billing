@@ -451,8 +451,15 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # The projection is a READ of the processor — it asks for a figure and
     # changes nothing — so it is classified as one, and the pattern that
     # otherwise catches every processor call is extended to catch it.
-    [ "read",   /\bprocessor\.upcoming_invoice\(/ ],
-    [ "update", /\bprocessor\.billing_portal_url\(/ ]
+    #
+    # `processor_for(...)` is the row-addressed dispatch (the processor that
+    # OWNS the row answers, so a fake-door subscription is answered by the fake
+    # and not by Stripe) — either receiver is caught, because the KIND of the
+    # question is the same whether the receiver was resolved per row or per
+    # request, and a pattern that stopped matching would silently retire the
+    # classification instead of questioning it.
+    [ "read",   /\bprocessor(?:_for\([^)]*\))?\.upcoming_invoice\(/ ],
+    [ "update", /\bprocessor(?:_for\([^)]*\))?\.billing_portal_url\(/ ]
   ].freeze
 
   # The patterns that only count **on a tenant model**. `scope` is one of them,

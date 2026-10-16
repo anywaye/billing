@@ -46,6 +46,25 @@ module Processor
     # unrelated bug.
     class Error < ::Processor::Error; end
 
+    # The prefix of every subscription id this processor mints, and the one
+    # way a caller can tell whose a subscription is without a column for it.
+    #
+    # The symlink is real rather than clever: the fleet's test support already
+    # spells this prefix out as "the marker" (`test/support/two_accounts.rb`:
+    # "`FAKE` is in the prefix of every processor id"), and a caller that needs
+    # to know which processor owns a row needs the same marker the specs have
+    # been reading for a year. `owns?` is that question, asked once.
+    #
+    # There is no `processor` column on `subscriptions`: what the fake writes
+    # is its own id, and a column would be a second place for the two to
+    # disagree about which processor holds a row.
+    SUBSCRIPTION_PREFIX = "sub_FAKE"
+
+    # Whether the subscription under this processor's own id is one it minted.
+    def self.owns?(processor_subscription_id)
+      processor_subscription_id.to_s.start_with?(SUBSCRIPTION_PREFIX)
+    end
+
     # What `subscribe` answers. A frozen value object rather than an Active
     # Record row: the old `Pay::Subscription` was a database row, and a row is
     # a second writer of state this service does not own.
@@ -172,7 +191,7 @@ module Processor
       trial_ends_at = trial_days.positive? ? created_at + trial_days.days : nil
 
       subscription = ProcessorSubscription.new(
-        processor_id: "sub_FAKE#{SecureRandom.hex(12)}",
+        processor_id: "#{SUBSCRIPTION_PREFIX}#{SecureRandom.hex(12)}",
         processor_plan: price_id,
         quantity: Integer(quantity),
         status: (trial_ends_at.present? ? "trialing" : "active"),
