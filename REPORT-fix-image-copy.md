@@ -186,6 +186,25 @@ No `app/` code, no test, no `Gemfile`, no lockfile, no floor changed. The
 vendored gem was **not** deleted and the Gemfile's `path: "vendor/cafaye"` pin was
 **not** touched — the fix is the COPY, as briefed.
 
+## One thing the manager should know: a pre-existing CI floor drift
+
+`.github/workflows/ci.yml`'s `gate` job asserts the suite size **by equality**
+(`BASELINE_RUNS: '1227'`, `BASELINE_ASSERTIONS: '4001'`), and this branch's suite
+is **`1231 / 4026`** — the same number the branch tip `4ad01be` reports in its own
+commit message (`1231 runs, 4026 assertions, 0 failures`). So the drift predates
+this packet: `4ad01be` changed `test/requests/v1/subscriptions_test.rb` and
+`test/contract/http_surface_contract_test.rb` and did not raise the floor, and the
+last commit to touch `ci.yml` is `9e293a8`.
+
+This packet adds **no tests** (it changes only the `Dockerfile`, the `CHANGELOG`
+and this report), so it neither causes nor can honestly resolve that drift, and
+the brief reserves floor changes to the repo's writer. **Left untouched, recorded
+here.** It does not affect the packet's done-condition: `bin/prime` is green, the
+image builds, and `publish.yml` triggers on a push to `master` independently of
+`ci.yml`. If the manager wants `ci.yml`'s `gate` green before the push,
+`BASELINE_RUNS`/`BASELINE_ASSERTIONS` go to `'1231'`/`'4026'` — but that is
+`4ad01be`'s author's call, not this packet's.
+
 ## Handoff / what is left
 
 Nothing for the next worker. The packet's done-condition is met: `docker build .`
