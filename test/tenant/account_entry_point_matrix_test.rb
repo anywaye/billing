@@ -340,6 +340,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     "app/controllers/concerns/authenticates_principal.rb" => "the `/v1` boundary: it reads a bearer token and renders a refusal, and it reaches no tenant row on either path",
     "app/lib/principal.rb" => "the verified caller as a value; it holds an account id and reads no model",
     "app/services/identity.rb" => "the identity namespace and its three refusal classes; it holds no query",
+    "app/services/courier/type_registrar.rb" => "registers billing's notification types in courier over HTTP; it holds no row in this database",
     "app/services/identity/token_verifier.rb" => "verifies a signature against identity's published key set, which is not this service's data",
     "app/controllers/concerns/idempotent_requests.rb" => "replays a response this service already sent, keyed on the request's own idempotency key",
     "app/controllers/concerns/problem_responses.rb" => "renders problem documents for a status a controller chose",
