@@ -33,12 +33,12 @@ class ChartDeployTest < ActiveSupport::TestCase
   # --- the seam between the chart and the substrate ---------------------------
 
   # The two facts the substrate pins, and the two this chart must carry: the
-  # `Application` names `chart: billing` and `targetRevision: 0.1.1`. A chart
+  # `Application` names `chart: billing` and `targetRevision: 0.1.2`. A chart
   # version that moves without the Application moving is a service that never
   # deploys — the OCI tag IS the chart version.
   test "chart name and version are what the substrate's Application pulls" do
     assert_equal "billing", @chart.fetch("name")
-    assert_equal "0.1.1", @chart.fetch("version")
+    assert_equal "0.1.2", @chart.fetch("version")
   end
 
   # Readiness, and the fleet's contract: the rollout waits on `/readyz`, which

@@ -47,3 +47,5 @@
 # Their files are another branch's working copies, not this tree's: untracked
 # here, invisible to `git add -A`, and never committed by accident.
 wt/
+keyring/
+secrets/

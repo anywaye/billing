@@ -347,6 +347,17 @@ dependencies:
   - name: identity
     required: true
 
+env:
+  - name: PORT
+    required: false
+    secret: false
+    description: "Listen port."
+  - name: DATABASE_URL
+    required: true
+    secret: true
+    dev_default: "auto"
+    description: "Postgres DSN."
+
 repository:
   url: git@github.com:cafaye/billing.git
   defaultBranch: master
