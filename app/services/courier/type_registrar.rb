@@ -73,7 +73,7 @@ module Courier
 
     def self.register_all!
       url = ENV.fetch("COURIER_URL")
-      token = ENV.fetch("COURIER_SERVICE_TOKEN")
+      token = ENV.fetch("COURIER_API_TOKEN")
 
       TYPES.each do |type_def|
         register_one!(url, token, type_def)
