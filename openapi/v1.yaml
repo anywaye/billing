@@ -177,7 +177,7 @@ info:
     name: billing
     email: billing@cafaye.com
 servers:
-  - url: https://billing.cafaye.com
+  - url: https://api.cafaye.com
     description: Production
   - url: http://localhost:3000
     description: Local
