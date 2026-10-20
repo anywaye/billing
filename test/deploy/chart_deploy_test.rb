@@ -25,7 +25,7 @@ require "test_helper"
 class ChartDeployTest < ActiveSupport::TestCase
   setup do
     @chart = YAML.safe_load_file(Rails.root.join("chart/Chart.yaml"))
-    @workflow = File.read(Rails.root.join(".github/workflows/publish.yml"))
+    @workflow = File.read(Rails.root.join("ci/publish.yml"))
     @deployment = File.read(Rails.root.join("chart/templates/deployment.yaml"))
     @values = YAML.safe_load_file(Rails.root.join("chart/values.yaml"))
   end
@@ -82,7 +82,7 @@ class ChartDeployTest < ActiveSupport::TestCase
   # One composition, and it is kit's: a caller that inlines the steps has
   # forked it, and the fork is the drift kit exists to prevent.
   test "the publish caller is kit's composed workflow, and nothing inlined" do
-    assert_includes @workflow, "uses: cafaye/kit/.github/workflows/publish.reusable.yml@master"
+    assert_includes @workflow, "uses: cafaye/kit/ci/publish.reusable.yml@master"
     refute_includes @workflow, "helm package", "the composition is kit's; a caller that packages has forked it"
   end
 

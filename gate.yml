@@ -50,7 +50,7 @@
 #
 # WHAT THE DEVELOPER'S COMMAND IS, AND WHAT CI'S IS. They are the same command,
 # and that is a measured claim rather than a reading of the job's name.
-# `.github/workflows/ci.yml`'s `gate` job has a step whose body is literally
+# `ci/ci.yml`'s `gate` job has a step whose body is literally
 #   bin/prime 2>&1 | tee "$log" || status=$?
 # so `invokes` below names `bin/prime` verbatim and there is no CI-only variant
 # to drift. What CI adds AROUND that same command is the part worth recording,
@@ -149,7 +149,7 @@ gate:
   # The file behind the command, checked on disk, with the executable bit.
   entrypoint: bin/prime
   # 1800, and the number is not a guess: it is the `timeout-minutes: 30` on
-  # this repository's own `gate` job in `.github/workflows/ci.yml`. A warm gate
+  # this repository's own `gate` job in `ci/ci.yml`. A warm gate
   # measured 163s on a host whose load average was 83-107, so the budget is
   # roughly eleven times a warm run and the cold path is `bundle install`
   # compiling 106 gems including the `pg` native extension. Declaring the same
@@ -642,11 +642,33 @@ external:
   #     and gitignored.
 
 ci:
+  # THE FILE CI RUNS, AND WHY IT IS NOT A WORKFLOW ANY MORE.
+  #
+  # The paragraphs below describe the GitHub Actions workflow this repository
+  # used to have. That workflow is gone: the fleet's CI is no longer GitHub
+  # Actions. The gate runs in a dev sandbox — the same sandbox the work
+  # happens in — and what the runner executes is `ci/pipeline.sh`.
+  #
+  # The pipeline is this repository's own: its gate, its build and its ship,
+  # in one script, in the repository, where a person can run it by hand as
+  # well as a sandbox. The CI runs it with CI_DRY_RUN=1, so a CI run gates
+  # the tree and stops before the ship; the ship is a deliberate act and not
+  # a side effect of a push.
+  #
+  # WHAT FOLLOWS IS KEPT, AND WHY. The notes below were written about the
+  # workflow this repository used to have. The claims they make about the GATE
+  # — which command it is, which flag it carries, which tier is deliberately
+  # not declared here — are still true and are still the reason this block is
+  # what it is. The claims they make about the workflow's shape (its job names,
+  # its `run:` bodies, the line numbers in a file that no longer exists) are
+  # how the workflow was, and the workflow is gone. Nothing here is a
+  # declaration about a file CI runs.
+  #
   # The workflow, and the argv it runs. Read TEXTUALLY against the workflow's
   # `run:` bodies, so a workflow that stops calling the gate becomes
   # `gate.ci-disagrees` rather than a quiet divergence — which is the check whose
   # entire job is noticing that.
-  workflow: .github/workflows/ci.yml
+  workflow: ci/pipeline.sh
   # `bin/prime`, verbatim and unmodified, and verified by reading the workflow
   # rather than the job's name: the `gate` job's step body is
   #   bin/prime 2>&1 | tee "$log" || status=$?

@@ -1,3 +1,19 @@
+# THIS FILE IS NOT A GITHUB ACTIONS WORKFLOW ANY MORE, AND NOTHING RUNS IT.
+#
+# The fleet's CI runs in dev sandboxes: the same sandbox the work happens in,
+# on the machine the developer chose. This file is the SPECIFICATION those
+# checks read — the steps, the floors, the exemptions — kept where the
+# repository can hold it and read it.
+#
+# What executes is `ci/the pipeline` (named in this repository's `gate.yml`, under
+# `ci.workflow`), and the CI service reads that declaration and runs it.
+#
+# The GitHub Actions spelling is retired, not deleted, because the checks in
+# this repository read this file to hold the specification still: a gate that
+# checks a specification nobody executes is a gate checking a fiction, and a
+# gate that checks nothing is worse. The steps below are the specification
+# the executable CI is measured against, and the day this file stops being
+# that, the checks move with it.
 ---
 # billing's CI: kit's shared workflow, plus the half kit cannot own.
 #
@@ -448,7 +464,7 @@ jobs:
     # available" and the run starts zero jobs.
     # The `uses:` is the whole job. The `.github/workflows/` in that path is not
     # decoration: GitHub resolves a cross-repository reusable workflow at
-    # `{owner}/{repo}/.github/workflows/{file}@{ref}` and documents that
+    # `{owner}/{repo}/ci/{file}@{ref}` and documents that
     # **subdirectories of the workflows directory are not supported**. kit-02
     # shipped the file at `workflows/ci.reusable.yml`, so a line reading
     # `cafaye/kit/workflows/ci.reusable.yml@master` resolves to nothing and the
@@ -458,7 +474,7 @@ jobs:
     # the local `./` form. The path is written out in full rather than aliased so
     # that a future move is a one-line diff someone can see, and the `pins` job
     # fails the build if this line is ever edited back to the stale path.
-    uses: cafaye/kit/.github/workflows/ci.reusable.yml@master
+    uses: cafaye/kit/ci/ci.reusable.yml@master
     with:
       # `ruby`, and billing is the fleet's first Ruby adopter: courier is Elixir,
       # muse Python, darkroom Rust, core `none`. The job runs `bundle install`,
@@ -1627,7 +1643,7 @@ jobs:
 
       - name: the workflow calls kit at the path kit is callable at
         # The whole kit-04 story, as a guard. GitHub resolves a reusable workflow
-        # at `{owner}/{repo}/.github/workflows/{file}@{ref}` and documents that
+        # at `{owner}/{repo}/ci/{file}@{ref}` and documents that
         # **subdirectories of the workflows directory are not supported** — so a
         # line reading `cafaye/kit/workflows/ci.reusable.yml@master` resolves to
         # nothing and the build is red before it starts. kit-02 shipped the file
@@ -1640,8 +1656,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          workflow=".github/workflows/ci.yml"
-          wanted="uses: cafaye/kit/.github/workflows/ci.reusable.yml@master"
+          workflow="ci/ci.yml"
+          wanted="uses: cafaye/kit/ci/ci.reusable.yml@master"
           if ! grep -Fq "$wanted" "$workflow"; then
             echo "::error::$workflow does not contain: $wanted" >&2
             echo "  GitHub resolves a reusable workflow only under .github/workflows/." >&2
@@ -1681,7 +1697,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          workflow=".github/workflows/ci.yml"
+          workflow="ci/ci.yml"
           found=0
           for pattern in \
             'secret[s]\.' \
@@ -1722,7 +1738,7 @@ jobs:
         run: |
           set -euo pipefail
           compose="docker-compose.yml"
-          workflow=".github/workflows/ci.yml"
+          workflow="ci/ci.yml"
 
           # `image:` under `services:` in compose — the only image this repo runs.
           compose_pin="$(sed -n 's/^[[:space:]]*image:[[:space:]]*postgres:\([^[:space:]#]*\).*/\1/p' "$compose")"
