@@ -61,7 +61,7 @@ gem "sentry-rails", "~> 5.24"
 # Stripe surface was never pay's — it is `Processor::StripeClient`, three
 # methods — and a second processor arriving is a `Processor::PaddleClient`
 # with the same shape, not a gem that owns its own schema. See
-# `REPORT-billing-fake-client-01.md` for the exit.
+# `REPORT-billing-fake-client-01` for the exit.
 
 # The transactional outbox substrate, from the fleet's shared gem `cafaye-rb`.
 #
