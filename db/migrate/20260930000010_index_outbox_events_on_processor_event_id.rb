@@ -71,7 +71,7 @@
 # index for that reason: `Webhooks::Ingestion` classifies a uniqueness failure
 # and a unique-index violation as the same decision, because which one a thread
 # hears is a scheduling accident. `test/services/webhooks/
-# concurrent_delivery_test.rb` exercises both routes, and `REPORT-billing-09.md`
+# concurrent_delivery_test.rb` exercises both routes, and `REPORT-billing-09`
 # records the measurement.
 #
 # Reversible: `add_index` in a `change` rolls back to `remove_index`, and

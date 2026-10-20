@@ -314,7 +314,7 @@ module Webhooks
     #
     # courier — the consumer that would mail a receipt for a settled charge and a
     # warning for a failed one — has no billing client and no billing tables
-    # (REPORT-courier-consumer-invite-01.md §2.6: a consumer acts on the envelope
+    # (REPORT-courier-consumer-invite-01 §2.6: a consumer acts on the envelope
     # or refuses, and never looks up). An event with no address on it is an event
     # that is dropped, so every money event was a dead letter for the one consumer
     # that needed it. The parallel fix already exists on the identity side:

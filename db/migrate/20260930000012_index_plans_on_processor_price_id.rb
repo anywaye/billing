@@ -20,7 +20,7 @@
 # This one is a correctness defect rather than a tenancy one — a plan is
 # catalogue, and the catalogue is shared on purpose — and the consequence is
 # still the same shape. This is finding F3 in
-# `REPORT-billing-12-isolation.md`.
+# `REPORT-billing-12-isolation`.
 #
 # ## Partial, and why
 #
@@ -40,7 +40,7 @@
 #
 # A unique index cannot be created over data that already violates it, so a
 # deployed `plans` table holding two plans on one `price_` has to have them
-# resolved before this migration can be applied. `REPORT-billing-13-fixes.md`
+# resolved before this migration can be applied. `REPORT-billing-13-fixes`
 # names it as a deploy step rather than pretending the migration is safe to run
 # on a table that already has the defect.
 #

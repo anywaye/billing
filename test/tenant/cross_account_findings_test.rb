@@ -10,7 +10,7 @@ require "test_helper"
 # and said in its own failure message that landing the fix should turn it red with
 # an instruction to delete it. That was the right shape for a packet that reports
 # findings, and it is why every one of them went red the moment
-# `REPORT-billing-13-fixes.md`'s work landed.
+# `REPORT-billing-13-fixes`'s work landed.
 #
 # They are **replaced rather than deleted**, and they are the same tests: the same
 # two accounts from `test/support/two_accounts.rb`, the same
@@ -321,7 +321,7 @@ class TenantCrossAccountFindingsTest < ActionDispatch::IntegrationTest
     assert_empty ambiguous_resolution_keys,
       "a delivery can again resolve a row ambiguously. The unique indexes over " \
       "`customers.processor_customer_id` and `plans.processor_price_id` are the fix; one of " \
-      "them has been dropped, and `REPORT-billing-13-fixes.md` has to be corrected."
+      "them has been dropped, and `REPORT-billing-13-fixes` has to be corrected."
 
     # The indexes are asserted **here** rather than in the two migration tests, and
     # the placement is the point.
@@ -353,7 +353,7 @@ class TenantCrossAccountFindingsTest < ActionDispatch::IntegrationTest
 
     assert_equal %w[F1 F2 F3], declared_finding_labels,
       "the set of findings changed. A new label is a fourth finding to report; a missing one " \
-      "means a finding was dropped from this file, and `REPORT-billing-13-fixes.md` must say so."
+      "means a finding was dropped from this file, and `REPORT-billing-13-fixes` must say so."
     assert_equal 6, declared_finding_tests.size,
       "the number of tests reproducing a finding changed. F1 and F2 each take more than one " \
       "because each needed the consequence proven as well as the mechanism."

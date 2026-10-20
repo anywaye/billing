@@ -103,7 +103,7 @@ class CustomerProcessorCustomerIdMigrationTest < ActiveSupport::TestCase
     # duplicates have to go first. That refusal is the database being correct,
     # and it is the real-world repair too: a deployed `customers` table holding
     # two rows on one `cus_` has to have them resolved before this migration can be
-    # applied at all. `REPORT-billing-13-fixes.md` names that as a deploy step.
+    # applied at all. `REPORT-billing-13-fixes` names that as a deploy step.
     Customer.where(processor_customer_id: contested).delete_all
 
     migrate(:up)

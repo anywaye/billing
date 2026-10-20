@@ -74,7 +74,7 @@ first. Read the last one before touching `/v1`.
   test helpers delivering under an event id their own payload did not carry, which
   the new index turned from a silent lie into a loud failure, and a ~5% flake in
   which a losing delivery was parked as a failure because a model validation won
-  the race instead of the index. See `REPORT-billing-09.md`, which also says what
+  the race instead of the index. See `REPORT-billing-09`, which also says what
   was not fixed.
 - **billing-08** is hardening, and it is where the *recorded* gaps stop being
   prose. `test/contract/tenant_isolation_matrix_test.rb` enumerates every `/v1`
@@ -152,8 +152,8 @@ first. Read the last one before touching `/v1`.
     the account already on the row. F2: `customers.processor_customer_id` was not
     unique and `POST`/`PATCH /v1/customers` both permitted it, which is what made
     F1 reachable through this service's own surface. F3: the same shape on
-    `plans.processor_price_id`. See `REPORT-billing-12-isolation.md` for the
-    before, and `REPORT-billing-13-fixes.md` for the after.
+    `plans.processor_price_id`. See `REPORT-billing-12-isolation` for the
+    before, and `REPORT-billing-13-fixes` for the after.
 
 - **billing-13** is those three fixes, and it is the packet that turned billing-12's
   findings into refusals. `+37 runs / +126 assertions`, `950 runs / 2724
@@ -246,7 +246,7 @@ repository.** No new dependency — the `stripe` gem was already here, for
     doing exactly what it forbids passed; and `account_scoped_queries > 0` with an
     unanchored `scope :for_account` **prefix** could not be moved by the very
     change it watches for. Both are fixed, and both are reported in
-    `REPORT-billing-21-authorization.md` and in `CHANGELOG.md`. Read that before
+    `REPORT-billing-21-authorization` and in `CHANGELOG.md`. Read that before
     writing a guard here — the first draft of either passed.
 
 - **billing-receipts-01** is the charge and the receipt: what a customer was
@@ -289,7 +289,7 @@ repository.** No new dependency — the `stripe` gem was already here, for
   `cafaye` gem dependency from rubygems or git (neither is reachable), and it
   did not touch the subscription payloads' known disagreement with core's
   schemas — that is core's change to make, and it is reported rather than
-  shipped around. See `REPORT-billing-outbox-publisher-01.md`.
+  shipped around. See `REPORT-billing-outbox-publisher-01`.
 
 - **billing-fake-client-01 (2026-10-15) deleted `pay` and moved the fake
   in-house.** The gem had been here for exactly one thing: `FakeProcessor`, a
@@ -309,7 +309,7 @@ repository.** No new dependency — the `stripe` gem was already here, for
   Stripe is one of the methods on `Processor::StripeClient`, and there is no
   other `Stripe::` call in the repository. A future processor is a
   `Processor::PaddleClient` beside it plus its own webhook controller, not a gem
-  that owns its schema. See `REPORT-billing-fake-client-01.md`.
+  that owns its schema. See `REPORT-billing-fake-client-01`.
 
 There are no invoices, no usage metering, no prepaid credit yet. Do not read
 their absence as something to fix in a side patch; those are later packets with
@@ -414,11 +414,7 @@ billing/
 │       ├── cross_account_web_test.rb          # the 404 shape, and the 403 audit
 │       └── cross_account_findings_test.rb     # the three cross-tenant defects, as refusals
 ├── .github/workflows/ci.yml           # calls kit's reusable workflow, plus the gate
-├── CHANGELOG.md                       # every notable change, per Keep a Changelog
-├── REPORT-billing-09.md               # the race: evidence, fix, and what was not fixed
-├── REPORT-billing-12-isolation.md     # the tenant boundary: the count, and three findings
-├── REPORT-billing-13-fixes.md         # F1, F2, F3 closed: before, after, and eight mutations
-└── REPORT-billing-21-authorization.md # the lock: built, verified, and the claim mismatch
+└── CHANGELOG.md                       # every notable change, per Keep a Changelog
 ```
 
 ## Commands
@@ -699,7 +695,7 @@ it must be guarded by the row **existing**, or it breaks the
 deletion-arriving-before-its-creation rule. The model's
 `account_is_the_customers_owner` cannot do this job — after a reassignment the new
 account genuinely belongs to the new customer, so that rule passes. See
-`REPORT-billing-13-fixes.md`.
+`REPORT-billing-13-fixes`.
 
 ## Charges and receipts
 
@@ -1400,8 +1396,8 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
   event carrying it is in this build's `consumes`.
 
   **The three cross-tenant defects billing-12 found on the delivery path — F1, F2
-  and F3 — are fixed** (`REPORT-billing-13-fixes.md`; the before is
-  `REPORT-billing-12-isolation.md`). **Read both before adding a field to
+  and F3 — are fixed** (`REPORT-billing-13-fixes`; the before is
+  `REPORT-billing-12-isolation`). **Read both before adding a field to
   `CustomerUpdate` or `PlanUpdate`.** `processor_customer_id` and
   `processor_price_id` are still permitted on the client's **own** row precisely
   because `owner` and `processor` are not — and they were the whole of F2's and
@@ -1571,3 +1567,11 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
 - [ ] Lint and security scans are green, and nothing was disabled to get there
 - [ ] `AGENTS.md` still describes the repository as it now is
 - [ ] `CHANGELOG.md` has an entry
+
+## Packet identifiers
+
+`REPORT-x`, `HANDOFF-x` and `MEASUREMENTS-x` name **work packets, not
+files**. The written reports were removed on 2026-10-20: duplicated across
+repositories, owned by nobody, rotting faster than they were read. What
+survives of a packet is its entry in `CHANGELOG.md` and, where a decision was
+made, in `DECISIONS.md`. A citation to a packet id points at that entry.

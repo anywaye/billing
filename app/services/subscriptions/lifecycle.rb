@@ -84,7 +84,7 @@ module Subscriptions
     # did not catch it, and could not: that rule is "a subscription's account is
     # its customer's", which the new account satisfied, and not "a subscription's
     # account does not move". This is finding F1 in
-    # `REPORT-billing-12-isolation.md`.
+    # `REPORT-billing-12-isolation`.
     #
     # ## Why the refusal and not a correction
     #
@@ -407,7 +407,7 @@ module Subscriptions
         # The recipient fact, and the reason a consumer can mail a subscription
         # change with no billing client and no billing tables: the address is on
         # the envelope, because there is nowhere else it can be read from
-        # (REPORT-courier-consumer-invite-01.md §2.6). The customer is resolved for
+        # (REPORT-courier-consumer-invite-01 §2.6). The customer is resolved for
         # this payload already, so the email costs no query the builder was not
         # already making. Absent — never null — when the customer has no address
         # on file: an event that promises a mail it cannot address is worse than

@@ -20,7 +20,7 @@
 # `schema_migrations` is a fact about a migration that is no longer in the tree,
 # and Rails reads the tree, not the rows. The tables' history is in
 # `CHANGELOG.md`, where a reader is told it happened, and in
-# `REPORT-billing-fake-client-01.md`, which carries the diff.
+# `REPORT-billing-fake-client-01`, which carries the diff.
 #
 # **Why `down` is irreversible.** Recreating these tables would mean vendoring
 # pay's schema by hand — a copy that would drift from the gem's own the moment

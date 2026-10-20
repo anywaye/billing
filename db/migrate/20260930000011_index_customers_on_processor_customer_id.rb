@@ -19,7 +19,7 @@
 # victim's subscription is billed to is **not decided by the data**, and
 # `IndexCustomersOnProcessorCustomerId` is what makes it decided.
 #
-# This is finding F2 in `REPORT-billing-12-isolation.md`.
+# This is finding F2 in `REPORT-billing-12-isolation`.
 #
 # ## Partial, and why it is partial rather than a bare `unique`
 #
@@ -58,7 +58,7 @@
 # A unique index cannot be created over data that already violates it, so a
 # deployed `customers` table holding duplicates has to have them resolved before
 # this migration can be applied at all. That refusal is the database being
-# correct. `REPORT-billing-13-fixes.md` names it as a deploy step.
+# correct. `REPORT-billing-13-fixes` names it as a deploy step.
 #
 # Reversible: `add_index` in a `change` rolls back to `remove_index`, and
 # `test/models/customer_processor_customer_id_migration_test.rb` runs the `down`

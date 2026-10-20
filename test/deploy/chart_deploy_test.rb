@@ -9,8 +9,8 @@ require "test_helper"
 # asserted Kamal's config — the healthcheck path, `env.secret`, no placeholder
 # host — against a `config/deploy.yml` that is still the stock template. That
 # test was red the moment it landed, and the reason it was red is the fleet's
-# direction rather than billing's: `DEPLOYMENT.md` puts the deployment on the
-# k3s/Argo substrate and `LAUNCH.md` is explicit that "no new launch work is
+# direction rather than billing's: `cafaye/notes/deployment.md` puts the deployment on the
+# k3s/Argo substrate and `cafaye/notes/launch.md` is explicit that "no new launch work is
 # Kamal work". A Kamal config test would be an investment in a file that
 # retires at parity, written for a service that has never deployed.
 #

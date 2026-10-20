@@ -18,7 +18,7 @@ commit that caused it and the one line that changes to opt back in.
   interpreter, two network hosts, a PostgreSQL server, and a checkout of core).
   Written against `core/schemas/gate.schema.json` and checked by core's
   `harness/gate_check.py`. `selfContained` is `false`, and the reason is not a
-  formality: with core absent the suite is red — see REPORT-core-10.md.
+  formality: with core absent the suite is red — see REPORT-core-10.
 - **`test/gate_declaration_self_test.sh`** — twenty-two cases proving the
   declaration is load-bearing: one control, two warning cases, and nineteen
   deliberate breakages, eight of which break `bin/prime` or the suite itself and
@@ -37,7 +37,7 @@ commit that caused it and the one line that changes to opt back in.
   accommodation for a defect that no longer exists. Verified in both directions
   against core's fixed checker: the one-liner is `OK … 0 failure(s)`, and
   deleting the step from the same tree is `FAIL gate.ci-disagrees`, exit 1.
-  REPORT-core-10.md carries the history and is corrected rather than left
+  REPORT-core-10 carries the history and is corrected rather than left
   asserting a limitation that is gone.
 
 ## [0.1.0] — 2026-09-30

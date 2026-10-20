@@ -70,7 +70,7 @@
 #
 # So the honest statement is: **`bin/prime` is the gate, and CI runs the same
 # gate with three environment variables set and four assertions bolted on that
-# are not part of the script.** Those four are named in REPORT-billing-10-gate.md
+# are not part of the script.** Those four are named in REPORT-billing-10-gate
 # with the variable each one needs, because "CI runs more than the local gate" is
 # a fact a declaration should state rather than a gap it should imply away.
 # ------------------------------------------------------------------------------
@@ -338,7 +338,7 @@ gate:
     # nonzero would change what the repository's gate accepts, which is a
     # decision above this packet. The declaration converts it from silent to
     # named for anything run through the gate checker; it does not convert it
-    # for a developer who runs `bin/prime` by hand. REPORT-billing-10-gate.md
+    # for a developer who runs `bin/prime` by hand. REPORT-billing-10-gate
     # names this as the open item.
     - id: suite
       match: '^([0-9]+) runs, [0-9]+ assertions, 0 failures, 0 errors, 0 skips$'
@@ -519,7 +519,7 @@ external:
       # the alpine build's `C` default collation (the one thing the smaller
       # image really changes) cannot reach a result. A suite green on 18.4 has
       # still not been shown green on the image, and that gap is recorded in
-      # REPORT-billing-10-gate.md rather than papered over.
+      # REPORT-billing-10-gate rather than papered over.
       #
       # The two credential paths differ, and both were read from the files
       # rather than assumed: `docker-compose.yml` sets
@@ -549,7 +549,7 @@ external:
         # `[tasks.setup]` as "Dependencies and database only". `db:prepare` is
         # the smallest argv in this repository that actually makes the database
         # exist, so it is the one declared here. The help-text mismatch is
-        # reported in REPORT-billing-10-gate.md and is not this packet's to fix.
+        # reported in REPORT-billing-10-gate and is not this packet's to fix.
         command: [bin/rails, db:prepare]
         # Demonstrated, with DATABASE_URL pointed at a port nothing is listening
         # on (59997). Quoted from the run; no URL of a real database appears.
@@ -664,5 +664,5 @@ ci:
   # `security` job runs brakeman and bundler-audit, and the `pins` job runs no
   # toolchain at all. None of those three is part of `bin/prime`, and none of
   # them is visible to this block. The residue is the finding, and it is written
-  # out in REPORT-billing-10-gate.md.
+  # out in REPORT-billing-10-gate.
   invokes: [bin/prime]

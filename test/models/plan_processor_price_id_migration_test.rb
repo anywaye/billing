@@ -98,7 +98,7 @@ class PlanProcessorPriceIdMigrationTest < ActiveSupport::TestCase
     # duplicates go first. That refusal is the database being correct, and it is
     # the real-world repair: a deployed `plans` table holding two plans on one
     # `price_` has to have them resolved before this migration can be applied at
-    # all. `REPORT-billing-13-fixes.md` names it as a deploy step.
+    # all. `REPORT-billing-13-fixes` names it as a deploy step.
     Plan.where(processor_price_id: contested).delete_all
 
     migrate(:up)

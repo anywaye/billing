@@ -68,7 +68,7 @@
 #   - **+5 — the uniqueness API contract.** Three on `Customer`, three on `Plan`,
 #     and the four request tests that a colliding `processor_customer_id` or
 #     `processor_price_id` is a 409 naming the field. **No existing webhook test
-#     broke**; see `REPORT-billing-13-fixes.md`.
+#     broke**; see `REPORT-billing-13-fixes`.
 #   - **+8 — the fixture drift-guard** in `test/coverage/`, and the four
 #     request/model tests that pinned the helper change it guards. The helper
 #     change is the part worth reading about: giving the helpers one `cus_` and one
@@ -94,7 +94,7 @@
 #     the classification in both directions; the other 42 are negative tests, four
 #     of which reproduce the cross-tenant defects that packet reports rather than
 #     fixing. The packet's own count — entry points, negative tests, per-operation
-#     — is asserted in those files and in `REPORT-billing-12-isolation.md`.
+#     — is asserted in those files and in `REPORT-billing-12-isolation`.
 #   - **+45 runs, +99 assertions — billing-08's hardening.** The tenant-isolation
 #     matrix and the secrets-do-not-leak file are new files (19 and 10 runs);
 #     the non-object webhook bodies (9) and the money-precision cases (13) extend

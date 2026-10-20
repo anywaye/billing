@@ -309,7 +309,7 @@ reasons are `unknown_customer`, `unknown_plan`, `no_subscription_to_update`,
 `account_mismatch` is the only one about **tenancy** rather than about the row's
 own shape: a delivery naming a customer on a *different* account than the row is
 on is refused rather than applied, so a subscription cannot be moved between
-accounts by a delivery. See `REPORT-billing-13-fixes.md`.
+accounts by a delivery. See `REPORT-billing-13-fixes`.
 
 There is deliberately no `billing.customer.updated`: core's catalog has no row
 for it, and a service that publishes a type the catalog does not list is a
@@ -680,7 +680,7 @@ Change Date `2030-10-10`, Change License `Apache License, Version 2.0`.
 `LICENSE` held a plain MIT grant until this packet. OPS-D2 splits the fleet:
 the framework (`core`, `cafe`, `kit`, `pantry`) stays permissive, the **services
 move to a Business Source Licence** — free to run, free to self-host, never to
-offer a competing service (`CAFAYE-OPS.md:176`, OPS-D2). billing is a service, so
+offer a competing service (`cafaye/notes/ops.md:181`, OPS-D2). billing is a service, so
 its grant moved with the policy rather than being left to contradict it.
 
 **Anyone who already holds a copy keeps the grant it was published under.** A
@@ -688,8 +688,8 @@ copy of this repository taken while `LICENSE` said MIT is still MIT, and this
 change takes nothing away from whoever holds it. What has changed is the grant a
 copy taken from today forward carries. OPS-D3's rule is that a published grant
 is superseded out loud rather than quietly, because a repo whose grant quietly
-contradicts the policy is worse than either licence (`CAFAYE-OPS.md:177`, OPS-D3,
-and the risk-8 entry at `CAFAYE-OPS.md:1076`).
+contradicts the policy is worse than either licence (`cafaye/notes/ops.md:182`, OPS-D3,
+and the risk-8 entry at `cafaye/notes/ops.md:1081`).
 
 What BSL means for a caller, stated plainly: **calling billing over HTTP changes
 nothing about your licence.** Nothing here is linked into a consumer's process

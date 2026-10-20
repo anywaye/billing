@@ -132,7 +132,7 @@
 # >
 # > **Why the fields are here anyway, and why now.** The fleet's consumer design
 # > is that a consumer acts on the envelope or refuses, and never looks up
-# > (REPORT-courier-consumer-invite-01.md §2.6): courier has no billing client
+# > (REPORT-courier-consumer-invite-01 §2.6): courier has no billing client
 # > and no billing tables, so an event with no address on it is an event that is
 # > dropped. Every money event was in that state. The parallel fix already
 # > exists on the identity side — `identity.session.revoked` and

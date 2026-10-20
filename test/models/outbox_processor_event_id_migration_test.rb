@@ -94,7 +94,7 @@ class OutboxProcessorEventIdMigrationTest < ActiveSupport::TestCase
     # duplicates have to go first. That refusal is the database being correct,
     # and it is the real-world repair too: a deployed table holding duplicates
     # has to have them resolved before this migration can be applied at all.
-    # `REPORT-billing-09.md` names that as a deploy step rather than pretending
+    # `REPORT-billing-09` names that as a deploy step rather than pretending
     # the migration is safe to run on a table that already has the bug.
     OutboxEvent.for_processor_event("evt_reversible").delete_all
 

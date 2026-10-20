@@ -75,7 +75,7 @@ All notable changes to billing are recorded here. The format follows
   exits **0** and the final image's `bundle check` reports `The Gemfile's
   dependencies are satisfied`. The bundler version mismatch (image ships 4.0.3,
   lockfile wants 4.0.18) was **not** pinned: the self-install was measured
-  working and was never the cause. See `REPORT-fix-image-copy.md`.
+  working and was never the cause. See `REPORT-fix-image-copy`.
 
 - **The development processor's subscriptions answer to their own
   processor.** The row-addressed actions dialled Stripe whatever processor owned
@@ -136,7 +136,7 @@ All notable changes to billing are recorded here. The format follows
   `Chart.yaml` `0.1.0`, `name: billing`, the workload with a `/readyz`
   readiness probe, and an Ingress that ships **off** because billing is an
   internal service reached through its namespace (gateway and parlor are the
-  two exposed ones, per `DEPLOYMENT.md`'s "Who owns the Application"). The
+  two exposed ones, per `cafaye/notes/deployment.md`'s "Who owns the Application"). The
   generated chart deliberately carries **no** `templates/application.yaml`:
   kit's substrate owns the `Application`, and a second one named `billing` in
   `argocd` fighting the substrate's would be split brain. The substrate gains
@@ -155,7 +155,7 @@ All notable changes to billing are recorded here. The format follows
   reason is the fleet's direction rather than a gap.** The October wave's test
   asserted Kamal's `config/deploy.yml` — healthcheck path, `env.secret`, no
   placeholder host — against a file that is still the stock template, and
-  `DEPLOYMENT.md` is explicit that no new work is Kamal work: the substrate is
+  `cafaye/notes/deployment.md` is explicit that no new work is Kamal work: the substrate is
   k3s + Traefik + cert-manager + Argo CD, and Kamal retires at parity. A Kamal
   config test would invest in a file this service has never deployed with, so
   the assertion moved to the artifact that actually deploys it.
@@ -298,7 +298,7 @@ All notable changes to billing are recorded here. The format follows
   `test/services/webhooks/live_invoice_shape_test.rb` pins both invoice
   shapes — the old fixture and a verbatim recording of the real payload —
   so "the tests pass and nobody gets a receipt" cannot return. The live
-  drill that found them is written up in `REPORT-billing-live-stripe-01.md`,
+  drill that found them is written up in `REPORT-billing-live-stripe-01`,
   including the charge recorded from a real payment and the cancellation
   arriving through a real webhook.
 
@@ -314,7 +314,7 @@ All notable changes to billing are recorded here. The format follows
   status into the fake changed nothing the door wrote, because nothing read
   the field. Status is now read off the processor's own answer; the same
   mutation fails **12 tests and 2 errors**, and the revert restores green.
-  Found while walking the first-charge drill (`REPORT-billing-e2e-01.md`).
+  Found while walking the first-charge drill (`REPORT-billing-e2e-01`).
 
 ### Removed
 
@@ -357,7 +357,7 @@ All notable changes to billing are recorded here. The format follows
     repository. A second processor arriving is a `Processor::PaddleClient` with
     the same shape plus its own `POST /v1/webhooks/paddle` controller — not a gem
     that owns its schema.
-  - Full reasoning and the diff in `REPORT-billing-fake-client-01.md`.
+  - Full reasoning and the diff in `REPORT-billing-fake-client-01`.
 
 ### Fixed
 
@@ -915,7 +915,7 @@ All notable changes to billing are recorded here. The format follows
   Measured with `gate-check --prove`: `0 failures, 3 warnings`, and the three
   warnings are `gate.requirement-unproven` for `mise`, `git` and `bundle` —
   bare-name requirements the checker deliberately does not run, which is the
-  documented tri-state contract and not a defect. `REPORT-billing-10-gate.md`
+  documented tri-state contract and not a defect. `REPORT-billing-10-gate`
   records the pass and skip counts per tier, the two environment-gated tiers by
   variable name, and three open items this packet deliberately did not change.
 
@@ -1050,7 +1050,7 @@ All notable changes to billing are recorded here. The format follows
   `test/tenant/cross_account_findings_test.rb` are **rewritten rather than
   deleted**: same two accounts, same delivery, same `PATCH`, same pair of plans,
   with each assertion flipped from "the defect reproduces" to "the defect is
-  refused". See `REPORT-billing-13-fixes.md` for the before/after of each.
+  refused". See `REPORT-billing-13-fixes` for the before/after of each.
 
   | finding | before | after |
   |---|---|---|
@@ -1240,7 +1240,7 @@ All notable changes to billing are recorded here. The format follows
     over, so a subscription is billed against whichever plan claimed the price id.
 
   All three are counted and named in the findings file and written up in
-  `REPORT-billing-12-isolation.md` with the fix each one needs.
+  `REPORT-billing-12-isolation` with the fix each one needs.
 
   **Fifteen mutations, every one of which turns a test red**, reported in the
   report rather than claimed. The set includes the three fixes: landing F1's guard,
@@ -2185,13 +2185,13 @@ never calls.
 - **`LICENSE` is a Business Source License 1.1, and it was MIT.** OPS-D2 splits the
   fleet — the framework (`core`, `cafe`, `kit`, `pantry`) stays permissive, the
   **services move to a Business Source Licence**: free to run, free to self-host,
-  never to offer a competing service (`CAFAYE-OPS.md:176`, OPS-D2). billing is a
+  never to offer a competing service (`cafaye/notes/ops.md:181`, OPS-D2). billing is a
   service, so its grant moved with the policy in one commit rather than being left
   to contradict it. The move down is recorded here because OPS-D3's rule is that a
   superseded grant is superseded *out loud*: a repo whose grant quietly changes
   while its policy changed looks like a bait-and-switch to whoever read the old one,
-  and the ambiguity is worse than either licence (`CAFAYE-OPS.md:177`, OPS-D3, and
-  the risk-8 entry at `CAFAYE-OPS.md:1076`).
+  and the ambiguity is worse than either licence (`cafaye/notes/ops.md:182`, OPS-D3, and
+  the risk-8 entry at `cafaye/notes/ops.md:1081`).
 
   The parameters are Licensor `Cafaye`, Licensed Work `billing`, Additional Use
   Grant `None`, Change Date `2030-10-10` — four years out, the fleet's fixed

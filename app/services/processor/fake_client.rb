@@ -138,7 +138,7 @@ module Processor
     #
     # The old `pay_subscriptions` table made the two-sided state of a refused
     # second checkout visible: the processor held two subscriptions and this
-    # service held one, which is the honest report `HANDOFF-w3-checkout.md`
+    # service held one, which is the honest report `HANDOFF-w3-checkout`
     # recorded. A fake with no ledger makes "the processor was asked twice"
     # unassertable, and the assertion is the thing that stops this class from
     # quietly becoming a mock. The ledger is also where an upcoming-invoice
