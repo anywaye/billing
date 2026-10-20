@@ -11,7 +11,7 @@ class CreateAskTokensTables < ActiveRecord::Migration[7.0]
       name: "idx_ask_tokens_wallets_owner"
 
     create_table :ask_tokens_transactions do |t|
-      t.references :token_wallet, null: false, foreign_key: {to_table: Ask::Tokens::Rails.config.wallets_table}
+      t.references :token_wallet, null: false, foreign_key: { to_table: Ask::Tokens::Rails.config.wallets_table }
       t.string :entry_type, null: false
       t.bigint :amount, null: false
       t.string :reason, null: false
