@@ -45,6 +45,7 @@ class Problem
     conflict: { title: "Conflict", status: :conflict },
     idempotency_key_reused: { title: "Idempotency key reused", status: :conflict },
     validation_failed: { title: "Validation failed", status: :unprocessable_content },
+    insufficient_tokens: { title: "Insufficient tokens", status: :payment_required },
     internal: { title: "Internal error", status: :internal_server_error },
     unavailable: { title: "Service unavailable", status: :service_unavailable }
   }.freeze

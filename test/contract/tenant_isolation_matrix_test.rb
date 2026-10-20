@@ -182,7 +182,16 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
     # buyer through — so a `customer_id` naming another account's customer is a
     # 404 and the processor is never asked. It is scoped because it WRITES: a
     # completed checkout grants entitlements, which is the expensive direction.
-    [ "POST", "/v1/checkouts" ] => [ SCOPED, "completes a checkout for a customer resolved inside `Customer.for_account`; another account's customer is a 404 and nothing is asked of the processor" ]
+    [ "POST", "/v1/checkouts" ] => [ SCOPED, "completes a checkout for a customer resolved inside `Customer.for_account`; another account's customer is a 404 and nothing is asked of the processor" ],
+
+    # Token wallet for the authenticated account. Backed by ask-tokens; the
+    # wallet is resolved from `current_account_id`, so another account's
+    # balance and ledger are unreachable.
+    [ "GET", "/v1/token_wallet" ] => [ SCOPED, "reads the authenticated account's token balance, resolved from current_account_id (the account scope, equivalent to for_account on the tenant models)" ],
+    [ "GET", "/v1/token_wallet/entries" ] => [ SCOPED, "pages the authenticated account's token ledger, resolved from current_account_id (the account scope, equivalent to for_account)" ],
+    [ "POST", "/v1/token_wallet/grant" ] => [ SCOPED, "grants tokens to the authenticated account's wallet, resolved from current_account_id (the account scope, equivalent to for_account)" ],
+    [ "POST", "/v1/token_wallet/deduct" ] => [ SCOPED, "deducts tokens from the authenticated account's wallet, resolved from current_account_id (the account scope, equivalent to for_account)" ],
+    [ "POST", "/v1/token_wallet/adjust" ] => [ SCOPED, "adjusts the authenticated account's token balance, resolved from current_account_id (the account scope, equivalent to for_account)" ]
   }.freeze
 
   # Every served `/v1` operation that is **not** account-scoped, with the reason.
@@ -272,7 +281,7 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
     scoped = ACCOUNT_SCOPED.select { |_operation, (verdict, _reason)| verdict == SCOPED }.keys
     catalogue = ACCOUNT_SCOPED.select { |_operation, (verdict, _reason)| verdict == CATALOGUE }.keys
 
-    assert_equal 15, scoped.size, "the scoped set is #{names(scoped)}"
+    assert_equal 20, scoped.size, "the scoped set is #{names(scoped)}"
     assert_equal 4, catalogue.size, "the catalogue set is #{names(catalogue)}"
     assert_empty scoped.grep(%r{/v1/plans}),
       "a plan operation is recorded as scoped. A plan has no `account_id` column, so there is " \

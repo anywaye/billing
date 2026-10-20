@@ -164,7 +164,13 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # `billable_customer` makes, so another account's customer cannot be
     # completed for. The production door and this one are the same rule over the
     # same scope; only the processor differs.
-    [ "POST", "/v1/checkouts" ] => [ "write", "completes a checkout for the `customer_id` in the body, resolved inside `Customer.for_account`" ]
+    [ "POST", "/v1/checkouts" ] => [ "write", "completes a checkout for the `customer_id` in the body, resolved inside `Customer.for_account`" ],
+
+    [ "GET", "/v1/token_wallet" ] => [ "read", "reads the authenticated account's token balance via ask-tokens" ],
+    [ "GET", "/v1/token_wallet/entries" ] => [ "list", "pages the authenticated account's token ledger via ask-tokens" ],
+    [ "POST", "/v1/token_wallet/grant" ] => [ "write", "grants tokens to the authenticated account's wallet via ask-tokens" ],
+    [ "POST", "/v1/token_wallet/deduct" ] => [ "write", "deducts tokens from the authenticated account's wallet via ask-tokens" ],
+    [ "POST", "/v1/token_wallet/adjust" ] => [ "update", "adjusts the authenticated account's token balance via ask-tokens" ]
   }.freeze
 
   # The one `/v1` operation that is served and is **not** account-scoped.
@@ -354,6 +360,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     "app/lib/idempotency_key_reused.rb" => "the error a replayed key raises; it holds no query",
     "app/lib/identifiers.rb" => "the uuid shape in one place; it reads no model",
     "app/lib/money_params.rb" => "turns a request body into an amount; it reads no model",
+    "app/models/account.rb" => "a non-persisted value object referencing an identity account; it reads no model",
+    "app/controllers/v1/token_wallets_controller.rb" => "delegates all data access to ask-tokens\' ActiveRecord store; no direct model call in this file",
     "app/lib/parameter_error.rb" => "the error a bad query parameter raises; it holds no query",
     "app/lib/problem.rb" => "the problem vocabulary, a frozen table of codes and no model access",
     # The file the Postgres-boundary packet added. It writes the transaction-local
@@ -720,8 +728,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # **15 account-scoped routes**, derived from the router, in the same four kinds.
   # This is the caller-facing count, and unlike the one above it does not change
   # when a helper is extracted.
-  test "there are 19 account-scoped routes, and the router serves exactly them plus the webhook" do
-    assert_equal 19, ACCOUNT_SCOPED_ROUTES.size
+  test "there are 24 account-scoped routes, and the router serves exactly them plus the webhook" do
+    assert_equal 24, ACCOUNT_SCOPED_ROUTES.size
     assert_equal served_routes.to_set,
                  (ACCOUNT_SCOPED_ROUTES.keys + NOT_ACCOUNT_SCOPED_ROUTES.keys).to_set
   end
@@ -739,8 +747,8 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
       "these routes are excluded with no reason"
   end
 
-  test "the route breakdown is read 6, list 4, write 4, update 5, delete 0" do
-    assert_equal({ "read" => 6, "list" => 4, "write" => 4, "update" => 5, "delete" => 0 },
+  test "the route breakdown is read 7, list 5, write 6, update 6, delete 0" do
+    assert_equal({ "read" => 7, "list" => 5, "write" => 6, "update" => 6, "delete" => 0 },
                  breakdown(ACCOUNT_SCOPED_ROUTES.values.map(&:first)))
   end
 
@@ -748,7 +756,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # packet's headline is two separately-asserted numbers and not one sum that
   # double-counts a route against the method that serves it.
   test "the two layers are counted separately, because a route and the method that serves it overlap" do
-    assert_equal 19, ACCOUNT_SCOPED_ROUTES.size
+    assert_equal 24, ACCOUNT_SCOPED_ROUTES.size
     assert_equal 52, self.class.accesses.size
     refute_equal ACCOUNT_SCOPED_ROUTES.size, self.class.accesses.size,
       "the two layers have converged, which means one of them is counting the other's rows"

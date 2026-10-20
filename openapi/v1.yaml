@@ -1096,6 +1096,154 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/token_wallet:
+    get:
+      tags: [tokens]
+      operationId: getTokenWallet
+      summary: Get the authenticated account's token balance
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      responses:
+        '200':
+          description: The token balance.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/token_wallet/entries:
+    get:
+      tags: [tokens]
+      operationId: listTokenWalletEntries
+      summary: List the authenticated account's token ledger entries
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      responses:
+        '200':
+          description: The ledger entries.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/token_wallet/grant:
+    post:
+      tags: [tokens]
+      operationId: grantTokens
+      summary: Grant tokens to the authenticated account's wallet
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, reason]
+              properties:
+                amount:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: The granted entry.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/token_wallet/deduct:
+    post:
+      tags: [tokens]
+      operationId: deductTokens
+      summary: Deduct tokens from the authenticated account's wallet
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, reason]
+              properties:
+                amount:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: The deducted entry.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          $ref: '#/components/responses/InsufficientTokens'
+        '503':
+          $ref: '#/components/responses/CallerIdentityUnavailable'
+  /v1/token_wallet/adjust:
+    post:
+      tags: [tokens]
+      operationId: adjustTokenWallet
+      summary: Adjust the authenticated account's token balance
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, reason]
+              properties:
+                amount:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: The adjustment entry or balance.
+          headers:
+            X-Trace-Id:
+              $ref: '#/components/headers/TraceId'
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/CallerIdentityUnavailable'
   /v1/webhooks/stripe:
     post:
       tags: [webhooks]
@@ -2204,6 +2352,12 @@ components:
             $ref: '#/components/schemas/Problem'
     NotFound:
       description: No record matches that identifier.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InsufficientTokens:
+      description: The wallet does not hold enough tokens for the requested amount.
       content:
         application/problem+json:
           schema:

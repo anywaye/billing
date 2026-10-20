@@ -217,7 +217,7 @@ class TenantCrossAccountWebTest < ActionDispatch::IntegrationTest
       "a 403 was added to the problem vocabulary. A 403 on a resource the caller cannot " \
       "see distinguishes it from one that does not exist, which is exactly the " \
       "enumeration oracle this service must not have. Use 404, or nil at the query."
-    assert_equal statuses.uniq.sort, [ 400, 401, 404, 409, 422, 500, 503 ],
+    assert_equal statuses.uniq.sort, [ 400, 401, 402, 404, 409, 422, 500, 503 ],
       "the problem vocabulary's statuses changed. 401 is `unauthorized`, added in billing-21 " \
       "for the token check, and is about the caller. This service answers 404 for absence, " \
       "never 403."

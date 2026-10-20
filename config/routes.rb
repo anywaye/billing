@@ -68,6 +68,14 @@ Rails.application.routes.draw do
     # demo, and a CI suite that holds no Stripe key, and it answers 404 unless
     # `BILLING_FAKE_PROCESSOR_ENABLED` is set. See V1::CheckoutsController.
     post "checkouts", to: "checkouts#create"
+
+    # Token wallet for the authenticated account. Cost computation is the
+    # caller's job; this is wallet math only.
+    get "token_wallet", to: "token_wallets#show"
+    get "token_wallet/entries", to: "token_wallets#entries"
+    post "token_wallet/grant", to: "token_wallets#grant"
+    post "token_wallet/deduct", to: "token_wallets#deduct"
+    post "token_wallet/adjust", to: "token_wallets#adjust"
   end
 
   # Processor webhooks. Each processor gets its own path, its own signature

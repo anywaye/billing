@@ -138,6 +138,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
   # them and not by us. The count is not asserted — the list is, so a removal and
   # an addition both fail and neither is mistaken for the other.
   OPERATION_IDS = %w[
+    adjustTokenWallet
     cancelSubscription
     changeSubscriptionPlan
     createCheckout
@@ -145,16 +146,20 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     createPaymentMethodUrl
     createPlan
     createSubscriptionCheckout
+    deductTokens
     getCharge
     getCustomer
     getPlan
     getSubscription
     getSubscriptionEntitlements
+    getTokenWallet
     getUpcomingInvoice
+    grantTokens
     listCharges
     listCustomers
     listPlans
     listSubscriptions
+    listTokenWalletEntries
     receiveStripeWebhook
     updateCustomer
     updatePlan
