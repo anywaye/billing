@@ -127,16 +127,16 @@ class ProcessorWebhookTest < ActiveSupport::TestCase
   test "fail records the class and the message of what broke" do
     webhook = ProcessorWebhook.ingest(processor: :stripe, event_id: "evt_1", type: "ping", payload: PAYLOAD)
 
-    webhook.fail!(Money::InvalidAmountError.new("10.5 is not a whole number of minor units"))
+    webhook.fail!(Billing::Money::InvalidAmountError.new("10.5 is not a whole number of minor units"))
 
     assert_predicate webhook.processed_at, :present?
-    assert_equal "failed:Money::InvalidAmountError: 10.5 is not a whole number of minor units", webhook.error
+    assert_equal "failed:Billing::Money::InvalidAmountError: 10.5 is not a whole number of minor units", webhook.error
   end
 
   test "a recorded failure is bounded, so a huge message cannot bloat the table" do
     webhook = ProcessorWebhook.ingest(processor: :stripe, event_id: "evt_1", type: "ping", payload: PAYLOAD)
 
-    webhook.fail!(Money::InvalidAmountError.new("x" * 5_000))
+    webhook.fail!(Billing::Money::InvalidAmountError.new("x" * 5_000))
 
     assert_operator webhook.error.length, :<=, ProcessorWebhook::MAX_ERROR_LENGTH
   end
@@ -144,9 +144,9 @@ class ProcessorWebhookTest < ActiveSupport::TestCase
   test "the recorded failure starts with the class even when the message is cut" do
     webhook = ProcessorWebhook.ingest(processor: :stripe, event_id: "evt_1", type: "ping", payload: PAYLOAD)
 
-    webhook.fail!(Money::InvalidAmountError.new("y" * 5_000))
+    webhook.fail!(Billing::Money::InvalidAmountError.new("y" * 5_000))
 
-    assert webhook.error.start_with?("failed:Money::InvalidAmountError: ")
+    assert webhook.error.start_with?("failed:Billing::Money::InvalidAmountError: ")
   end
 
   # A column named `type` is single-table inheritance on any Active Record model.

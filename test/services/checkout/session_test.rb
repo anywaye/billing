@@ -39,7 +39,7 @@ class CheckoutSessionTest < ActiveSupport::TestCase
     @plan = Plan.create!(
       name: "Pro monthly",
       slug: "pro-#{SecureRandom.hex(6)}",
-      price: Money.new(1_900, "USD"),
+      price: Billing::Money.new(1_900, "USD"),
       interval: "month",
       processor_price_id: "price_FAKE#{SecureRandom.hex(8)}"
     )
@@ -65,13 +65,13 @@ class CheckoutSessionTest < ActiveSupport::TestCase
   end
 
   # The price is verified, not assumed: it is read back off the plan through
-  # `Money`, because `Subscription` has no amount column and must never grow one
-  # (`AGENTS.md`, Money — the amount charged is the processor's).
+  # `Billing::Money`, because `Subscription` has no amount column and must never grow one
+  # (`AGENTS.md`, Billing::Money — the amount charged is the processor's).
   test "the recorded subscription is priced by the plan it was bought on" do
     outcome = Checkout::Session.new(customer: @customer, plan: @plan).complete
 
     price = outcome.subscription.plan.price
-    assert_equal Money.new(1_900, "USD"), price
+    assert_equal Billing::Money.new(1_900, "USD"), price
     assert_equal 1_900, price.minor_units
     assert_equal "USD", price.currency
   end
@@ -120,14 +120,14 @@ class CheckoutSessionTest < ActiveSupport::TestCase
     assert_equal 7, OutboxEvent.find_by(event_type: "billing.subscription.started").data["quantity"]
     # The plan's price is unchanged by how many seats were bought: per-seat
     # pricing multiplies at the processor, and this service never computes an
-    # amount to send (`AGENTS.md`, Money).
-    assert_equal Money.new(1_900, "USD"), outcome.subscription.plan.price
+    # amount to send (`AGENTS.md`, Billing::Money).
+    assert_equal Billing::Money.new(1_900, "USD"), outcome.subscription.plan.price
   end
 
   test "a plan with a trial starts trialing and records when the trial ends" do
     plan = Plan.create!(
       name: "Pro trial", slug: "pro-trial-#{SecureRandom.hex(6)}",
-      price: Money.new(1_900, "USD"), interval: "month",
+      price: Billing::Money.new(1_900, "USD"), interval: "month",
       trial_days: 14, processor_price_id: "price_FAKE#{SecureRandom.hex(8)}"
     )
 
@@ -164,7 +164,7 @@ class CheckoutSessionTest < ActiveSupport::TestCase
   test "a plan with a trial asks the processor for that trial, by name" do
     plan = Plan.create!(
       name: "Pro trial", slug: "pro-trial-#{SecureRandom.hex(6)}",
-      price: Money.new(1_900, "USD"), interval: "month",
+      price: Billing::Money.new(1_900, "USD"), interval: "month",
       trial_days: 14, processor_price_id: "price_FAKE#{SecureRandom.hex(8)}"
     )
 
@@ -265,7 +265,7 @@ class CheckoutSessionTest < ActiveSupport::TestCase
   test "a subscription the lifecycle refuses is a failure carrying the lifecycle's own reason" do
     plan = Plan.create!(
       name: "Other plan", slug: "other-#{SecureRandom.hex(6)}",
-      price: Money.new(4_900, "USD"), interval: "month",
+      price: Billing::Money.new(4_900, "USD"), interval: "month",
       processor_price_id: "price_FAKE#{SecureRandom.hex(8)}"
     )
     # A live subscription on THIS account for a different plan. `Lifecycle` resolves

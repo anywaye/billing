@@ -85,13 +85,13 @@ module V1
 
       # The price is not permitted with the rest, because it is not a column —
       # it is two columns that only `price=` may write, and the only value that
-      # may be written is a Money.
+      # may be written is a Billing::Money.
       def assign_price(plan, price)
         money, error = MoneyParams.parse(price)
         return [ ProblemResponses::Failure.new(field: "price", code: "invalid_format", message: "price #{error}") ] if error
 
         # The only path by which an amount reaches this model. `price=` refuses
-        # anything that is not a Money, so a plan can never hold a bare integer
+        # anything that is not a Billing::Money, so a plan can never hold a bare integer
         # that has lost its currency.
         plan.price = money
         []

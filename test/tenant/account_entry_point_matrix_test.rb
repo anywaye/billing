@@ -366,7 +366,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     "app/mailers/application_mailer.rb" => "the abstract base class; it declares no query",
     "app/models/application_record.rb" => "the abstract base class; it declares no scope",
     "app/models/idempotency_key.rb" => "keyed on the request's own idempotency key, which is a client's, not an account's. Its `scope :expired` is a ttl and touches no tenant row, which is why a scope on a non-tenant model is not counted.",
-    "app/models/money.rb" => "the money primitive; it reads no model",
+    "app/models/billing/money.rb" => "the money primitive; it reads no model",
     "app/models/processor_webhook.rb" => "the receipt model; its one write is `ingest`, addressed by the processor's event id",
     "app/services/processor.rb" => "the processor namespace; it declares no query",
     "app/services/processor/stripe_client.rb" => "builds and sends the three processor requests; the row each acts on was resolved by the caller",

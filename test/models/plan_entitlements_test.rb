@@ -68,7 +68,7 @@ class PlanEntitlementsTest < ActiveSupport::TestCase
 
   test "it is carried on the wire, because it is what the entitlements endpoint reads" do
     plan = Plan.create!(
-      name: "Pro monthly", slug: "pro-monthly", price: Money.new(1900, "USD"), interval: "month",
+      name: "Pro monthly", slug: "pro-monthly", price: Billing::Money.new(1900, "USD"), interval: "month",
       entitlements: { "features" => %w[dashboards] }
     )
 
@@ -76,7 +76,7 @@ class PlanEntitlementsTest < ActiveSupport::TestCase
   end
 
   test "a plan that was written before the column existed reads as granting nothing" do
-    plan = Plan.create!(name: "Pro", slug: "pro", price: Money.new(1900, "USD"), interval: "month")
+    plan = Plan.create!(name: "Pro", slug: "pro", price: Billing::Money.new(1900, "USD"), interval: "month")
 
     assert_equal({}, plan.entitlements)
   end
@@ -107,7 +107,7 @@ class PlanEntitlementsTest < ActiveSupport::TestCase
       Plan.new(
         name: "Pro monthly",
         slug: "pro-monthly",
-        price: Money.new(1900, "USD"),
+        price: Billing::Money.new(1900, "USD"),
         interval: "month",
         entitlements: entitlements
       )

@@ -13,7 +13,7 @@
 module MoneyParams
   MESSAGE = "must be an object with an integer amount_minor and a three-letter currency"
 
-  # [Money, nil] or [nil, MESSAGE]. Never raises: a request is untrusted input,
+  # [Billing::Money, nil] or [nil, MESSAGE]. Never raises: a request is untrusted input,
   # and a refusal is a 422 rather than a 500.
   #
   # `price` is duck-typed rather than checked against Hash, because an
@@ -33,9 +33,9 @@ module MoneyParams
     # representation for an amount and it is not a string.
     return [ nil, MESSAGE ] unless minor_units.is_a?(Integer) && currency.is_a?(String)
 
-    [ Money.new(minor_units, currency), nil ]
-  rescue Money::Error
-    # A bad currency shape, or an amount outside the bigint range. Money has
+    [ Billing::Money.new(minor_units, currency), nil ]
+  rescue Billing::Money::Error
+    # A bad currency shape, or an amount outside the bigint range. Billing::Money has
     # already decided both are errors, and the client gets the same sentence
     # either way rather than a list of the ways to be wrong.
     [ nil, MESSAGE ]

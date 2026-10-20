@@ -94,7 +94,7 @@ module Webhooks
         # **Zero and negative are both skipped, and negative is the interesting
         # one.** Stripe settles an invoice whose total is entirely covered by the
         # customer's credit balance with a *negative* `amount_paid`, and sends
-        # `invoice.paid` for it. `Money` permits a negative amount — it has
+        # `invoice.paid` for it. `Billing::Money` permits a negative amount — it has
         # `#negative?` — and `charges_amount_not_negative` would refuse the row,
         # so recording it would raise `RecordInvalid` from inside a webhook and
         # **park a correct `billing.payment.succeeded` over a receipt that should

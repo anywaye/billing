@@ -1015,7 +1015,7 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
       Plan.create!(
         name: "Plan #{@plans_created}",
         slug: "plan-#{@plans_created}",
-        price: Money.new(price, "USD"),
+        price: Billing::Money.new(price, "USD"),
         interval: "month",
         processor_price_id: price_id
       )

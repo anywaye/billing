@@ -32,7 +32,7 @@ class LiveInvoiceShapeTest < ActiveSupport::TestCase
     )
     @plan = Plan.create!(
       name: "Live Drill", slug: "live-drill-#{SecureRandom.hex(4)}",
-      price: Money.new(1_900, "USD"), interval: "month",
+      price: Billing::Money.new(1_900, "USD"), interval: "month",
       processor_price_id: "price_1UQwacCmN780pAiWr0mwVOHB"
     )
     @subscription = Subscription.create!(

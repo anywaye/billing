@@ -8,7 +8,7 @@ class PlanTest < ActiveSupport::TestCase
     @plan = Plan.new(
       name: "Pro monthly",
       slug: "pro-monthly",
-      price: Money.new(1900, "USD"),
+      price: Billing::Money.new(1900, "USD"),
       interval: "month"
     )
   end
@@ -26,7 +26,7 @@ class PlanTest < ActiveSupport::TestCase
   # would then have to guess between. `:taken` is what `ProblemResponses` turns
   # into a named 409, and this is the error it reads.
   test "a second plan may not claim a processor price id that is taken" do
-    Plan.create!(name: "Theirs", slug: "theirs", price: Money.new(4_900, "USD"), interval: "month",
+    Plan.create!(name: "Theirs", slug: "theirs", price: Billing::Money.new(4_900, "USD"), interval: "month",
       processor_price_id: "price_FAKEtheirsBBBBBBBBBB")
 
     @plan.processor_price_id = "price_FAKEtheirsBBBBBBBBBB"
@@ -48,20 +48,20 @@ class PlanTest < ActiveSupport::TestCase
   # rule is "a value here is unique", not "this column is unique" — the same
   # reading the index's partial predicate states.
   test "many plans may carry no processor price id at all" do
-    Plan.create!(name: "Draft", slug: "draft", price: Money.new(900, "USD"), interval: "month")
-    unsold = Plan.new(name: "Also a draft", slug: "also-a-draft", price: Money.new(1_500, "USD"), interval: "month")
+    Plan.create!(name: "Draft", slug: "draft", price: Billing::Money.new(900, "USD"), interval: "month")
+    unsold = Plan.new(name: "Also a draft", slug: "also-a-draft", price: Billing::Money.new(1_500, "USD"), interval: "month")
 
     assert_predicate unsold, :valid?
   end
 
-  test "a plan's price is a Money" do
-    assert_kind_of Money, @plan.price
+  test "a plan's price is a Billing::Money" do
+    assert_kind_of Billing::Money, @plan.price
     assert_equal 1900, @plan.price.minor_units
     assert_equal "USD", @plan.price.currency
   end
 
   test "a free plan is zero in its own currency" do
-    @plan.price = Money.zero("USD")
+    @plan.price = Billing::Money.zero("USD")
 
     assert @plan.valid?
     assert_equal 0, @plan.price.minor_units
@@ -75,14 +75,14 @@ class PlanTest < ActiveSupport::TestCase
     assert_equal({ "amount_minor" => 1900, "currency" => "USD" }, @plan.price.to_h)
   end
 
-  test "a plan's price is refused unless it is a Money" do
-    error = assert_raises(Money::Error) { @plan.price = 1900 }
+  test "a plan's price is refused unless it is a Billing::Money" do
+    error = assert_raises(Billing::Money::Error) { @plan.price = 1900 }
 
-    assert_match(/Money/, error.message)
+    assert_match(/Billing::Money/, error.message)
   end
 
-  test "assigning a Money writes both the amount and the currency" do
-    @plan.price = Money.new(500, "JPY")
+  test "assigning a Billing::Money writes both the amount and the currency" do
+    @plan.price = Billing::Money.new(500, "JPY")
 
     assert_equal 500, @plan.amount_cents
     assert_equal "JPY", @plan.currency
@@ -126,7 +126,7 @@ class PlanTest < ActiveSupport::TestCase
 
   test "a plan slug is unique" do
     @plan.save!
-    duplicate = Plan.new(name: "Pro yearly", slug: "pro-monthly", price: Money.new(1900, "USD"), interval: "year")
+    duplicate = Plan.new(name: "Pro yearly", slug: "pro-monthly", price: Billing::Money.new(1900, "USD"), interval: "year")
 
     assert_not duplicate.valid?
     assert_includes duplicate.errors.attribute_names, :slug

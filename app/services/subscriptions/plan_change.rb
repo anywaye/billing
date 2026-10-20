@@ -20,7 +20,7 @@ module Subscriptions
   #     computed would eventually disagree with the processor's own books.
   #
   # So the only thing this object does with money is compare two of them, and a
-  # comparison of `Money` values is the only arithmetic in this file. There is no
+  # comparison of `Billing::Money` values is the only arithmetic in this file. There is no
   # credit, no refund, no prorated figure and no annualisation: the processor is
   # sent a *behaviour* (`always_invoice` or `none`) and computes the number.
   # Nothing here is a Float, and nothing here is persisted.
@@ -28,7 +28,7 @@ module Subscriptions
   # Two comparisons are refused rather than guessed, and both refusals matter
   # because a wrong answer is a wrong amount of money:
   #
-  #   * **Different currencies.** `Money#<=>` is nil across currencies, so a bare
+  #   * **Different currencies.** `Billing::Money#<=>` is nil across currencies, so a bare
   #     `>` would raise from inside Comparable — the right answer for the wrong
   #     reason, with a message about an operator rather than about this change.
   #     FX is a pricing decision, not something a plan change may make.
@@ -103,15 +103,15 @@ module Subscriptions
 
     private
       # Both refusals, in one place, so a `timing`, an `upgrade?` and a
-      # `downgrade?` cannot each discover a different answer. `Money#<=>` is nil
+      # `downgrade?` cannot each discover a different answer. `Billing::Money#<=>` is nil
       # across currencies, which is why the currency is checked before the
       # comparison rather than by rescuing the comparison's own failure.
       def ensure_comparable!
-        # Money's own error, not a second one that says the same thing: a caller
+        # Billing::Money's own error, not a second one that says the same thing: a caller
         # refusing to compare two amounts wants to catch one class whichever
         # comparison it came from.
         if from.price.currency != to.price.currency
-          raise Money::CurrencyMismatchError,
+          raise Billing::Money::CurrencyMismatchError,
             "cannot compare #{from.price} with #{to.price}: different currencies are not interchangeable"
         end
 

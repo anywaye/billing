@@ -89,7 +89,7 @@ module StripeSubscriptionFixtures
     )
   end
 
-  def create_stripe_plan(price: Money.new(1900, "USD"), interval: "month", processor_price_id: nil, slug: nil, name: nil)
+  def create_stripe_plan(price: Billing::Money.new(1900, "USD"), interval: "month", processor_price_id: nil, slug: nil, name: nil)
     # One index, read once: the name and the slug are the same row and a counter
     # that advanced between them would number them differently.
     index = next_index

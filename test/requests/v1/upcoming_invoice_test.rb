@@ -17,7 +17,7 @@ class V1UpcomingInvoiceTest < ActionDispatch::IntegrationTest
     @api = FakeStripeAPI.new
     @previous_processor = Processor::StripeClient.current
     Processor::StripeClient.current = Processor::StripeClient.new(api_key: "sk_test", api: @api)
-    @plan = create_stripe_plan(price: Money.new(1900, "USD"))
+    @plan = create_stripe_plan(price: Billing::Money.new(1900, "USD"))
     @customer = create_stripe_customer(processor_customer_id: KNOWN_CUSTOMER_ID)
     @subscription = create_subscription(plan: @plan, customer: @customer)
   end

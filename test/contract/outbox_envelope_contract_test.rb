@@ -156,7 +156,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
   # vacuously, because the work it does is over core's schemas, not over this
   # constant. The corpus and the grammar comparison move with it, onto the two
   # constraints where core and this service genuinely each hold a pattern of their
-  # own: `Plan::SLUG_PATTERN` and `Money::CURRENCY_FORMAT`.
+  # own: `Plan::SLUG_PATTERN` and `Billing::Money::CURRENCY_FORMAT`.
   PENDING_ID_PATTERNS = {}.freeze
 
   # The events core has no payload schema for, which core's outbox checklist asks
@@ -218,7 +218,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
   #
   # `number` accepts a Float; `integer` does not, even though JSON Schema 2020-12
   # reads `1.0` as an integer. That is the strict direction on purpose: no amount
-  # in this service is ever a Float (AGENTS.md, Money), and a validator that
+  # in this service is ever a Float (AGENTS.md, Billing::Money), and a validator that
   # accepted one where core asked for an integer would be the exact hole this file
   # exists to close.
   JSON_TYPES = %w[string number integer boolean object array null].freeze
@@ -476,7 +476,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
 
   # Two sides, one constraint, and the honest way to say they agree is behaviour.
   # `Plan::SLUG_PATTERN` is this service's answer to the same question core's plan
-  # schema answers with `^[a-z0-9]+(-[a-z0-9]+)*$`, and `Money::CURRENCY_FORMAT` is
+  # schema answers with `^[a-z0-9]+(-[a-z0-9]+)*$`, and `Billing::Money::CURRENCY_FORMAT` is
   # its answer to `^[A-Z]{3}$`. Neither is an id, but the technique is the one this
   # file was built around and the failure it guards against is the same one: a text
   # comparison passes once and fails forever after with nothing changed in between.
@@ -485,7 +485,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
   end
 
   test "this service's currency pattern and core's accept exactly the same strings" do
-    assert_same_grammar declared_pattern("billing.plan.created", "price.currency"), Money::CURRENCY_FORMAT, PATTERN_CORPUS
+    assert_same_grammar declared_pattern("billing.plan.created", "price.currency"), Billing::Money::CURRENCY_FORMAT, PATTERN_CORPUS
   end
 
   # core's patterns are written with `^` and `$`, which in a Ruby `Regexp` anchor
@@ -596,7 +596,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
       plan = Plan.create!(
         name: "Pro monthly",
         slug: "pro-monthly",
-        price: Money.new(1900, "USD"),
+        price: Billing::Money.new(1900, "USD"),
         interval: "month",
         processor_price_id: StripeSubscriptionFixtures::PROCESSOR_PRICE_ID
       )

@@ -290,7 +290,7 @@ module V1
 
       # One place the processor is asked, and the one place its refusals become
       # answers. `Subscriptions::PlanChange::Unpriced` and
-      # `Money::CurrencyMismatchError` are raised by the plan-change *rule* rather
+      # `Billing::Money::CurrencyMismatchError` are raised by the plan-change *rule* rather
       # than by the processor and mean the same thing here — this request cannot be
       # carried out as asked — so they are handled alongside.
       #
@@ -301,7 +301,7 @@ module V1
       # defaults are the mutators', which are three of the four call sites.
       def ask_processor(field: "plan_id", message: "could not be applied by the payment processor")
         yield
-      rescue Processor::Error, Subscriptions::PlanChange::Error, Money::CurrencyMismatchError => e
+      rescue Processor::Error, Subscriptions::PlanChange::Error, Billing::Money::CurrencyMismatchError => e
         refuse_processor(e, field: field, message: message)
       end
 
@@ -500,7 +500,7 @@ module V1
 
       # The subscription, with its plan's price in integer minor units. The one wire
       # representation for an amount, and the same one everywhere it is returned —
-      # `Plan#price` is a `Money` and `Money#to_h` is the crossing shape.
+      # `Plan#price` is a `Billing::Money` and `Billing::Money#to_h` is the crossing shape.
       def serialize(subscription)
         subscription.as_json.merge("price" => subscription.plan.price.to_h)
       end
@@ -591,7 +591,7 @@ module V1
       # A refusal this service reached on its own reasoning is not a processor
       # problem, and logging it as one would send an operator to the wrong system.
       def log_processor_refusal(exception)
-        return if exception.is_a?(Subscriptions::PlanChange::Error) || exception.is_a?(Money::CurrencyMismatchError)
+        return if exception.is_a?(Subscriptions::PlanChange::Error) || exception.is_a?(Billing::Money::CurrencyMismatchError)
 
         Rails.logger.error("payment processor refused a request: #{exception.class}: #{exception.message}")
       end

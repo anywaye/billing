@@ -420,7 +420,7 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     def plan
       @plan ||= Plan.create!(
         name: "Lock probe", slug: "lock-probe-#{SecureRandom.hex(4)}",
-        price: Money.new(1_900, "USD"), interval: "month",
+        price: Billing::Money.new(1_900, "USD"), interval: "month",
         processor_price_id: "price_FAKElock#{SecureRandom.hex(6)}"
       )
     end

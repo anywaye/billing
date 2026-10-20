@@ -7,14 +7,14 @@
 # one file is that a case added to cover a new branch is a case those files run,
 # and there is no second list of cases to forget.
 #
-# Every branch in `Money` and `PlanChange` is reached from here, including the
+# Every branch in `Billing::Money` and `PlanChange` is reached from here, including the
 # refusals. A corpus of only successful calls would leave the error arms
 # unmeasured, and the gate would be measuring the wrong thing — which is exactly
 # what the gate's own honesty test in
 # test/coverage/money_paths_coverage_test.rb checks by feeding it a corpus that
 # reaches almost nothing and requiring it to report that.
 #
-# `attempt` is not decoration. `Money` raises on a Float and on a cross-currency
+# `attempt` is not decoration. `Billing::Money` raises on a Float and on a cross-currency
 # addition, and those raises are the arms being measured; an unrescued one would
 # take the probe process down before it could write a report, and the gate would
 # fail with "no report" rather than with the coverage it is supposed to be
@@ -39,7 +39,7 @@ module MoneyCoverageExercise
     plans.fetch(kind)[[ minor, price_id ]] ||= Plan.new(
       name: "#{kind} #{minor} #{price_id}",
       slug: "#{kind}-#{minor}-#{price_id}",
-      price: Money.new(minor, currency),
+      price: Billing::Money.new(minor, currency),
       interval: interval,
       processor_price_id: price_id
     )
@@ -57,7 +57,7 @@ module MoneyCoverageExercise
       attempt { subject.proration_behavior }, attempt { subject.to_price_id } ]
   end
 
-  # The corpus the gate measures. Every branch in `Money` and `PlanChange`, with
+  # The corpus the gate measures. Every branch in `Billing::Money` and `PlanChange`, with
   # the refusals included.
   def full
     call
@@ -68,99 +68,99 @@ module MoneyCoverageExercise
   # test/coverage/money_paths_coverage_test.rb, which is the only thing stopping
   # a gate that measures nothing from passing vacuously.
   def minimal
-    Money.zero("USD")
+    Billing::Money.zero("USD")
   end
 
   def call
-    # --- Money: construction ----------------------------------------------------
-    Money.new(1900, "USD")
-    Money.new(1900, "usd")
-    Money.new(1900, :usd)
-    Money.new(0, "JPY")
-    Money.new(1, "KWD")
-    Money.new(1, "CLF")
-    Money.new(Money::MAX_MINOR_UNITS, "USD")
-    Money.new(Money::MIN_MINOR_UNITS, "USD")
-    attempt { Money.new(10.5, "USD") }
-    attempt { Money.new(nil, "USD") }
-    attempt { Money.new(100, "US") }
-    attempt { Money.new(100, nil) }
-    attempt { Money.new(100, 840) }
-    attempt { Money.new(Money::MAX_MINOR_UNITS + 1, "USD") }
-    attempt { Money.new(Money::MIN_MINOR_UNITS - 1, "USD") }
+    # --- Billing::Money: construction ----------------------------------------------------
+    Billing::Money.new(1900, "USD")
+    Billing::Money.new(1900, "usd")
+    Billing::Money.new(1900, :usd)
+    Billing::Money.new(0, "JPY")
+    Billing::Money.new(1, "KWD")
+    Billing::Money.new(1, "CLF")
+    Billing::Money.new(Billing::Money::MAX_MINOR_UNITS, "USD")
+    Billing::Money.new(Billing::Money::MIN_MINOR_UNITS, "USD")
+    attempt { Billing::Money.new(10.5, "USD") }
+    attempt { Billing::Money.new(nil, "USD") }
+    attempt { Billing::Money.new(100, "US") }
+    attempt { Billing::Money.new(100, nil) }
+    attempt { Billing::Money.new(100, 840) }
+    attempt { Billing::Money.new(Billing::Money::MAX_MINOR_UNITS + 1, "USD") }
+    attempt { Billing::Money.new(Billing::Money::MIN_MINOR_UNITS - 1, "USD") }
 
-    # --- Money: from_major ------------------------------------------------------
-    Money.from_major("10.50", "USD")
-    Money.from_major(10, "USD")
-    Money.from_major(BigDecimal("0.01"), "USD")
-    Money.from_major("1000", "JPY")
-    Money.from_major("1.234", "KWD")
-    Money.from_major("1.2345", "CLF")
-    attempt { Money.from_major("10.505", "USD") }
-    attempt { Money.from_major("10.5", "JPY") }
-    attempt { Money.from_major("1.2345", "KWD") }
-    attempt { Money.from_major("10.5", "USD") }
-    attempt { Money.from_major("92233720368547758.08", "USD") }
-    attempt { Money.from_major("10.00", "nope") }
-    attempt { Money.from_major(1..2, "USD") }
-    attempt { Money.from_major(BigDecimal("NaN"), "USD") }
-    attempt { Money.from_major("abc", "USD") }
-    Money.zero("jpy")
+    # --- Billing::Money: from_major ------------------------------------------------------
+    Billing::Money.from_major("10.50", "USD")
+    Billing::Money.from_major(10, "USD")
+    Billing::Money.from_major(BigDecimal("0.01"), "USD")
+    Billing::Money.from_major("1000", "JPY")
+    Billing::Money.from_major("1.234", "KWD")
+    Billing::Money.from_major("1.2345", "CLF")
+    attempt { Billing::Money.from_major("10.505", "USD") }
+    attempt { Billing::Money.from_major("10.5", "JPY") }
+    attempt { Billing::Money.from_major("1.2345", "KWD") }
+    attempt { Billing::Money.from_major("10.5", "USD") }
+    attempt { Billing::Money.from_major("92233720368547758.08", "USD") }
+    attempt { Billing::Money.from_major("10.00", "nope") }
+    attempt { Billing::Money.from_major(1..2, "USD") }
+    attempt { Billing::Money.from_major(BigDecimal("NaN"), "USD") }
+    attempt { Billing::Money.from_major("abc", "USD") }
+    Billing::Money.zero("jpy")
 
-    # --- Money: arithmetic ------------------------------------------------------
-    Money.new(1050, "USD") + Money.new(250, "USD")
-    Money.new(1050, "USD") - Money.new(50, "USD")
-    Money.new(1000, "USD") - Money.new(250, "USD")
-    Money.new(1050, "USD") * 3
-    Money.new(1050, "USD") * 0
-    Money.new(1050, "USD") * -2
-    -Money.new(1050, "USD")
-    Money.new(-1050, "USD").abs
-    Money.new(1050, "USD").abs
-    attempt { Money.new(Money::MAX_MINOR_UNITS, "USD") + Money.new(1, "USD") }
-    attempt { Money.new(100, "USD") + Money.new(100, "EUR") }
-    attempt { Money.new(100, "USD") + 100 }
-    attempt { Money.new(100, "USD") - Money.new(100, "EUR") }
-    attempt { Money.new(100, "USD") - Money.new(250, "USD") }
-    attempt { Money.new(1050, "USD") * 1.5 }
-    attempt { Money.new(1050, "USD") * Money.new(2, "USD") }
-    attempt { Money.new(1050, "USD") * 2 }
+    # --- Billing::Money: arithmetic ------------------------------------------------------
+    Billing::Money.new(1050, "USD") + Billing::Money.new(250, "USD")
+    Billing::Money.new(1050, "USD") - Billing::Money.new(50, "USD")
+    Billing::Money.new(1000, "USD") - Billing::Money.new(250, "USD")
+    Billing::Money.new(1050, "USD") * 3
+    Billing::Money.new(1050, "USD") * 0
+    Billing::Money.new(1050, "USD") * -2
+    -Billing::Money.new(1050, "USD")
+    Billing::Money.new(-1050, "USD").abs
+    Billing::Money.new(1050, "USD").abs
+    attempt { Billing::Money.new(Billing::Money::MAX_MINOR_UNITS, "USD") + Billing::Money.new(1, "USD") }
+    attempt { Billing::Money.new(100, "USD") + Billing::Money.new(100, "EUR") }
+    attempt { Billing::Money.new(100, "USD") + 100 }
+    attempt { Billing::Money.new(100, "USD") - Billing::Money.new(100, "EUR") }
+    attempt { Billing::Money.new(100, "USD") - Billing::Money.new(250, "USD") }
+    attempt { Billing::Money.new(1050, "USD") * 1.5 }
+    attempt { Billing::Money.new(1050, "USD") * Billing::Money.new(2, "USD") }
+    attempt { Billing::Money.new(1050, "USD") * 2 }
 
-    # --- Money: predicates and comparison ---------------------------------------
-    Money.new(0, "USD").zero?
-    Money.new(0, "USD").zero?("usd")
-    Money.new(0, "USD").zero?("EUR")
-    Money.new(1, "USD").zero?("USD")
-    attempt { Money.new(0, "USD").zero?("nope") }
-    Money.new(1, "USD").positive?
-    Money.new(-1, "USD").negative?
-    Money.new(100, "USD") <=> Money.new(100, "USD")
-    Money.new(100, "USD") == Money.new(200, "USD")
-    Money.new(100, "USD") == Money.new(100, "EUR")
-    Money.new(100, "USD") == 100
-    Money.new(100, "USD").hash
-    Money.new(100, "USD").eql?(Money.new(100, "EUR"))
-    Money.new(100, "USD") <=> 100
+    # --- Billing::Money: predicates and comparison ---------------------------------------
+    Billing::Money.new(0, "USD").zero?
+    Billing::Money.new(0, "USD").zero?("usd")
+    Billing::Money.new(0, "USD").zero?("EUR")
+    Billing::Money.new(1, "USD").zero?("USD")
+    attempt { Billing::Money.new(0, "USD").zero?("nope") }
+    Billing::Money.new(1, "USD").positive?
+    Billing::Money.new(-1, "USD").negative?
+    Billing::Money.new(100, "USD") <=> Billing::Money.new(100, "USD")
+    Billing::Money.new(100, "USD") == Billing::Money.new(200, "USD")
+    Billing::Money.new(100, "USD") == Billing::Money.new(100, "EUR")
+    Billing::Money.new(100, "USD") == 100
+    Billing::Money.new(100, "USD").hash
+    Billing::Money.new(100, "USD").eql?(Billing::Money.new(100, "EUR"))
+    Billing::Money.new(100, "USD") <=> 100
     begin
-      Money.new(100, "USD") < Money.new(200, "EUR")
+      Billing::Money.new(100, "USD") < Billing::Money.new(200, "EUR")
     rescue ArgumentError
       nil
     end
 
-    # --- Money: rendering -------------------------------------------------------
-    Money.new(1050, "USD").to_s
-    Money.new(100, "USD").to_s
-    Money.new(5, "USD").to_s
-    Money.new(0, "USD").to_s
-    Money.new(-2550, "USD").to_s
-    Money.new(1000, "JPY").to_s
-    Money.new(1234, "KWD").to_s
-    Money.new(12_345, "CLF").to_s
-    Money.new(1050, "USD").to_h
-    Money.new(1050, "USD").to_major
-    Money.new(-1234, "KWD").to_major
-    Money.new(1000, "JPY").to_major
-    Money.new(1, "USD").exponent
+    # --- Billing::Money: rendering -------------------------------------------------------
+    Billing::Money.new(1050, "USD").to_s
+    Billing::Money.new(100, "USD").to_s
+    Billing::Money.new(5, "USD").to_s
+    Billing::Money.new(0, "USD").to_s
+    Billing::Money.new(-2550, "USD").to_s
+    Billing::Money.new(1000, "JPY").to_s
+    Billing::Money.new(1234, "KWD").to_s
+    Billing::Money.new(12_345, "CLF").to_s
+    Billing::Money.new(1050, "USD").to_h
+    Billing::Money.new(1050, "USD").to_major
+    Billing::Money.new(-1234, "KWD").to_major
+    Billing::Money.new(1000, "JPY").to_major
+    Billing::Money.new(1, "USD").exponent
 
     # --- PlanChange: every arm of the one comparison ----------------------------
     # Both directions, the boundary (equal), the free cases, both refusals from

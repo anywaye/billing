@@ -29,7 +29,7 @@ class FirstChargeTest < ActionDispatch::IntegrationTest
 
     @plan = Plan.create!(
       name: "Pro monthly", slug: "pro-monthly",
-      price: Money.new(1_900, "USD"), interval: "month",
+      price: Billing::Money.new(1_900, "USD"), interval: "month",
       trial_days: 0, active: true,
       processor_price_id: "price_1PZQaBcDeFgHiJkLmNoPqR2",
       entitlements: { "features" => [ "Everything" ], "limits" => { "projects" => 10 } }

@@ -315,7 +315,7 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     payload = JSON.parse(stripe_fixture("invoice.paid"))
     payload["data"]["object"]["amount_paid"] = "8700.5"
 
-    assert_raises(Money::InvalidAmountError) do
+    assert_raises(Billing::Money::InvalidAmountError) do
       Webhooks::StripeEvents.normalize(payload)
     end
   end

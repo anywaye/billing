@@ -94,7 +94,7 @@ module Webhooks
     # `started_at` cannot be two readings of one field. A third copy here would be
     # a third reading.
 
-    # A money amount on the wire. `Money#to_h` is the platform's crossing shape,
+    # A money amount on the wire. `Billing::Money#to_h` is the platform's crossing shape,
     # so the normalized payload uses it verbatim rather than a key invented here
     # — an event payload that spelled money differently from every other boundary
     # would need a second reader forever. It also means a non-integer amount
@@ -103,7 +103,7 @@ module Webhooks
     def self.money(amount, currency)
       return if amount.nil? || currency.blank?
 
-      Money.new(amount, currency).to_h
+      Billing::Money.new(amount, currency).to_h
     end
 
     def self.provenance(payload)
@@ -204,7 +204,7 @@ module Webhooks
     # collected; a failed one reports what could not be, which is `amount_due` and
     # *not* `amount_paid` — the failed fixture carries `amount_paid: 0`, and 0 is
     # truthy in Ruby, so the naive `amount_paid || amount_due` would report a
-    # failed 29.00 charge as a settled 0.00. Money is not worth a clever
+    # failed 29.00 charge as a settled 0.00. Billing::Money is not worth a clever
     # fallback.
     def self.settled_or_due(invoice)
       paid_invoice?(invoice) ? invoice["amount_paid"] : invoice["amount_due"]

@@ -169,7 +169,7 @@ module Processor
     #
     # `price_id` is the plan's `processor_price_id` — the processor's own id for
     # a price — and never an amount: "the checkout sends no amount to anybody"
-    # is a rule of this service (`AGENTS.md`, Money), and the fake honouring it
+    # is a rule of this service (`AGENTS.md`, Billing::Money), and the fake honouring it
     # is the same rule holding on the dev side.
     #
     # `trial_period_days` is passed only when it is positive. Passing zero
@@ -239,7 +239,7 @@ module Processor
     # showed the unit price alone would understate the bill. That multiplication
     # is the processor's arithmetic about the processor's own price — the same
     # direction as the `tax` display delta the controller computes from two of
-    # Stripe's figures, and not the thing `AGENTS.md` (Money) forbids: no
+    # Stripe's figures, and not the thing `AGENTS.md` (Billing::Money) forbids: no
     # figure is computed here to send to a processor, and none is persisted.
     #
     # The period is the interval the plan was bought on, and a plan on no

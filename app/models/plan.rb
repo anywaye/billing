@@ -1,11 +1,11 @@
 # A plan: what can be bought, at what price, on what cadence.
 #
-# The only way an amount enters this model is `price=`, and it takes a `Money`.
+# The only way an amount enters this model is `price=`, and it takes a `Billing::Money`.
 # `amount_cents` and `currency` are the two columns that amount is stored in,
-# and nothing else writes them: the controller parses a request into a `Money`
+# and nothing else writes them: the controller parses a request into a `Billing::Money`
 # (or refuses it), the column type and a CHECK constraint refuse a negative or
 # a non-integer, and `as_json` reads it back out through `price`. There is no
-# code path where a Float carries a price (AGENTS.md, Money).
+# code path where a Float carries a price (AGENTS.md, Billing::Money).
 #
 # `interval` is a plain string with an inclusion validation and a CHECK
 # constraint rather than a Rails `enum`, for the reason given on Customer: an
@@ -57,10 +57,10 @@ class Plan < ApplicationRecord
   before_validation :normalize_entitlements
 
   # The amount, as the value object. This is the read side of the money rule:
-  # a caller that wants to do arithmetic on a price gets a `Money`, never the
+  # a caller that wants to do arithmetic on a price gets a `Billing::Money`, never the
   # raw integer, so a currency cannot be dropped by accident.
   def price
-    Money.new(amount_cents, currency)
+    Billing::Money.new(amount_cents, currency)
   end
 
   # A plan is **platform catalogue and not tenant data**, and that is the reason
@@ -86,12 +86,12 @@ class Plan < ApplicationRecord
   # That is a recorded gap (`README.md`, "Known gaps") rather than a decision, and
   # `Principal#scopes` is the place it is closed.
 
-  # The write side. Refuses anything that is not a `Money`, because the whole
+  # The write side. Refuses anything that is not a `Billing::Money`, because the whole
   # point of the type is that a bare integer has no currency and a Float has no
-  # exact value. A caller with a raw pair must build the Money itself.
+  # exact value. A caller with a raw pair must build the Billing::Money itself.
   def price=(money)
-    unless money.is_a?(Money)
-      raise Money::InvalidAmountError, "price must be a Money, got #{money.class}"
+    unless money.is_a?(Billing::Money)
+      raise Billing::Money::InvalidAmountError, "price must be a Billing::Money, got #{money.class}"
     end
 
     self.amount_cents = money.minor_units
@@ -145,14 +145,14 @@ class Plan < ApplicationRecord
       errors.add(:slug, :invalid_format, message: "must be kebab-case")
     end
 
-    # ISO 4217 shape, not the list of live codes — the same reasoning Money
+    # ISO 4217 shape, not the list of live codes — the same reasoning Billing::Money
     # gives: a hand-maintained list of 180 currencies is a liability in a
     # payment system, and an unfamiliar code should not be refused before the
     # catalogue lands. Upcased first, so `usd` is accepted and stored as `USD`;
     # the column is `varchar(3)`, and a lowercase code that reached the
     # database anyway is caught by the length and shape here.
     def currency_is_iso_4217
-      return if currency.blank? || Money::CURRENCY_FORMAT.match?(currency)
+      return if currency.blank? || Billing::Money::CURRENCY_FORMAT.match?(currency)
 
       errors.add(:currency, :invalid_format, message: "is not an ISO 4217 code")
     end
@@ -198,7 +198,7 @@ class Plan < ApplicationRecord
       features.all? { |feature| feature.is_a?(String) && feature.strip.present? }
     end
 
-    # Counts, not amounts. There is no `Money` here on purpose: a limit is how many
+    # Counts, not amounts. There is no `Billing::Money` here on purpose: a limit is how many
     # of something, and putting it in a currency would be a category error this
     # service has already made the mistake of avoiding everywhere else.
     def limits_are_counts?

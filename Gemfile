@@ -81,6 +81,12 @@ gem "sentry-rails", "~> 5.24"
 # inert unless a host configures it, so this dependency configures nothing.
 gem "cafaye", path: "vendor/cafaye"
 
+# Token accounting foundation (shared with ship and other projects). ask-tokens
+# is the ledger engine; ask-tokens-rails provides the ActiveRecord-backed
+# store, models and install generator.
+gem "ask-tokens", "~> 0.3.0"
+gem "ask-tokens-rails", "~> 0.5.3"
+
 # The broker client. billing publishes its outbox onto the fleet's NATS bus, and
 # this is the one gem that decision costs — the transport is the piece the
 # shared gem deliberately does not own (its README: "It is not a bus client"),

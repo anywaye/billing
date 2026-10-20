@@ -163,6 +163,9 @@ module Tenancy
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind in ('r', 'p', 'S')
           and pg_get_userbyid(c.relowner) <> #{connection.quote(OWNER_ROLE)}
+          and not (c.relkind = 'S' and exists (
+            select 1 from pg_depend d
+            where d.objid = c.oid and d.deptype = 'a'))
       SQL
         connection.execute("alter #{kind} public.#{connection.quote_table_name(name)} owner to #{OWNER_ROLE}")
       end

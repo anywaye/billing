@@ -78,6 +78,7 @@ grant usage on schema cafaye to billing_app;
 -- --- customers: the grant `protect_table` could not write ---------------------
 
 grant select, insert, update, delete on table customers to billing_app;
+grant select, insert, update, delete on table ask_tokens_wallets, ask_tokens_transactions to billing_app;
 
 -- --- the four tables the account boundary does not cover ----------------------
 

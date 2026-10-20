@@ -372,7 +372,7 @@ class V1PlansTest < ActionDispatch::IntegrationTest
       Plan.create!({
         name: "Pro monthly",
         slug: "pro-monthly",
-        price: Money.new(1900, "USD"),
+        price: Billing::Money.new(1900, "USD"),
         interval: "month"
       }.merge(overrides))
     end

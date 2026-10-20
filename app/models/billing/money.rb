@@ -1,3 +1,4 @@
+module Billing
 # An amount of money, held as an integer number of minor units.
 #
 # This is the seed of the platform-wide rule that money is *integer minor
@@ -284,4 +285,5 @@ class Money
 
       currency
     end
+end
 end

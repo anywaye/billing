@@ -295,7 +295,7 @@ class ObservabilityRequestSpanTest < ActionDispatch::IntegrationTest
   end
 
   def a_plan
-    Plan.create!(name: "Pro", slug: "pro-#{SecureRandom.hex(6)}", price: Money.new(1_900, "USD"),
+    Plan.create!(name: "Pro", slug: "pro-#{SecureRandom.hex(6)}", price: Billing::Money.new(1_900, "USD"),
                  interval: "month", processor_price_id: "price_FAKE#{SecureRandom.hex(8)}")
   end
 

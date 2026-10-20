@@ -84,6 +84,12 @@ GEM
       uri (>= 0.13.1)
     addressable (2.9.0)
       public_suffix (>= 2.0.2, < 8.0)
+    ask-tokens (0.3.0)
+      money (>= 6.13)
+      tiktoken_ruby (>= 0.0.5)
+    ask-tokens-rails (0.5.3)
+      ask-tokens (>= 0.3.0)
+      rails (>= 7.0)
     ast (2.4.3)
     base64 (0.3.0)
     bcrypt_pbkdf (1.1.2)
@@ -188,6 +194,9 @@ GEM
     minitest (6.0.6)
       drb (~> 2.0)
       prism (~> 1.5)
+    money (7.1.1)
+      bigdecimal
+      i18n (~> 1.9)
     nats-pure (2.7.0)
       base64
       concurrent-ruby (~> 1.0)
@@ -393,6 +402,12 @@ GEM
     thruster (0.1.26-aarch64-linux)
     thruster (0.1.26-arm64-darwin)
     thruster (0.1.26-x86_64-linux)
+    tiktoken_ruby (0.0.17-aarch64-linux)
+    tiktoken_ruby (0.0.17-aarch64-linux-musl)
+    tiktoken_ruby (0.0.17-arm-linux)
+    tiktoken_ruby (0.0.17-arm64-darwin)
+    tiktoken_ruby (0.0.17-x86_64-linux)
+    tiktoken_ruby (0.0.17-x86_64-linux-musl)
     timeout (0.6.1)
     tsort (0.2.0)
     tzinfo (2.0.6)
@@ -425,6 +440,8 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
+  ask-tokens (~> 0.3.0)
+  ask-tokens-rails (~> 0.5.3)
   brakeman
   bundler-audit
   cafaye!
@@ -464,6 +481,8 @@ CHECKSUMS
   activestorage (8.1.4) sha256=f4956f3ec9ee63e5e0b332b57c877cb627f82b56f4cc902279310d2aa285c7a8
   activesupport (8.1.4) sha256=891dd3fe43c4fc8391934b237b1189bb1f661c932a84a840043db9d46a4e80df
   addressable (2.9.0) sha256=7fdf6ac3660f7f4e867a0838be3f6cf722ace541dd97767fa42bc6cfa980c7af
+  ask-tokens (0.3.0) sha256=86ad3858e46c0fab03234128ddb80f284640f401cd4d7d9df157957943fd5127
+  ask-tokens-rails (0.5.3) sha256=d3ca24a951a084fa1ba6887cea4ef6c8e0fe6045c11721fa55a065488f536345
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   bcrypt_pbkdf (1.1.2) sha256=c2414c23ce66869b3eb9f643d6a3374d8322dfb5078125c82792304c10b94cf6
@@ -518,6 +537,7 @@ CHECKSUMS
   mini_magick (5.4.0) sha256=f120af581d9ed4ec52c57f35a67a605d112bb1d8f582d1415b147fda42d11d78
   mini_mime (1.1.5) sha256=8681b7e2e4215f2a159f9400b5816d85e9d8c6c6b491e96a12797e798f8bccef
   minitest (6.0.6) sha256=153ea36d1d987a62942382b61075745042a2b3123b1cd48f4c3675af9cc7d6f1
+  money (7.1.1) sha256=8ed5cd99dfbc45e82688ea711cb59ea3c396c2608cd88876502b164c90269d4e
   nats-pure (2.7.0) sha256=4ed79ce4a369c5bd27b6b9165f3830caf30b8565eb4fc3575e36fd1c7994c974
   net-imap (0.6.7) sha256=b5c9573be975d856de252ee851871724da66aa2d449b2482d5690bd12bc23660
   net-pop (0.1.2) sha256=848b4e982013c15b2f0382792268763b748cce91c9e91e36b0f27ed26420dff3
@@ -592,6 +612,12 @@ CHECKSUMS
   thruster (0.1.26-aarch64-linux) sha256=2171cb34928c0250830008f535c4ab2ee57846cc3f5d3e96c3475f7b3de7a541
   thruster (0.1.26-arm64-darwin) sha256=40676164c433abf31313422305d9e9e9210cf941b1befad88e2428b3b8dcc36c
   thruster (0.1.26-x86_64-linux) sha256=3117a6ee430663f845a0457699fe9a05232dcc6c396e2cc83504de5a223c60e8
+  tiktoken_ruby (0.0.17-aarch64-linux) sha256=73c1b3065e3356274ff7f9f612b80531029d59c6474f6a73c8bae913cd3fd731
+  tiktoken_ruby (0.0.17-aarch64-linux-musl) sha256=038e114be72b2cbd9db2e3555a9a153e0638183447cfde9b1561775b7c4119d4
+  tiktoken_ruby (0.0.17-arm-linux) sha256=82d00547263b3a9ec3f3cb4c918fa0fe472e57ec0bdc65d17f60a52ad402ba2a
+  tiktoken_ruby (0.0.17-arm64-darwin) sha256=3e76e75218864f7315f83969533ddbe3eb0b927c357bd747acd156412ed6c2e9
+  tiktoken_ruby (0.0.17-x86_64-linux) sha256=c5bfe3067b0d0776028be2112a18f9031d69ed250427a575a4a0b51a0507906b
+  tiktoken_ruby (0.0.17-x86_64-linux-musl) sha256=d5dbae406a95a93cbf638f2a45aed9e71dea7eb987526df0474cf5db33b35de6
   timeout (0.6.1) sha256=78f57368a7e7bbadec56971f78a3f5ecbcfb59b7fcbb0a3ed6ddc08a5094accb
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f
   tzinfo (2.0.6) sha256=8daf828cc77bcf7d63b0e3bdb6caa47e2272dcfaf4fbfe46f8c3a9df087a829b

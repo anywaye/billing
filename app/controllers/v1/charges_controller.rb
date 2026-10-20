@@ -133,7 +133,7 @@ module V1
 
       # The amount as a person reads money, from integer minor units.
       #
-      # `Money#to_major` gives the number and `#exponent` gives how many decimal
+      # `Billing::Money#to_major` gives the number and `#exponent` gives how many decimal
       # places this currency has, so `1900` USD is `19.00` and `1900` JPY is
       # `1900`. Hardcoding two places would show a yen receipt with a decimal
       # point it has no minor unit for, which is the kind of small wrongness that
@@ -142,7 +142,7 @@ module V1
       # The currency is spelled out beside it rather than assumed, because a bare
       # number on a receipt is ambiguous by construction.
       def formatted_amount(charge)
-        money = Money.new(charge.amount, charge.currency)
+        money = Billing::Money.new(charge.amount, charge.currency)
         "#{format("%.#{money.exponent}f", money.to_major)} #{charge.currency}"
       end
 

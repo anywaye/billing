@@ -26,7 +26,7 @@ class MoneyPathsCoverageTest < ActiveSupport::TestCase
   # inventory test in this directory asserts the list against the repository, so a
   # new money path added without adding it here fails rather than going ungated.
   MONEY_PATHS = %w[
-    app/models/money.rb
+    app/models/billing/money.rb
     app/services/subscriptions/plan_change.rb
   ].freeze
 

@@ -238,7 +238,7 @@ class SubscriptionTest < ActiveSupport::TestCase
 
   test "one account may hold two live subscriptions to two different plans" do
     create_subscription(status: "active", processor_subscription_id: "sub_first")
-    other_plan = Plan.create!(name: "Team monthly", slug: "team-monthly", price: Money.new(4900, "USD"), interval: "month")
+    other_plan = Plan.create!(name: "Team monthly", slug: "team-monthly", price: Billing::Money.new(4900, "USD"), interval: "month")
 
     subscription = create_subscription(
       plan: other_plan,
@@ -389,7 +389,7 @@ class SubscriptionTest < ActiveSupport::TestCase
       Plan.create!(
         name: "Pro #{@plan_count}",
         slug: "pro-#{@plan_count}",
-        price: Money.new(1900, "USD"),
+        price: Billing::Money.new(1900, "USD"),
         interval: "month"
       )
     end

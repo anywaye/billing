@@ -89,7 +89,7 @@ class Webhooks::Charges::RecorderTest < ActiveSupport::TestCase
   end
 
   # A negative settlement is the same case with a sign: Stripe reports a
-  # credit-covered invoice as a negative `amount_paid`. `Money` permits a
+  # credit-covered invoice as a negative `amount_paid`. `Billing::Money` permits a
   # negative amount and the CHECK constraint refuses the row, so recording it
   # would raise from inside a webhook and park a correct event.
   test "a paid invoice with a negative amount records no charge" do
@@ -176,7 +176,7 @@ class Webhooks::Charges::RecorderTest < ActiveSupport::TestCase
     def shared_plan
       @shared_plan ||= Plan.create!(
         name: "Recorder plan", slug: "recorder-plan-#{SecureRandom.hex(6)}",
-        price: Money.new(1_900, "USD"), interval: "month",
+        price: Billing::Money.new(1_900, "USD"), interval: "month",
         processor_price_id: "price_FAKErecorderAAAAAAAAAAAAA"
       )
     end

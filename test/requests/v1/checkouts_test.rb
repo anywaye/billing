@@ -29,7 +29,7 @@ class V1CheckoutsTest < ActionDispatch::IntegrationTest
     travel_to(frozen_now)
     Processor::FakeClient.reset!
     @customer = create_stripe_customer
-    @plan = create_stripe_plan(price: Money.new(1900, "USD"))
+    @plan = create_stripe_plan(price: Billing::Money.new(1900, "USD"))
   end
 
   # --- the happy path --------------------------------------------------------
@@ -185,7 +185,7 @@ class V1CheckoutsTest < ActionDispatch::IntegrationTest
       headers: { "Idempotency-Key" => IDEMPOTENCY_KEY },
       as: :json
 
-    other_plan = create_stripe_plan(price: Money.new(4900, "USD"))
+    other_plan = create_stripe_plan(price: Billing::Money.new(4900, "USD"))
     post "/v1/checkouts",
       params: { customer_id: @customer.id, plan_id: other_plan.id },
       headers: { "Idempotency-Key" => IDEMPOTENCY_KEY },
@@ -240,7 +240,7 @@ class V1CheckoutsTest < ActionDispatch::IntegrationTest
   test "a plan change is refused by name on the same terms" do
     post "/v1/checkouts", params: { customer_id: @customer.id, plan_id: @plan.id }, as: :json
     subscription = Subscription.sole
-    other_plan = create_stripe_plan(price: Money.new(4900, "USD"))
+    other_plan = create_stripe_plan(price: Billing::Money.new(4900, "USD"))
 
     post "/v1/subscriptions/#{subscription.id}/change_plan", params: { plan_id: other_plan.id }, as: :json
 

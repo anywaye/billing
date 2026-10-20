@@ -10,9 +10,44 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_16_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_092000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "ask_tokens_transactions", force: :cascade do |t|
+    t.bigint "token_wallet_id", null: false
+    t.string "entry_type", null: false
+    t.bigint "amount", null: false
+    t.string "reason", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.bigint "balance", null: false
+    t.datetime "expires_at"
+    t.string "model_id"
+    t.string "provider"
+    t.bigint "input_tokens"
+    t.bigint "output_tokens"
+    t.bigint "cached_tokens"
+    t.decimal "llm_cost_usd", precision: 12, scale: 8
+    t.decimal "multiplier", precision: 6, scale: 4, default: "1.0", null: false
+    t.string "cost_kind"
+    t.string "unit_kind"
+    t.bigint "units"
+    t.datetime "created_at", null: false
+    t.index ["entry_type"], name: "index_ask_tokens_transactions_on_entry_type"
+    t.index ["expires_at"], name: "index_ask_tokens_transactions_on_expires_at"
+    t.index ["token_wallet_id", "created_at"], name: "index_ask_tokens_transactions_on_token_wallet_id_and_created_at"
+    t.index ["token_wallet_id"], name: "index_ask_tokens_transactions_on_token_wallet_id"
+  end
+
+  create_table "ask_tokens_wallets", force: :cascade do |t|
+    t.string "owner_type", null: false
+    t.bigint "owner_id", null: false
+    t.bigint "balance", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["owner_type", "owner_id"], name: "idx_ask_tokens_wallets_owner", unique: true
+    t.index ["owner_type", "owner_id"], name: "index_ask_tokens_wallets_on_owner"
+  end
 
   create_table "charges", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "account_id", null: false
@@ -131,6 +166,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_190000) do
     t.check_constraint "status::text = ANY (ARRAY['trialing'::text, 'active'::text, 'past_due'::text, 'canceled'::text, 'unpaid'::text])", name: "subscriptions_status_known"
   end
 
+  add_foreign_key "ask_tokens_transactions", "ask_tokens_wallets", column: "token_wallet_id"
   add_foreign_key "charges", "customers"
   add_foreign_key "charges", "subscriptions"
   add_foreign_key "subscriptions", "customers"

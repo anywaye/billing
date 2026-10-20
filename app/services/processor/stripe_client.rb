@@ -41,7 +41,7 @@ module Processor
     # The processor stated a figure this service cannot carry. Stripe's 2025
     # line items report `pricing.unit_amount_decimal` as a decimal STRING —
     # integral for every flat price this service sells, and legitimately
-    # fractional for metered ones. Money here is integer minor units and
+    # fractional for metered ones. Billing::Money here is integer minor units and
     # nothing rounds, so a fractional unit amount is refused rather than
     # truncated: a truncated one would be a figure the processor never stated.
     class Unrepresentable < Error; end

@@ -241,7 +241,7 @@ class SecretsDoNotLeakTest < ActionDispatch::IntegrationTest
       )
       plan = Plan.create!(
         name: "Secret probe", slug: "secret-probe-#{SecureRandom.hex(3)}",
-        price: Money.new(1900, "USD"), interval: "month",
+        price: Billing::Money.new(1900, "USD"), interval: "month",
         processor_price_id: "price_secret_probe"
       )
       subscription = Subscription.create!(

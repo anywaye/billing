@@ -283,8 +283,8 @@ class TenantCrossAccountFindingsTest < ActionDispatch::IntegrationTest
   test "F3: two plans can no longer claim one Stripe price id" do
     shared = "price_FAKEcontestedAAAAAAAAAA"
 
-    first = create_stripe_plan(processor_price_id: shared, price: Money.new(1_900, "USD"))
-    second = contested_plan(shared, Money.new(49_000, "USD"))
+    first = create_stripe_plan(processor_price_id: shared, price: Billing::Money.new(1_900, "USD"))
+    second = contested_plan(shared, Billing::Money.new(49_000, "USD"))
 
     refute_equal first.amount_cents, second.amount_cents,
       "the two plans must charge different amounts, or a collision would be a cosmetic " \
@@ -370,8 +370,8 @@ class TenantCrossAccountFindingsTest < ActionDispatch::IntegrationTest
     # failure, and the assertions above read the result.
     def attempt_ambiguous_resolution_keys
       [ ACCOUNT_A, ACCOUNT_B ].each { |account| contested_customer(account, "cus_FAKEambiguousBBBBBBBBBBBBB") }
-      create_stripe_plan(processor_price_id: "price_FAKEambiguousAAAAAAAAA", price: Money.new(1_900, "USD"))
-      contested_plan("price_FAKEambiguousAAAAAAAAA", Money.new(49_000, "USD"))
+      create_stripe_plan(processor_price_id: "price_FAKEambiguousAAAAAAAAA", price: Billing::Money.new(1_900, "USD"))
+      contested_plan("price_FAKEambiguousAAAAAAAAA", Billing::Money.new(49_000, "USD"))
     end
 
     # A customer row **aimed at** an id another row already holds, with the write

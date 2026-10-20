@@ -37,8 +37,8 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     @processor_under_test = Processor::StripeClient.new(api_key: "sk_test", api: @api)
     Processor::StripeClient.current = @processor_under_test
     @customer = create_stripe_customer
-    @plan = create_stripe_plan(price: Money.new(1900, "USD"))
-    @team = create_stripe_plan(price: Money.new(4900, "USD"))
+    @plan = create_stripe_plan(price: Billing::Money.new(1900, "USD"))
+    @team = create_stripe_plan(price: Billing::Money.new(4900, "USD"))
     @subscription = create_subscription(plan: @plan)
   end
 
@@ -460,7 +460,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   end
 
   test "a change to the same price carries nothing forward" do
-    lateral = create_stripe_plan(price: Money.new(1900, "USD"))
+    lateral = create_stripe_plan(price: Billing::Money.new(1900, "USD"))
 
     post change_plan_path, params: { plan_id: lateral.id }, as: :json
 
@@ -471,7 +471,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   # unit. Comparing them would mean annualising, which is computing money nobody
   # asked for.
   test "a change to a plan on a different interval is refused" do
-    yearly = create_stripe_plan(price: Money.new(19_000, "USD"), interval: "year")
+    yearly = create_stripe_plan(price: Billing::Money.new(19_000, "USD"), interval: "year")
 
     post change_plan_path, params: { plan_id: yearly.id }, as: :json
 
@@ -486,7 +486,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     # made the column unique it is also a unique violation — the assertion below
     # is about the currency refusal, and a collision would have replaced it with
     # an exception before the request was ever made.
-    euros = Plan.create!(name: "Pro EUR", slug: "pro-eur", price: Money.new(1900, "EUR"), interval: "month",
+    euros = Plan.create!(name: "Pro EUR", slug: "pro-eur", price: Billing::Money.new(1900, "EUR"), interval: "month",
       processor_price_id: "price_FAKEeuroplanBBBBBBBBB")
 
     post change_plan_path, params: { plan_id: euros.id }, as: :json
@@ -833,7 +833,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     end
 
     def downgrade_plan
-      @downgrade_plan ||= create_stripe_plan(price: Money.new(900, "USD"))
+      @downgrade_plan ||= create_stripe_plan(price: Billing::Money.new(900, "USD"))
     end
 
     def post_with_key(key, body = {}, to: "/v1/subscriptions")

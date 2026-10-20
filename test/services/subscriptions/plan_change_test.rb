@@ -23,13 +23,13 @@ require "test_helper"
 #     this service computed would be a number that eventually disagreed with the
 #     processor's own books.
 #
-# Both directions are one comparison of two `Money` values, which is the only
+# Both directions are one comparison of two `Billing::Money` values, which is the only
 # arithmetic in this file and it is a comparison, not a calculation. Nothing
 # here is a Float and nothing here is ever persisted.
 #
 # Two comparisons are refused rather than guessed:
 #
-#   * **Different currencies.** `Money#<=>` returns nil across currencies, and
+#   * **Different currencies.** `Billing::Money#<=>` returns nil across currencies, and
 #     Comparable would raise from an `>`. That is the right answer — FX is a
 #     pricing decision, not something a plan change may make — but the refusal
 #     has to be a named, tested outcome rather than an exception from a
@@ -121,7 +121,7 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
   test "a change between currencies is refused" do
     change = Subscriptions::PlanChange.new(from: usd_plan(1900), to: eur_plan(1900))
 
-    error = assert_raises(Money::CurrencyMismatchError) { change.timing }
+    error = assert_raises(Billing::Money::CurrencyMismatchError) { change.timing }
 
     assert_match(/USD/, error.message)
     assert_match(/EUR/, error.message)
@@ -130,13 +130,13 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
   test "a change between currencies is refused before anything is compared" do
     change = Subscriptions::PlanChange.new(from: usd_plan(1900), to: eur_plan(1900))
 
-    assert_raises(Money::CurrencyMismatchError) { change.upgrade? }
-    assert_raises(Money::CurrencyMismatchError) { change.downgrade? }
+    assert_raises(Billing::Money::CurrencyMismatchError) { change.upgrade? }
+    assert_raises(Billing::Money::CurrencyMismatchError) { change.downgrade? }
   end
 
   test "a change between intervals is refused, because the prices are not the same unit" do
     monthly = plan(1900)
-    yearly = Plan.create!(name: "Pro yearly", slug: "pro-yearly", price: Money.new(19_000, "USD"), interval: "year")
+    yearly = Plan.create!(name: "Pro yearly", slug: "pro-yearly", price: Billing::Money.new(19_000, "USD"), interval: "year")
 
     change = Subscriptions::PlanChange.new(from: monthly, to: yearly)
 
@@ -145,7 +145,7 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
 
   test "an interval refusal says which intervals were compared" do
     monthly = plan(1900)
-    yearly = Plan.create!(name: "Pro yearly", slug: "pro-yearly", price: Money.new(19_000, "USD"), interval: "year")
+    yearly = Plan.create!(name: "Pro yearly", slug: "pro-yearly", price: Billing::Money.new(19_000, "USD"), interval: "year")
 
     change = Subscriptions::PlanChange.new(from: monthly, to: yearly)
 
@@ -156,7 +156,7 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
 
   test "an interval refusal does not report a timing" do
     monthly = plan(1900)
-    yearly = Plan.create!(name: "Pro yearly", slug: "pro-yearly", price: Money.new(19_000, "USD"), interval: "year")
+    yearly = Plan.create!(name: "Pro yearly", slug: "pro-yearly", price: Billing::Money.new(19_000, "USD"), interval: "year")
 
     change = Subscriptions::PlanChange.new(from: monthly, to: yearly)
 
@@ -164,7 +164,7 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
     assert_raises(Subscriptions::PlanChange::IntervalMismatch) { change.downgrade? }
   end
 
-  # The prices are compared as `Money`, so a zero-decimal currency is compared in
+  # The prices are compared as `Billing::Money`, so a zero-decimal currency is compared in
   # its own minor units and never scaled by a hundred.
   test "a zero-decimal currency is compared in its own units" do
     change = Subscriptions::PlanChange.new(
@@ -236,7 +236,7 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
       @plans[[ minor, processor_price_id ]] ||= Plan.new(
         name: "Plan #{minor}",
         slug: "plan-#{minor}-#{@plans.size}",
-        price: Money.new(minor, "USD"),
+        price: Billing::Money.new(minor, "USD"),
         interval: "month",
         processor_price_id: processor_price_id
       )
@@ -250,7 +250,7 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
       Plan.new(
         name: "Plan #{minor} EUR",
         slug: "plan-#{minor}-eur-#{@plans&.size}",
-        price: Money.new(minor, "EUR"),
+        price: Billing::Money.new(minor, "EUR"),
         interval: "month",
         processor_price_id: "price_eur_#{minor}"
       )
@@ -260,7 +260,7 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
       Plan.new(
         name: "Plan #{minor} JPY",
         slug: "plan-#{minor}-jpy-#{@plans&.size}",
-        price: Money.new(minor, "JPY"),
+        price: Billing::Money.new(minor, "JPY"),
         interval: "month",
         processor_price_id: "price_jpy_#{minor}"
       )
@@ -270,7 +270,7 @@ class Subscriptions::PlanChangeTest < ActiveSupport::TestCase
       Plan.new(
         name: "Plan #{minor} KWD",
         slug: "plan-#{minor}-kwd-#{@plans&.size}",
-        price: Money.new(minor, "KWD"),
+        price: Billing::Money.new(minor, "KWD"),
         interval: "month",
         processor_price_id: "price_kwd_#{minor}"
       )

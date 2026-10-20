@@ -52,7 +52,7 @@ class FixtureProcessorIdsTest < ActiveSupport::TestCase
 
   test "two plans in one test get two ids, and both are written" do
     first = create_stripe_plan
-    second = create_stripe_plan(price: Money.new(4_900, "USD"))
+    second = create_stripe_plan(price: Billing::Money.new(4_900, "USD"))
 
     assert_predicate first, :persisted?
     assert_predicate second, :persisted?

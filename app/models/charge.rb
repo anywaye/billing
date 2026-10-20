@@ -23,7 +23,7 @@
 #
 # `amount` is an integer of minor units and `currency` is an ISO 4217 code,
 # for the reason `plans.amount_cents` and `plans.currency` are: money is integer
-# minor units and never a Float (AGENTS.md, Money).
+# minor units and never a Float (AGENTS.md, Billing::Money).
 class Charge < ApplicationRecord
   belongs_to :customer
   belongs_to :subscription, optional: true
@@ -74,7 +74,7 @@ class Charge < ApplicationRecord
     # payment system, and an unfamiliar code should not be refused before the
     # catalogue lands.
     def currency_is_iso_4217
-      return if currency.blank? || Money::CURRENCY_FORMAT.match?(currency)
+      return if currency.blank? || Billing::Money::CURRENCY_FORMAT.match?(currency)
 
       errors.add(:currency, :invalid_format, message: "is not an ISO 4217 code")
     end

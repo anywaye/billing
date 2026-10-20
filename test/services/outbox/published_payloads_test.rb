@@ -108,7 +108,7 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
       @plan = Plan.create!(
         name: "Pro Monthly",
         slug: "pro-monthly",
-        price: Money.new(1900, "USD"),
+        price: Billing::Money.new(1900, "USD"),
         interval: "month",
         processor_price_id: "price_1PZQaBcDeFgHiJkLmNoPqR2"
       )

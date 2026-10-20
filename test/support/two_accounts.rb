@@ -68,7 +68,7 @@ module TwoAccounts
     @shared_plan ||= Plan.create!(
       name: "Shared plan",
       slug: "shared-plan-#{SecureRandom.hex(6)}",
-      price: Money.new(1_900, "USD"),
+      price: Billing::Money.new(1_900, "USD"),
       interval: "month",
       processor_price_id: PRICE
     )

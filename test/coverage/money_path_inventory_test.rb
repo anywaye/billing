@@ -12,7 +12,7 @@ require "test_helper"
 # and asserts the partition is complete:
 #
 #   * **A money path** — the file exists to be about amounts, and is held to 100%
-#     line and branch coverage. `app/models/money.rb` and
+#     line and branch coverage. `app/models/billing/money.rb` and
 #     `Subscriptions::PlanChange` are the two.
 #   * **A file with money in it** — it builds, parses or reads an amount as one
 #     part of a larger job, and is not line-gated. The amount is still reached
@@ -27,7 +27,7 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
   GATE = Rails.root.join("test/coverage/money_paths_coverage_test.rb").freeze
 
   MONEY_PATHS = %w[
-    app/models/money.rb
+    app/models/billing/money.rb
     app/services/subscriptions/plan_change.rb
   ].freeze
 
@@ -51,7 +51,7 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
     # The checkout path reads `processor_price_id` — the **processor's** id for a
     # price — and nothing else monetary. It is in this list because the word is in
     # the column name, not because it decides an amount: the checkout sends no
-    # amount to anybody, which is the rule `AGENTS.md` (Money) states and the
+    # amount to anybody, which is the rule `AGENTS.md` (Billing::Money) states and the
     # reason the reason column exists. A per-unit quantity is multiplied at the
     # processor.
     "app/services/checkout/session.rb" =>
@@ -134,7 +134,7 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
         # crossing shape every other amount in this service uses: integer minor units
         # plus a currency, never a decimal and never a float.
         subscription = Subscription.new
-        serialized = subscription.as_json.merge("price" => Plan.new(name: "P", slug: "p", price: Money.new(1900, "USD"), interval: "month").price.to_h)
+        serialized = subscription.as_json.merge("price" => Plan.new(name: "P", slug: "p", price: Billing::Money.new(1900, "USD"), interval: "month").price.to_h)
 
         assert_equal({ "amount_minor" => 1900, "currency" => "USD" }, serialized.fetch("price"))
         assert_instance_of Integer, serialized.dig("price", "amount_minor")
@@ -145,17 +145,17 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
         money, error = MoneyParams.parse(ActionController::Parameters.new(amount_minor: 1900, currency: "USD"))
 
         assert_nil error
-        assert_equal Money.new(1900, "USD"), money
+        assert_equal Billing::Money.new(1900, "USD"), money
         assert_instance_of Integer, money.minor_units
         assert_predicate money, :frozen?
       when "Plan#price", "Plan#price="
-        plan = Plan.new(name: "Pro", slug: "pro", price: Money.new(1900, "USD"), interval: "month")
+        plan = Plan.new(name: "Pro", slug: "pro", price: Billing::Money.new(1900, "USD"), interval: "month")
 
-        assert_equal Money.new(1900, "USD"), plan.price
+        assert_equal Billing::Money.new(1900, "USD"), plan.price
         assert_instance_of Integer, plan.amount_cents
         # A Float is refused at the only place a price is written, which is the
-        # reason the setter takes a Money at all.
-        assert_raises(Money::InvalidAmountError) { plan.price = 19.0 }
+        # reason the setter takes a Billing::Money at all.
+        assert_raises(Billing::Money::InvalidAmountError) { plan.price = 19.0 }
       when "Webhooks::StripeEvents.money"
         shape = Webhooks::StripeEvents.money(1900, "usd")
 
@@ -166,7 +166,7 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
         # what it **does not** contain: an amount. The price crosses as the
         # processor's own id for it (`price_id`), never as a number, because the
         # amount a customer is charged is the processor's to decide (`AGENTS.md`,
-        # Money). So the proof that money survives this file as minor units is that
+        # Billing::Money). So the proof that money survives this file as minor units is that
         # no minor-unit field leaves it at all, and that the plan's own price is
         # still an integer pair when the session reads it back.
         #
@@ -175,14 +175,14 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
         # than subscribed for, because the delivery is read from it and that is
         # the whole of this entry point.
         customer = Customer.new(owner_type: "Account", owner_id: "11111111-1111-4111-8111-111111111111", processor: "stripe")
-        plan = Plan.new(name: "Pro", slug: "pro", price: Money.new(1900, "USD"), interval: "month",
+        plan = Plan.new(name: "Pro", slug: "pro", price: Billing::Money.new(1900, "USD"), interval: "month",
           processor_price_id: "price_FAKEcheckout000000")
         session = Checkout::Session.new(customer: customer, plan: plan, quantity: 3)
 
         subscription = Processor::FakeClient::ProcessorSubscription.new(
           processor_id: "sub_FAKEcheckout0000", processor_plan: "price_FAKEcheckout000000",
           quantity: 3, status: "active", trial_ends_at: nil, created_at: Time.current,
-          price: Money.new(1900, "USD"), interval: "month"
+          price: Billing::Money.new(1900, "USD"), interval: "month"
         )
         delivery = session.send(:delivery, subscription)
 
@@ -192,7 +192,7 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
         # amount: nothing in this file computes one.
         assert_equal 3, delivery.fetch("quantity")
         assert_instance_of Integer, delivery.fetch("quantity")
-        assert_equal Money.new(1900, "USD"), plan.price
+        assert_equal Billing::Money.new(1900, "USD"), plan.price
         assert_instance_of Integer, plan.price.minor_units
       when "V1::ChargesController#formatted_amount"
         # The receipt's amount line: integer minor units in, a number with the
@@ -213,7 +213,7 @@ class MoneyPathInventoryTest < ActiveSupport::TestCase
     # enough: half this repository serialises something to a hash, and a file that
     # renders a problem body is not a money path.
     def money_mention
-      /\b(Money\.(new|from_major|zero)|#price\b)/
+      /\b(Billing::Money\.(new|from_major|zero)|#price\b)/
     end
 
     def gated_paths

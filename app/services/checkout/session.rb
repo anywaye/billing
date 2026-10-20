@@ -68,7 +68,7 @@ module Checkout
     #                                 the processor. There is nothing to subscribe
     #                                 to, and inventing a price for it here would
     #                                 be this service deciding an amount, which
-    #                                 `AGENTS.md` (Money) forbids outright.
+    #                                 `AGENTS.md` (Billing::Money) forbids outright.
     #   * `customer_not_an_account` — a `User`-owned customer. Exactly the rule
     #                                 `Subscription::BILLABLE_OWNER_TYPE` already
     #                                 enforces on the row, checked here so the
@@ -143,7 +143,7 @@ module Checkout
     # same answer to a subscriber, and the second half is what keeps this service
     # from ever having to name a price — `Plan#price` is read for the response and
     # never sent, because the amount the customer is charged is the processor's
-    # (`AGENTS.md`, Money: "no amount is ever computed to send to a processor").
+    # (`AGENTS.md`, Billing::Money: "no amount is ever computed to send to a processor").
     def on_sale?
       plan.active? && plan.processor_price_id.present?
     end
@@ -189,7 +189,7 @@ module Checkout
           # The fake's price book: it answers an upcoming-invoice projection
           # from the plan this checkout bought, which is the only price it
           # knows. A real processor is not sent either fact — this door talks to
-          # the fake alone — and `AGENTS.md` (Money)'s rule is about what is
+          # the fake alone — and `AGENTS.md` (Billing::Money)'s rule is about what is
           # sent to a processor, which this is not.
           price: plan.price,
           interval: plan.interval
