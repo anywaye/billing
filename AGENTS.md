@@ -1252,7 +1252,7 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
 
 - **Never** edit `Gemfile.lock` as a side effect. A lockfile change is its own
   commit with its own reason. `bin/prime` only ever runs `bundle install`.
-- **Never** copy code from `moon/refs/` into this repository. `jumpstart-pro` is
+- **Never** copy code from `reference/` into this repository. `jumpstart-pro` is
   a licensed product and the shallow clones are behavioral references only;
   every line here is written from scratch (PLAN §2).
 - **Never** add a gem without saying so in the PR body. Rails defaults and `pg`

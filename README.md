@@ -668,7 +668,7 @@ path, so there is no network in `bin/rails test`.
 
 Read `AGENTS.md` before changing anything here. It is the contract: money is
 integer minor units, time is UTC, IDs are opaque strings, lockfiles are never
-edited as a side effect, and nothing is copied out of `moon/refs/`.
+edited as a side effect, and nothing is copied out of `reference/`.
 
 ## License
 

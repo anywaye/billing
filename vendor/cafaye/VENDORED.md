@@ -35,7 +35,7 @@ manifest cannot say is that the *upstream* has not moved: nothing in CI can
 reach a private repository. That half is a developer workflow, not a test:
 
 ```
-# with the fleet checked out beside this worktree (moon/cafaye/cafaye-rb):
+# with the fleet checked out beside this worktree (cafaye/cafaye-rb):
 diff -r vendor/cafaye ../../cafaye/cafaye-rb --exclude=DIGESTS --exclude=VENDORED.md
 ```
 

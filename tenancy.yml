@@ -2,7 +2,7 @@
 #
 # Checked by cafaye/core's contract harness:
 #
-#     bash /Users/kaka/Code/any/moon/cafaye/core/harness/bin/tenancy-check .
+#     bash /Users/kaka/Code/any/cafaye/core/harness/bin/tenancy-check .
 #
 # It must report 0 failures. This file is TG-A4's deliverable, and the report
 # that goes with it names what was deliberately NOT declared.
