@@ -20,7 +20,7 @@
 # The tracked `docker-compose.yml` is the opposite case and is NOT ignored. That
 # one is hand-written, it is the service's declaration of its own tenant, and it
 # is reviewed.
-/caf.dev.compose.yaml
+/cafe.dev.compose.yaml
 
 # Ignore all logfiles and tempfiles.
 /log/*
