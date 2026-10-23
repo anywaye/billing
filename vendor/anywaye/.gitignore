@@ -1,0 +1,25 @@
+/.bundle
+/vendor/bundle
+/.env*
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+/pkg/
+*.gem
+/coverage/
+
+# `cafe dev` renders this from anywaye.yml and rewrites it on every run, which its
+# own first line says. Build output shaped like a source file: untracked and not
+# ignored, it is one `git add -A` from being committed, and from there a merge
+# conflict nobody can resolve by reading it — both sides are generated, and the
+# manifest neither side was rendered from is not in the diff.
+#
+# Declared rather than left to accident. `cafe dev` refuses in this repository
+# today (a library: no Dockerfile, and the catalog names no image for it), so the
+# file is never actually written here. That is a property of this manifest, not
+# a reason to leave the path open. anywaye-rb holds no hand-written compose file
+# of its own, so there is nothing for this entry to be confused with.
+/caf.dev.compose.yaml
+keyring/
+secrets/

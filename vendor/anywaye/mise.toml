@@ -1,0 +1,45 @@
+# Toolchain pins for this repository. anywaye is a gem, not an app, so the ruby
+# pin is the whole toolchain: every other dependency is a gem in Gemfile.lock,
+# pinned there.
+#
+#   mise install     # install the pinned toolchain
+#   mise run prime   # the gate: bundle, prepare the database, lint, audit, test
+#
+# The ruby version here must match .ruby-version. Two files, one number: a
+# worktree that primes on 4.0.1 and a service that resolves on 3.4 are two
+# different programs wearing one repo's name.
+[tools]
+"ruby" = "4.0.1"
+"bundler" = "4.0.18"
+
+[tasks.prime]
+description = "The gate: bundle install, db:prepare, rubocop, bundler-audit, rake test"
+run = "./bin/prime"
+
+[tasks.setup]
+description = "Dependencies and the test database only, no lint or tests"
+run = "./bin/prime --fast"
+
+[tasks.test]
+description = "Run the test suite"
+run = "bundle exec rake test"
+
+[tasks.lint]
+description = "Run the linter"
+run = "bundle exec rubocop --parallel"
+
+[tasks.security]
+description = "Audit the bundle for known security defects"
+run = "bundle exec bundler-audit check --update"
+
+[tasks.coverage]
+description = "Line and branch coverage of lib/, with a floor"
+run = "bundle exec rake coverage"
+
+[tasks.db-prepare]
+description = "Create the test database and load the outbox schema"
+run = "bundle exec rake db:prepare"
+
+[tasks.console]
+description = "An IRB session with the gem and the test database loaded"
+run = "bundle exec irb -Ilib -ranywaye"

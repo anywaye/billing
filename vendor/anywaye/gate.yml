@@ -1,0 +1,230 @@
+# gate.yml — how anywaye-rb is gated, declared rather than guessed.
+#
+# WHY THIS FILE IS HERE. Across this fleet "run the gate" had five different
+# spellings across fifteen repositories, and this one is `mise run prime`, which
+# is the spelling nine of them use. What was missing was never the command — it
+# was everything the command needs that is not in the repository. This file says
+# what those things are, so a reader does not have to get it wrong to find out.
+# The format is core/schemas/gate.schema.json, the checker is core's
+# harness/gate_check.py, and core/docs/gate.md is why the format is this shape.
+#
+# WHAT THE CHECKER PROVES ABOUT THIS FILE, AND WHAT IT DOES NOT. It proves the
+# command runs, the entrypoint exists and is executable, `mise run prime`
+# resolves to that same file, the CI workflow really invokes it, and that running
+# it makes each of the five lines below appear — the suite's count at or above
+# the floor, and the four other gate steps saying they ran. It does NOT prove the
+# tests touched the database they claim to; `gate.proof` is a line of output, and
+# a collect-then-run set diff is `cafe`'s job, named in core's
+# harness/gate_findings.json rather than implied here.
+#
+# EVERY NUMBER BELOW WAS MEASURED ON THIS REPOSITORY, NOT COPIED. The baseline
+# run this was written from was 228 runs, 652 assertions, 0 failures, 0 errors,
+# 0 skips, 44 files linted, coverage 96.06% of lines.
+version: 1
+name: anywaye-rb
+
+gate:
+  # An argv, not a shell string. This fleet's one recorded false green was
+  # `… | tail -45; echo "PRIME EXIT=$?"` under zsh, where `$?` was `tail`'s and
+  # `tail` is always 0. An argv has no pipeline in it to lose an exit code.
+  command: [bin/prime]
+  # The fleet's spelling, and it already resolves to the entrypoint below:
+  # `mise.toml` says `[tasks.prime] run = "./bin/prime"`. No rename needed here —
+  # core had to rename its task, this repository never had to.
+  miseTask: prime
+  # The file behind the command, checked on disk, with the executable bit.
+  entrypoint: bin/prime
+  # 65s warm on this machine; minutes on a cold one, because `bundle install`
+  # builds the `pg` native extension for 63 gems and the advisory database is
+  # cloned. Deliberately generous for the same reason core's is: a budget tight
+  # enough to be a bug detector is tight enough to be a flake generator on a
+  # first run, and a timeout that fires on a slow CI runner reads as a red gate
+  # over nothing.
+  timeoutSeconds: 900
+  proof:
+    # The suite. This is the proof that makes the rest worth having, because the
+    # defect this format exists to prevent is this repository's own: a run that
+    # prints `ok` having executed none of the database tier. Minitest 6 prints
+    # all five counters unconditionally (lib/minitest.rb:981), so pinning
+    # `0 failures, 0 errors, 0 skips` is pinning a real line and not a formatting
+    # accident.
+    - id: suite
+      match: '^([0-9]+) runs, [0-9]+ assertions, 0 failures, 0 errors, 0 skips$'
+      # A decrease-detector, and 220 is 228 less a deliberate margin of eight.
+      # The margin is there because this suite is expected to grow and this
+      # repository has no test forcing the floor up when it does — the ratchet
+      # core enforces in `test_the_gate_floor_is_not_below_the_suite_core_claims`
+      # is OWED here, and is named in REPORT-core-10 rather than quietly
+      # skipped. Eight is small enough that losing any real tier — the outbox
+      # tier is 48 tests, the contract tier 32 — trips it, and large enough that
+      # a legitimate consolidation of a handful of tests does not.
+      minimum: 220
+    # The linter, counted. `bin/prime`'s own comment says "No step is skippable
+    # into a false green", and that claim is only checkable if something is
+    # asserted about it: with this line declared, deleting the rubocop step from
+    # `bin/prime` is `gate.proof-missing` rather than a gate that quietly stops
+    # linting. 44 is today's file count and is a floor in the ratchet sense —
+    # it goes UP as the library grows, and down only when a file is deliberately
+    # deleted. `44 files inspected` is stable between a git worktree and a plain
+    # directory copy; both were checked, because a count that moved with the
+    # checkout would make this proof a coin flip.
+    - id: lint
+      match: '^([0-9]+) files inspected, no offenses detected$'
+      minimum: 44
+    # The advisory tier. No floor: it reports nothing countable, and the schema
+    # allows a proof without one for exactly this case. The line is the whole
+    # claim — a security library's gate that stops auditing for known CVEs and
+    # says nothing is the failure mode, not the green it would leave behind.
+    - id: audit
+      match: '^No vulnerabilities found$'
+    # The database step. Deliberately NOT matched with a URL in the pattern:
+    # `ANYWAYE_TEST_DATABASE_URL` is a developer's to set and theirs may carry a
+    # password, so the pattern asserts the prefix and nothing more. A literal
+    # connection string in a file in the repository is a plaintext secret at
+    # rest, and a secret written into a declaration is a secret written into
+    # every CI log that reports on it.
+    #
+    # What this proves and what it does not: that `rake db:prepare` ran and
+    # connected, which means the gate carries its own schema load. It does NOT
+    # prove the suite used that schema — only a test that asserts it can. What
+    # it does catch is the identity defect's shape: a gate that stops preparing
+    # its own database is green on a machine that happens to have one and red on
+    # a clean one, and nobody finds out which machine they are on until CI.
+    - id: database
+      match: '^database ready: '
+
+external:
+  # FALSE, and every one of the five entries below was demonstrated rather than
+  # reasoned about. `selfContained: true` is a claim that the gate needs nothing
+  # but this repository; this one needs an interpreter it does not carry, a
+  # package index, a second network host, a database server, and a checkout of
+  # another repository. Each `unmet` below is what this gate actually printed
+  # when that thing was absent — quoted, not predicted — because "a requirement
+  # you cannot describe the failure of is worse than no requirement".
+  selfContained: false
+  requirements:
+    # Demonstrated: `env PATH=<empty> bash bin/prime` exits 127 with exactly the
+    # line quoted here. `bin/prime` deliberately does NOT run `mise install` —
+    # it refuses rather than installing a toolchain behind your back — so this is
+    # the operator's to satisfy before gating.
+    - kind: toolchain
+      name: ruby 4.0.1 and bundler 4.0.18, pinned in mise.toml and in .ruby-version
+      satisfy:
+        # A bare name: this is a claim about THIS MACHINE and the checker
+        # deliberately does not run it, so it reports `gate.requirement-unproven`
+        # as a warning and leaves the exit code alone. That warning is correct.
+        command: [mise, install]
+        unmet: bin/prime: ruby not found on PATH — run 'mise install' in this worktree (exit 127)
+    # Demonstrated: an empty gem home with the network forbidden reports
+    # `Could not find jwt-3.3.0, pg-1.6.3, …` and exits 7. Once, on a cold
+    # checkout only; the 63 gems are pinned in Gemfile.lock.
+    - kind: network
+      name: rubygems.org, once, on a cold checkout — the 63 gems in Gemfile.lock
+      satisfy:
+        command: [bundle, install]
+        unmet: Could not find jwt-3.3.0, pg-1.6.3, minitest-6.0.6, ... (exit 7)
+    # Demonstrated, and this one is NOT once: `bin/prime` runs
+    # `bundler-audit check --update`, which fetches ruby-advisory-db on every
+    # single run. With the network blocked and a warm cache it printed
+    # `failed to update "…/ruby-advisory-db"` and exited 1. So an air-gapped
+    # runner is not merely stale here, it is RED. Declared as its own entry
+    # because it is a different host, at a different time, with a different
+    # failure, and folding it into the line above would have hidden that.
+    - kind: network
+      name: github.com/rubysec/ruby-advisory-db, on EVERY run — bundler-audit check --update
+      satisfy:
+        command: [bundle, exec, bundler-audit, check, --update]
+        unmet: failed to update "/…/ruby-advisory-db" (exit 1)
+    # Demonstrated: with ANYWAYE_TEST_DATABASE_URL pointing at a port nothing is
+    # listening on, `rake db:prepare` aborts with `PG::ConnectionBad` and the
+    # gate exits 1.
+    #
+    # Note what is NOT here: no credential. `postgres://localhost/anywaye_test`
+    # carries no password and CI sets POSTGRES_HOST_AUTH_METHOD=trust, so
+    # declaring a credential would be a requirement with nothing behind it. And
+    # note what the requirement does NOT have to say: that the schema gets
+    # loaded. `bin/prime` runs `rake db:prepare`, which calls `prepare!` →
+    # `reset_schema!` → `create_tables!`, so the outbox tables are created from
+    # this repository's own `db/outbox_events.sql` on every run. That is the
+    # answer to identity's 1430-green-tests-against-an-empty-schema, and it was
+    # verified rather than assumed: see REPORT-core-10.
+    - kind: database
+      name: a PostgreSQL server at postgres://localhost/anywaye_test, or ANYWAYE_TEST_DATABASE_URL
+      satisfy:
+        # Repository-relative, so the checker verifies the file is here: a
+        # requirement satisfied by a file that does not exist is a pointer to a
+        # page that does not exist, which is the thing this field replaced.
+        # `--fast` is bundle install plus db:prepare and nothing else, so it is
+        # the smallest argv in this repository that makes the database exist.
+        command: [bin/prime, --fast]
+        unmet: rake aborted! / PG::ConnectionBad: connection to server at "127.0.0.1", port 5432 failed (exit 1)
+    # THE ONE NOBODY HAD WRITTEN DOWN. Demonstrated: copy this repository to a
+    # directory with no `core` beside it — which is exactly what a CI runner gets
+    # from `actions/checkout@v4` — and the suite is RED:
+    #
+    #     1) Failure: ManifestTest#test_it_carries_every_field_core_requires_and_nothing_else
+    #     1) Error:   CoreSpecsTest#test_the_attribute_list_here_is_core_s:
+    #                  NoMethodError: undefined method 'fetch' for nil
+    #     228 runs, 650 assertions, 1 failures, 1 errors, 0 skips
+    #
+    # `test/contract/` reads core's own schema and doc rather than paraphrasing
+    # them, and resolves core as `../../../core` from `test/contract` — a SIBLING
+    # of the repository root, not a file in this repository. Sixteen of those
+    # tests fall back to a pinned copy and still assert (that is a deliberate
+    # design choice in that file and it is good); these two do not, so they are
+    # the two that need the real thing.
+    #
+    # The run COUNT is 228 either way, so the floor above is right in both
+    # environments — which is only knowable by running both, and is why the
+    # margin in `suite` is not a guess about CI.
+    #
+     # `ci/ci.yml` now provides this, in both matrix jobs: it runs
+     # `git clone --depth 1 https://github.com/anywaye/core.git` to the sibling
+     # path, and `anywaye/core` is public so the clone needs no credential. FIXED
+     # by this repository's fix/ci-green packet (REPORT-ci-green), and not by
+     # core-10: fixing CI would have meant modifying the gate's own behaviour,
+     # which that packet was prohibited from. The `unmet` line below is the
+     # measured failure with core absent — quoted, not predicted — and is why
+     # this requirement stays declared even though CI now satisfies it.
+    - kind: filesystem
+      name: core's checkout on disk as a sibling of this repository, or CORE_PATH pointing at one
+      satisfy:
+        command: [git, clone, git@github.com:anywaye/core.git, ../core]
+        unmet: 1 failure in manifest_test.rb and 1 error in core_specs_test.rb; 228 runs, 1 failures, 1 errors, 0 skips
+  # NOT required, named so nobody goes looking for them: no credential, no
+  # service other than PostgreSQL, no browser, no fixed port. The suite starts
+  # its own JWKS server on 127.0.0.1 with port 0 (the kernel's choice), so there
+  # is no port to collide with and nothing to shut down. Each of the five above
+  # is something this gate actually failed without.
+
+ci:
+  # THE FILE CI RUNS, AND WHY IT IS NOT A WORKFLOW ANY MORE.
+  #
+  # The paragraphs below describe the GitHub Actions workflow this repository
+  # used to have. That workflow is gone: the fleet's CI is no longer GitHub
+  # Actions. The gate runs in a dev sandbox — the same sandbox the work
+  # happens in — and what the runner executes is `ci/gate.sh`.
+  #
+  # The script is this repository's gate, in the repository, where it can be
+  # run by hand, by a sandbox, or by a runner. It owns the parts of the gate
+  # the runner cannot know about — a database, a browser, an audit tool —
+  # and the runner executes it as it stands.
+  #
+  # WHAT FOLLOWS IS KEPT, AND WHY. The notes below were written about the
+  # workflow this repository used to have. The claims they make about the GATE
+  # — which command it is, which flag it carries, which tier is deliberately
+  # not declared here — are still true and are still the reason this block is
+  # what it is. The claims they make about the workflow's shape (its job names,
+  # its `run:` bodies, the line numbers in a file that no longer exists) are
+  # how the workflow was, and the workflow is gone. Nothing here is a
+  # declaration about a file CI runs.
+  #
+  workflow: ci/gate.sh
+  # True as written: the workflow's only gate step is `run: ./bin/prime`, and
+  # the steps before it (checkout core, put it at the sibling path) exist to
+  # satisfy the `filesystem` requirement above rather than to change the gate.
+  # Note the distinction this declaration exists for: "CI runs this gate" and
+  # "this gate is green on CI" are different claims. Both are true as of
+  # fix/ci-green (REPORT-ci-green); the second was false before it, with the
+  # contract tier red for want of the core checkout.
+  invokes: [./bin/prime]

@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+#
+# Prime this worktree. Run it after `git clone`, `git worktree add`, or
+# `git pull --rebase`, and it is what CI runs.
+#
+#   bin/prime            # bundle, database, lint, audit, then the suite
+#   bin/prime --fast     # bundle and the database only
+#
+# WHAT IT PROMISES
+#   Exit 0: dependencies resolve, the test database is prepared, the linter is
+#   clean, no dependency in the lockfile has a known CVE, and every test
+#   passes. Anything else: nonzero, with the failing step named. `set -euo
+#   pipefail` is the whole mechanism — no error handling to forget.
+#
+# STRICTNESS NOTES
+#   - No `mise install` here. mise.toml pins the interpreter; this script fails
+#     loudly (127) with instructions instead of installing a toolchain behind
+#     your back.
+#   - `bundle install`, never `bundle update`: a prime that moves the lockfile
+#     can make two worktrees disagree about the same commit.
+#   - The database is created if it is missing, from the same reference DDL the
+#     gem ships to services. A first run on a clean checkout therefore does not
+#     fail on a database nobody remembered to make. It is created, never
+#     dropped: `db:reset` drops the schema, `db:prepare` does not.
+#   - `bundler-audit` runs before the tests. A shared library is the one place
+#     a CVE in a transitive dependency reaches every service in the fleet at
+#     once, so it belongs in the local gate, not only in CI.
+#   - No step is skippable into a false green. If `rubocop` is missing from the
+#     bundle the prime fails; a gate that quietly stops checking is worse than
+#     no gate.
+
+set -euo pipefail
+
+FAST=0
+for arg in "$@"; do
+  case "$arg" in
+    --fast) FAST=1 ;;
+    -h | --help)
+      sed -n '2,22p' "$0"
+      exit 0
+      ;;
+    *)
+      echo "bin/prime: unknown argument: $arg" >&2
+      exit 2
+      ;;
+  esac
+done
+
+require() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "bin/prime: $1 not found on PATH — run 'mise install' in this worktree" >&2
+    exit 127
+  fi
+}
+
+step() {
+  printf '\n== %s\n' "$1"
+}
+
+# Never fails the prime. The toolchain checks below are the gate; a banner must
+# not be able to turn a green prime red.
+version_of() {
+  "$@" --version 2>/dev/null | head -n 1 || true
+}
+
+require ruby
+require bundle
+
+step "ruby $(version_of ruby)"
+
+step "bundle install"
+bundle install
+
+if [ "$FAST" -eq 1 ]; then
+  step "skipping the linter, the audit and the suite (--fast)"
+  exit 0
+fi
+
+step "test database"
+bundle exec rake db:prepare
+
+step "rubocop"
+_rubocop_log="$(mktemp)"
+set +e
+bundle exec rubocop --parallel 2>&1 | tee "$_rubocop_log"
+_rubocop_rc=${PIPESTATUS[0]}
+set -e
+_rubocop_inspected="$(grep -oE '[0-9]+ files? inspected' "$_rubocop_log" | grep -oE '^[0-9]+' | head -n1)"
+rm -f "$_rubocop_log"
+if [ "$_rubocop_rc" -ne 0 ]; then
+  exit "$_rubocop_rc"
+fi
+if [ -z "$_rubocop_inspected" ] || [ "$_rubocop_inspected" -eq 0 ]; then
+  echo "bin/prime: rubocop inspected 0 files — the lint step is vacuous (check AllCops/Exclude and the working directory)" >&2
+  exit 1
+fi
+
+step "bundler-audit"
+bundle exec bundler-audit check --update
+
+step "minitest"
+bundle exec rake test
+
+step "prime ok (anywaye $(ruby -Ilib -ranywaye/version -e 'print Anywaye::VERSION'))"

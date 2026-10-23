@@ -1,0 +1,110 @@
+---
+# anywaye.yml — the anywaye project manifest for anywaye-rb.
+#
+# Conforms to core's frozen schema
+# (anywaye/core: schemas/anywaye.manifest.schema.json). Specs are manager-owned:
+# a worker records the shape it is being built against and marks what it cannot
+# decide. See AGENTS.md.
+#
+# This repository is a library, not a service: it is not deployed, serves no
+# traffic and publishes no events. core's manifest schema says exactly that —
+# "omit `exposes` entirely for libraries and specification-only repositories" —
+# so `exposes` is absent rather than empty, because `exposes` has
+# `minProperties: 1` and a service that names no contract surface is not
+# declaring a contract it has.
+name: anywaye-rb
+description: The shared Ruby library every anywaye Ruby service depends on — JWKS-backed token verification and the transactional outbox writer.
+language: ruby
+core: ^0.2.0
+
+# anywaye-rb subscribes to no events and depends on no anywaye service in the
+# service-graph sense. It does have a build-time relationship with `identity`:
+# the token contract it verifies against is identity's, and its claim names come
+# from core's docs/openapi-conventions.md plus guard's private copy of the same
+# logic — the two disagree, and that disagreement is recorded below rather than
+# resolved here.
+#
+# `consumes` is empty: a library is not a consumer, and naming event types it
+# does not handle would make every SDK generator emit a subscriber for a gem
+# with no bus connection.
+consumes: []
+
+# The JWT contract anywaye-rb verifies is identity's: the issuer, the audience
+# and the signing keys are all identity's, so the dependency is real rather than
+# a data reference. `version` is provisional for the same reason guard's is —
+# no anywaye service has tagged a release, so this is the platform's initial core
+# range rather than a version identity has shipped.
+dependencies:
+  - name: identity
+    version: ^0.1.0
+    required: true
+
+# > DECISION NEEDED (anywaye-rb-01): the token claim contract this gem reads is
+# > ambiguous in the fleet, and it was resolved defensively rather than by a
+# > judgement call. `identity` mints no tokens yet — it is a Go service whose
+# > auth is a session cookie and whose CHANGELOG and README both say "no JWT
+# > code, that is a later packet" — so there is no implementation to read the
+# > claim names off. The two written contracts disagree:
+# >
+# > 1. **The scope claim.** core's `docs/openapi-conventions.md` says the claim
+# >    is `scopes`, an array, and is *required* for authenticated service
+# >    traffic. `guard` — the only implementation in the fleet, in
+# >    `src/middleware/jwt.ts` — reads `scope`, a space-separated string, and
+# >    treats it as optional. guard records the same conflict as its own
+# >    `DECISION NEEDED (guard, guard-02)` item 2, and asks for a ruling.
+# > 2. **The tenant claim.** core says `account_id` and says every query is
+# >    scoped by `account_id` from the token, never from the request body.
+# >    guard does not read a tenant claim at all, and this gem's packet asks for
+# >    "the tenant/account" on the result object.
+# > 3. **The algorithm set.** core accepts RS256 and ES256. guard accepts RS256
+# >    only, pinned in one constant. This gem accepts RS256 only, matching guard
+# >    and `identity`'s absence of anything else.
+# >
+# > What was built, and why it is the restrictive default rather than a
+# > coin-flip: `Anywaye::TokenVerifier::DEFAULT_SCOPE_CLAIMS` reads **both**
+# > `scopes` (array or space-separated string) and `scope` (space-separated
+# > string), and unions them, because accepting both names is strictly safer
+# > than accepting one and silently producing an empty scope set — a scope gate
+# > over an empty set denies everything, which is a safe failure, but a caller
+# > that reads `principal.scopes` to *decide what to show* gets an empty list
+# > and shows nothing. The account claim is read as `account_id`, configurable
+# > to anything with `Anywaye.config.account_claim`, and is **not** required by
+# > default: a service that needs tenancy must ask for it explicitly
+# > (`require_account: true`) or it gets `nil` and has to handle that. A library
+# > that refused every token without `account_id` would refuse every token guard
+# > can currently mint, which would make the migration a big-bang cutover.
+# >
+# > Requested: a ruling on 1, 2 and 3, recorded in core's conventions so the
+# > contract lives in one file. Cost of flipping: one constant each
+# > (`DEFAULT_SCOPE_CLAIMS`, the `account_claim` config default, `ALGORITHMS`),
+# > all of them already exist and are named in the source.
+# >
+# > DECISION NEEDED (anywaye-rb-01): `core/docs/event-outbox.md` says, under
+# > "Per-service implementations, never shared code", that "there is no shared
+# > outbox library, and there will not be one". This repository is that shared
+# > library. The two are reconcilable — the section's stated reason is that
+# > "a shared library would have to expose every one of those as configuration,
+# > and would end up owning the transaction semantics of six different ORMs",
+# > and this gem deliberately does not: it speaks SQL over one connection, so it
+# > owns no ORM's transaction semantics and exposes no batch size, backoff
+# > ceiling, retention or alerting as configuration. But core is read-only from
+# > this worktree, so the contradiction stands in the document and core's
+# > `AGENTS.md` still tells the next reader "each service implements it in its
+# > own language". Requested: either amend that section to say the Ruby fleet
+# > shares `anywaye`, or state the exception. Until then, a Ruby service reading
+# > core will conclude it must hand-roll this, which is the exact outcome the
+# > packet exists to prevent.
+env:
+  - name: ANYWAYE_IDENTITY_URL
+    required: false
+    secret: false
+    description: "Identity base URL."
+
+repository:
+  url: git@github.com:anywaye/anywaye-rb.git
+  defaultBranch: master
+  visibility: private
+
+owner:
+  team: anywaye
+  contact: anywaye@anywaye.com

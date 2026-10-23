@@ -1,0 +1,56 @@
+# The house style is RuboCop's Rails omakase preset — the same one billing lints
+# with — so a service that adds this gem does not need a second RuboCop
+# configuration in its own repository.
+inherit_gem: { rubocop-rails-omakase: rubocop.yml }
+
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: enable
+  Exclude:
+    - "vendor/**/*"
+    - "tmp/**/*"
+    - "log/**/*"
+    # A Rails generator template. It is an ERB file that becomes a migration, not
+    # a Ruby file that Ruby can parse, and linting it would be linting the
+    # template's own interpolation syntax.
+    - "lib/anywaye/generators/templates/**/*"
+
+# The library is `require`d by name, not by path, so the tests reach the
+# installed code path rather than a copy that only exists in this checkout.
+Naming/FileName:
+  Exclude:
+    - "lib/anywaye/jwks_fetcher.rb"
+
+# Metrics that a security library should be allowed to hit: a verifier that has
+# been cut into helpers-under-five-lines to satisfy a counter is a verifier whose
+# error handling was the thing that got compressed.
+Metrics/AbcSize:
+  Max: 30
+
+Metrics/ClassLength:
+  Max: 200
+
+Metrics/CyclomaticComplexity:
+  Max: 12
+
+Metrics/MethodLength:
+  Max: 30
+
+Metrics/ModuleLength:
+  Max: 150
+
+Metrics/ParameterLists:
+  Max: 8
+
+Metrics/PerceivedComplexity:
+  Max: 12
+
+# Tests assert on the exact SQL and on the exact shape of a log line, both of
+# which are long strings by nature.
+Layout/LineLength:
+  Max: 120
+  AllowedPatterns:
+    - '\A\s*#'
+
+Style/Documentation:
+  Enabled: true

@@ -1,0 +1,230 @@
+# THIS FILE IS NOT A GITHUB ACTIONS WORKFLOW ANY MORE, AND NOTHING RUNS IT.
+#
+# The fleet's CI runs in dev sandboxes: the same sandbox the work happens in,
+# on the machine the developer chose. This file is the SPECIFICATION those
+# checks read — the steps, the floors, the exemptions — kept where the
+# repository can hold it and read it.
+#
+# What executes is `ci/the pipeline` (named in this repository's `gate.yml`, under
+# `ci.workflow`), and the CI service reads that declaration and runs it.
+#
+# The GitHub Actions spelling is retired, not deleted, because the checks in
+# this repository read this file to hold the specification still: a gate that
+# checks a specification nobody executes is a gate checking a fiction, and a
+# gate that checks nothing is worse. The steps below are the specification
+# the executable CI is measured against, and the day this file stops being
+# that, the checks move with it.
+# release — a tag is the release.
+#
+# Pushing a tag matching `v*` runs the full gate, builds the gem, creates the
+# GitHub Release with the `.gem` attached and the CHANGELOG section as its
+# notes, and pushes to rubygems.org when the credential exists. There is no
+# other release path: no manual `gem push` from a laptop, no release that skips
+# `bin/prime`.
+#
+# TOOLCHAIN PIN. `ruby-version` below is 4.0.1 — the version `mise.toml` and
+# `.ruby-version` pin, and the newer of the two entries `ci.yml`'s matrix
+# covers. Never `@latest`, never a floating range: a release built by a
+# toolchain nobody chose is not reproducible, and this workflow is the one
+# place reproducibility matters most. The `pg` extension is compiled here, so a
+# different interpreter produces a different binary for the same source.
+#
+# THE GATE NEEDS CORE, SO THIS WORKFLOW PROVIDES IT. `bin/prime` runs the full
+# suite, and `test/contract/core_specs_test.rb` reads `anywaye/core`'s own schema
+# rather than a paraphrase — with no checkout it errors and the gate is red. A
+# release that ran a red gate could never produce a Release, so this workflow
+# clones core beside the repository and points `CORE_PATH` at it before
+# `bin/prime`. That is the same step `ci.yml` runs, and for the same reason:
+# the sibling has to live outside `$GITHUB_WORKSPACE`, and `actions/checkout`
+# refuses any `path` outside it. `anywaye/core` is public — verified
+# unauthenticated — so the clone needs no credential.
+#
+# WHY NOT `--provenance`-style extras, OR `gem push --key`. `gem push` reads the
+# API key from `GEM_HOST_API_KEY` in the environment, which is the form that
+# keeps the credential out of a file on disk; `--key` names a profile in
+# `~/.gem/credentials`, which would mean writing the secret to disk first. The
+# environment variable is the right form here. `gem signin` and the `~/.gem`
+# config are never used.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: gate, build, release, publish
+    runs-on: ubuntu-latest
+
+    # `contents: write` lives on THIS JOB ONLY, and it is here for one step:
+    # creating the GitHub Release and uploading the `.gem`. Nothing else in this
+    # repository writes anything anywhere.
+    permissions:
+      contents: write
+
+    env:
+      # A credential gap becomes a sentence, never a prompt for a username on a
+      # runner with no terminal to read it from.
+      GIT_TERMINAL_PROMPT: "0"
+      # The same DSN ci.yml exports, for the same service above: without it
+      # `TestSupport::Database` falls back to `postgres://localhost/anywaye_test`,
+      # which connects as the runner's login role (`runner`) instead of
+      # `postgres` — and `bin/prime` dies in `db:prepare` with
+      # `FATAL: role "runner" does not exist`. Measured on the v0.1.0 tag run.
+      ANYWAYE_TEST_DATABASE_URL: postgres://postgres@127.0.0.1:5432/anywaye_test
+
+    services:
+      postgres:
+        # Same service as ci.yml, for the same reason: the outbox is a Postgres
+        # table and the transaction guarantee is a property of Postgres, so the
+        # suite runs against a real one.
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history and tags. `anywaye.gemspec` lists files with `Dir[]`
+          # rather than `git ls-files`, so depth is not needed for the build —
+          # but a tag-triggered run should be able to see its own tag, and a
+          # shallow clone cannot.
+          fetch-depth: 0
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          # bundler-cache runs `bundle install` with the lockfile's platform set
+          # to this runner's, the same way ci.yml does, so the lockfile cannot
+          # drift under the release.
+          bundler-cache: true
+
+      - name: "the gate's core sibling: anywaye/core, beside the repository"
+        # THE SAME STEP AS ci.yml, for the same reason. `test/contract/` reads
+        # core's own schema and doc; the sibling has to live outside
+        # `$GITHUB_WORKSPACE` — `core_specs_test.rb` honours `CORE_PATH` and
+        # `manifest_test.rb` resolves `../../../core` from `test/contract`, a
+        # sibling of the repository root, with no env override. `actions/checkout`
+        # REFUSES any `path` outside the workspace, so this is a `run:` step:
+        # cloning straight to the sibling path is also exactly the command
+        # `gate.yml` declares as this requirement's `satisfy`, and it puts
+        # nothing inside the repository. `anywaye/core` is public, so the clone
+        # needs no credential; `GIT_TERMINAL_PROMPT=0` so a failure is a failure
+        # in seconds, never a prompt on a runner with no terminal to read it.
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          sibling="$(dirname "$GITHUB_WORKSPACE")/core"
+          git clone --depth 1 https://github.com/anywaye/core.git "$sibling"
+          test -f "$sibling/schemas/event-envelope.schema.json"
+          test -f "$sibling/schemas/anywaye.manifest.schema.json"
+          test -f "$sibling/docs/event-outbox.md"
+          echo "CORE_PATH=$sibling" >> "$GITHUB_ENV"
+          echo "core at $sibling; the contract tier will run against it."
+
+      - name: the tag and the gem version agree, or there is no release
+        # The tag is `v0.1.0`; `lib/anywaye/version.rb` must say `0.1.0`. The
+        # GitHub Release notes are read out of the CHANGELOG section for the
+        # version in the file, not the tag, so a mismatch would attach the wrong
+        # notes as well as publishing a gem whose version contradicts its tag.
+        run: |
+          set -euo pipefail
+          version="$(ruby -Ilib -ranywaye/version -e 'print Anywaye::VERSION')"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "::error::tag is ${GITHUB_REF_NAME} but lib/anywaye/version.rb says $version. Bump the version (docs/RELEASING.md) and re-tag."
+            exit 1
+          fi
+          echo "tag ${GITHUB_REF_NAME} matches Anywaye::VERSION $version."
+
+      - name: bin/prime
+        # The full gate. A release that skips it is not a release.
+        run: ./bin/prime
+
+      - name: build the gem
+        run: |
+          set -euo pipefail
+          gem build anywaye.gemspec
+          gem_file="$(ls anywaye-*.gem)"
+          echo "built $gem_file"
+          echo "GEM_FILE=$gem_file" >> "$GITHUB_ENV"
+
+      - name: release notes are the CHANGELOG section, not a commit dump
+        # The notes for `v0.1.0` ARE the `## [0.1.0]` section of CHANGELOG.md,
+        # read out of the file, from its header to the next `## [` header or EOF.
+        # A generated list of commits since the last tag describes what happened
+        # to move; the changelog describes what changed for a consumer, which is
+        # what release notes are for. A missing section stops the release rather
+        # than shipping empty notes.
+        #
+        # The second stop rule is for the keep-a-changelog link references this
+        # file keeps at the bottom (`[Unreleased]: …`, `[0.1.0]: …`); without it
+        # they would be read into the last section's notes. They are the only
+        # lines in this file that start with `[`.
+        run: |
+          set -euo pipefail
+          version="$(ruby -Ilib -ranywaye/version -e 'print Anywaye::VERSION')"
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { in_section = 1; next }
+            in_section && /^## / { exit }
+            in_section && /^\[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section. Write it (docs/RELEASING.md) and re-tag."
+            exit 1
+          fi
+          echo "release notes:"
+          cat RELEASE_NOTES.md
+
+      - name: create the GitHub Release with the gem attached
+        # `gh` ships on the runner, so no third-party release action is needed.
+        # The default GITHUB_TOKEN plus this job's `contents: write` is the only
+        # credential involved.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file RELEASE_NOTES.md \
+            "$GEM_FILE"
+
+      - name: publish to rubygems.org, when the credential exists
+        # CREDENTIAL-GATED, and deliberately so: this account has no rubygems
+        # credential configured, and a release must not fail red on a credential
+        # the user has not added yet. A GitHub Actions `if:` cannot read secrets
+        # — an unset secret is the empty string by the time the expression sees
+        # it — so the gate is a shell presence check on an env var set from the
+        # secret, the one shape that tells "absent" apart from "present but
+        # wrong". Absent: log the one step that enables it and succeed, because
+        # the GitHub Release above IS the release. Present: `gem push`, which
+        # reads `GEM_HOST_API_KEY` from this same variable, so the key never
+        # lands in a file.
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GEM_HOST_API_KEY:-}" ]; then
+            echo "RUBYGEMS_API_KEY is not set: skipping the rubygems.org push."
+            echo "The GitHub Release above (with the .gem attached) is the release."
+            echo "To enable publishing, add a rubygems.org API key with push scope for anywaye as the repository secret RUBYGEMS_API_KEY, then re-run this job."
+            exit 0
+          fi
+          gem push "$GEM_FILE"
