@@ -2,7 +2,7 @@
 #
 # The row is the event. Nothing here publishes to anything: a dispatcher that
 # claims the unpublished rows and hands them to a transport is a later packet,
-# because cafaye has no broker wired up and adding a queue is a dependency
+# because anywaye has no broker wired up and adding a queue is a dependency
 # decision this packet does not get to make (AGENTS.md). What this packet does
 # fix is the part that is expensive to get wrong later: the envelope, the
 # grammar, and the transaction.
@@ -11,12 +11,12 @@
 # the dedupe key. A re-emission is a new row and therefore a new id, so a
 # consumer that has seen an event can always tell it from the next one.
 class OutboxEvent < ApplicationRecord
-  # The service name. Also `name` in cafaye.yml, which also the envelope's
+  # The service name. Also `name` in anywaye.yml, which also the envelope's
   # `source` has to equal — core's manifest conventions, rule 1.
   SERVICE = "billing"
 
   # The types this service publishes. Closed on purpose: `test/contract` asserts
-  # this list and `cafaye.yml`'s `exposes.events` are the same list, so the
+  # this list and `anywaye.yml`'s `exposes.events` are the same list, so the
   # manifest cannot advertise an event nothing emits — and, in the other
   # direction, a type that is not on this list cannot be written at all. That
   # second half is what stops a webhook mapping from parking every delivery as a
@@ -110,7 +110,7 @@ class OutboxEvent < ApplicationRecord
     )
   end
 
-  # The envelope as core defines it: CloudEvents 1.0 attribute names, cafaye's
+  # The envelope as core defines it: CloudEvents 1.0 attribute names, anywaye's
   # required subset, and nothing else — `additionalProperties` is false, so an
   # attribute that is not in this method is an attribute that does not exist.
   def to_envelope

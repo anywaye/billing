@@ -490,7 +490,7 @@ class TenantCrossAccountFindingsTest < ActionDispatch::IntegrationTest
       body["id"] = event_id
       object["id"] = subscription_id
       object["customer"] = customer.processor_customer_id
-      object["metadata"] = { "cafaye_customer_id" => customer.id }
+      object["metadata"] = { "anywaye_customer_id" => customer.id }
       object.dig("items", "data", 0, "price")["id"] = shared_plan.processor_price_id
       object["plan"]["id"] = shared_plan.processor_price_id
 

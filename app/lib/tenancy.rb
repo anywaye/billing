@@ -1,16 +1,16 @@
 # The one place this service writes the database's account identity.
 #
 # Every account-scoped table carries row-level security policies whose predicate
-# is `account_id = (select cafaye.current_account_id())` (or, for `customers`,
-# `owner_type = 'Account' and owner_id = (select cafaye.current_account_id())`),
-# and `cafaye.current_account_id()` reads a transaction-local GUC. So the boundary
+# is `account_id = (select anywaye.current_account_id())` (or, for `customers`,
+# `owner_type = 'Account' and owner_id = (select anywaye.current_account_id())`),
+# and `anywaye.current_account_id()` reads a transaction-local GUC. So the boundary
 # is only as good as the number of places that set it: this class is that place,
 # and there is exactly one caller per surface —
 # `V1::BaseController#with_account_scope` for the token-authenticated API and
 # `Webhooks::StripeController` for the signature-authenticated processor surface.
 #
 # WHY THE IDENTITY IS TRANSACTION-LOCAL, and it is the whole design rather than a
-# detail. `cafaye.begin_account/1` is `set_config(..., is_local => true)`, and
+# detail. `anywaye.begin_account/1` is `set_config(..., is_local => true)`, and
 # every process here holds a connection POOL:
 #
 #   * A session-level value would go back to the pool still carrying tenant A's
@@ -34,13 +34,13 @@
 # only the outermost COMMIT/ROLLBACK reverts it. Measured on this cluster:
 #
 #   begin;
-#   select cafaye.begin_account('1111…');        -- A
+#   select anywaye.begin_account('1111…');        -- A
 #   savepoint s;
-#   select cafaye.begin_account('2222…');        -- B
+#   select anywaye.begin_account('2222…');        -- B
 #   release savepoint s;
-#   select cafaye.current_account_id();          -- 2222…   <-- the trap
+#   select anywaye.current_account_id();          -- 2222…   <-- the trap
 #   commit;
-#   select cafaye.current_account_id();          -- NULL
+#   select anywaye.current_account_id();          -- NULL
 #
 # So code inside a request that called `begin_account` again — in a nested
 # transaction, in a test helper — would leave the identity changed for the rest of
@@ -79,13 +79,13 @@ module Tenancy
   # The identity itself. One function, one place, so "where does the database
   # learn which account this is" has one answer in this repository.
   def begin_account(account_id)
-    execute_function("cafaye.begin_account", account_id)
+    execute_function("anywaye.begin_account", account_id)
   end
 
   # `with_account` for a request that has to WORK OUT which account it is, and
   # the difference is not stylistic. `resolution` answers `account_id`, and it has
   # to run INSIDE the transaction: working out the account means presenting a
-  # value (`cafaye.begin_credential/1`), and that is `set_config(..., is_local =>
+  # value (`anywaye.begin_credential/1`), and that is `set_config(..., is_local =>
   # true)` like `begin_account/1` — outside a transaction the presented value is
   # gone before the lookup that uses it. The webhook path is the one caller; see
   # `Webhooks::AccountResolution` for why a signature-authenticated request cannot
@@ -99,17 +99,17 @@ module Tenancy
 
   # The OTHER seam, and the only other one this service uses: the value a caller
   # PRESENTS to resolve a row it cannot yet name an account for. See
-  # `db/tenancy/account_isolation.sql` — `customers_cafaye_resolve` — and
+  # `db/tenancy/account_isolation.sql` — `customers_anywaye_resolve` — and
   # `Webhooks::AccountResolution`, which is its one caller.
   def begin_credential(presented_value)
-    execute_function("cafaye.begin_credential", presented_value)
+    execute_function("anywaye.begin_credential", presented_value)
   end
 
   # What Postgres thinks the identity is, read back from the connection. Used by
   # the isolation suite, which asserts the value the database holds rather than
   # the value Ruby set — and by nothing in the request path.
   def current_account_id
-    ApplicationRecord.connection.select_value("select cafaye.current_account_id()")
+    ApplicationRecord.connection.select_value("select anywaye.current_account_id()")
   end
 
   def execute_function(name, argument)

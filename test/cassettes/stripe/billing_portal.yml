@@ -5,7 +5,7 @@ http_interactions:
     uri: https://api.stripe.com/v1/billing_portal/sessions
     body:
       encoding: UTF-8
-      string: customer=cus_VRqHdzgTgwLPA1&return_url=https%3A%2F%2Fapp.cafaye.com%2Fbilling
+      string: customer=cus_VRqHdzgTgwLPA1&return_url=https%3A%2F%2Fapp.anywaye.com%2Fbilling
     headers:
       User-Agent:
       - Stripe/v1 RubyBindings/19.6.2
@@ -96,7 +96,7 @@ http_interactions:
           "livemode": false,
           "locale": null,
           "on_behalf_of": null,
-          "return_url": "https://app.cafaye.com/billing",
+          "return_url": "https://app.anywaye.com/billing",
           "url": "https://billing.stripe.com/p/session?secret=test_YWNjdF8xVEYyamRDbU43ODBwQWlXLF9WUnFROUFIMVNxV0VpYmpoY05uNk0zdlBLaElGT3A0010062RsEyPr"
         }
   recorded_at: Thu, 15 Oct 2026 22:02:50 GMT

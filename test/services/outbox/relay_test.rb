@@ -23,8 +23,8 @@ class Outbox::RelayTest < ActiveSupport::TestCase
     # One synchronous pass, not the thread: the claim, the publish and the mark
     # are the pass's, and the thread is only a clock around them.
     relay = Outbox::Relay.new(
-      Cafaye::Outbox.publisher(
-        connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+      Anywaye::Outbox.publisher(
+        connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
         clock: -> { Time.current },
         logger: nil,
         deliverer: ->(envelope) { Outbox::NatsPublisher.build(@broker.url).publish(envelope) }
@@ -85,7 +85,7 @@ class Outbox::RelayTest < ActiveSupport::TestCase
 
   test "the poll interval is one second, fixed, and the loop is stopped before the threads are counted" do
     assert_equal 1.0, Outbox::Relay::POLL_INTERVAL
-    assert_equal 100, Cafaye::Outbox::Publisher::DEFAULT_BATCH_SIZE,
+    assert_equal 100, Anywaye::Outbox::Publisher::DEFAULT_BATCH_SIZE,
       "identity's batch, the shared gem's default, unchanged"
   end
 
@@ -114,8 +114,8 @@ class Outbox::RelayTest < ActiveSupport::TestCase
     # publisher that fails once and then delegates is the case, and the thread
     # surviving to publish is the assertion.
     create_customer
-    real = Cafaye::Outbox.publisher(
-      connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+    real = Anywaye::Outbox.publisher(
+      connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
       clock: -> { Time.current },
       logger: nil,
       deliverer: ->(envelope) { Outbox::NatsPublisher.build(@broker.url).publish(envelope) }

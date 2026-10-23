@@ -4,7 +4,7 @@ module Webhooks
   # ## The problem this exists for, stated as the query it is about
   #
   # `Lifecycle#customer` and `Charges::Recorder#resolved_customer` both find a
-  # customer row by an id the processor sent — the cafaye customer uuid our own
+  # customer row by an id the processor sent — the anywaye customer uuid our own
   # Checkout session put in the subscription's metadata, or the processor's own
   # `cus_…` — and learn the account from `owner_id`. That is a query whose SUBJECT
   # the account boundary does not know yet: it cannot be scoped by an account,
@@ -16,11 +16,11 @@ module Webhooks
   #
   # ## The mechanism, and it is kit's rather than this service's
   #
-  # `customers_cafaye_resolve` (`db/tenancy/account_isolation.sql`) is a `for
+  # `customers_anywaye_resolve` (`db/tenancy/account_isolation.sql`) is a `for
   # select` policy whose qualifier is the value the CALLER PRESENTED:
   #
-  #     id::text = (select cafaye.current_credential_digest())
-  #     or processor_customer_id = (select cafaye.current_credential_digest())
+  #     id::text = (select anywaye.current_credential_digest())
+  #     or processor_customer_id = (select anywaye.current_credential_digest())
   #
   # The predicate is in the policy and not only in the caller's query, which is
   # the whole design: RLS policies combine permissively, so a policy that said
@@ -38,13 +38,13 @@ module Webhooks
   # ## Where the values come from, and why they are read from the normaliser
   #
   # `Webhooks::StripeEvents.normalize` is already the one place in this service
-  # that knows where a cafaye reference lives in a processor payload — the
+  # that knows where a anywaye reference lives in a processor payload — the
   # invoice's own metadata, the subscription's (which the live shape nests under
   # `parent`), the first line item's, or a Checkout session's
   # `client_reference_id`. Reading them here a second time would be a second
   # answer to "where is the link back", and the two would drift. So this class
   # asks the normaliser, in the same order the payment path resolves a customer
-  # (`cafaye_customer_id` first, the processor's id second — the order is the
+  # (`anywaye_customer_id` first, the processor's id second — the order is the
   # measured fix for a first payment whose customer has no
   # `processor_customer_id` yet).
   #
@@ -101,7 +101,7 @@ module Webhooks
       # existed.
       def candidates
         data = Webhooks::StripeEvents.normalize(payload) || {}
-        [ data["cafaye_customer_id"], data["client_reference_id"], data["customer_id"] ].compact_blank.uniq
+        [ data["anywaye_customer_id"], data["client_reference_id"], data["customer_id"] ].compact_blank.uniq
       rescue Webhooks::Error
         []
       end

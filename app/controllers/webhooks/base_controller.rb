@@ -3,7 +3,7 @@ module Webhooks
   # header, and nothing else.
   #
   # Inbound webhooks are not JWT-authenticated — the sender is a processor, not a
-  # cafaye client, and it authenticates by signature instead. That is why nothing
+  # anywaye client, and it authenticates by signature instead. That is why nothing
   # here adds a token check, and why it must never grow one: a `Bearer` token on
   # this path would be a second, weaker trust path to the same door.
   #

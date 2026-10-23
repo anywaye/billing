@@ -17,7 +17,7 @@ module Webhooks
   # the same underlying fact.
   #
   # Every event type below is a member of `OutboxEvent::TYPES` and a row in this
-  # repository's `cafaye.yml`. A type that was not would be refused by the outbox
+  # repository's `anywaye.yml`. A type that was not would be refused by the outbox
   # at the write, from inside a webhook, and answered 200 — an outage nobody sees
   # until a processor's dashboard does.
   module StripeEvents
@@ -44,7 +44,7 @@ module Webhooks
 
     CHECKOUT_TYPE = "checkout.session.completed"
 
-    # Processor event type to cafaye event type. Most are a fixed mapping.
+    # Processor event type to anywaye event type. Most are a fixed mapping.
     EVENT_TYPES = {
       "customer.subscription.created" => "billing.subscription.started",
       "customer.subscription.updated" => "billing.subscription.updated",
@@ -53,7 +53,7 @@ module Webhooks
       "invoice.payment_failed" => "billing.payment.failed"
     }.freeze
 
-    # The cafaye event type a normalized hash becomes. The only processor type
+    # The anywaye event type a normalized hash becomes. The only processor type
     # that is not a fixed mapping is a Checkout session, because it is only ever
     # emitted in payment mode — the subscription-mode case raises `Ignored` in the
     # normalizer rather than producing a second `billing.subscription.started`.
@@ -65,10 +65,10 @@ module Webhooks
 
     # The subject an emission is correlated on, per core's envelope: the entity
     # the event is about, not the actor. This build has no subscriptions table and
-    # no cafaye subscription id, so the only stable identifier a subscription or
+    # no anywaye subscription id, so the only stable identifier a subscription or
     # payment event has is the processor's: the subscription id when the payload
     # carries one and the customer id otherwise. Recorded as a decision in
-    # cafaye.yml; flipping it is this one line.
+    # anywaye.yml; flipping it is this one line.
     def self.subject_for(data)
       data["subscription_id"] || data["customer_id"]
     end
@@ -119,12 +119,12 @@ module Webhooks
         "kind" => "subscription",
         "subscription_id" => subscription["id"],
         "customer_id" => subscription["customer"],
-        # The link back to a cafaye customer, carried in the subscription's metadata
+        # The link back to a anywaye customer, carried in the subscription's metadata
         # when the subscription was bought through our Checkout session. It is absent
         # for a subscription created directly in the processor's dashboard, and the
         # delivery is then recorded as `unknown_customer` rather than matched to
         # whoever happens to share an id.
-        "cafaye_customer_id" => subscription.dig("metadata", "cafaye_customer_id"),
+        "anywaye_customer_id" => subscription.dig("metadata", "anywaye_customer_id"),
         "status" => subscription["status"],
         "quantity" => item["quantity"],
         "price_id" => price["id"] || subscription.dig("plan", "id"),
@@ -161,14 +161,14 @@ module Webhooks
       provenance(payload).merge(
         "kind" => "payment",
         "customer_id" => invoice["customer"],
-        # The link back to the cafaye customer, from wherever the shape of the
+        # The link back to the anywaye customer, from wherever the shape of the
         # day carries it. The first checkout's `invoice.paid` arrives **before**
         # `customer.subscription.created` — measured on this stack, 2026-10-16 —
         # so there is no subscription row yet to resolve the customer through,
         # and a customer created through `/v1` has no `processor_customer_id`
         # either. The Checkout session put this metadata on the subscription,
         # and reading it is the difference between a receipt and none.
-        "cafaye_customer_id" => cafaye_customer_of(invoice),
+        "anywaye_customer_id" => anywaye_customer_of(invoice),
         "subscription_id" => invoice["subscription"] || invoice.dig("parent", "subscription_details", "subscription"),
         "invoice_id" => invoice["id"],
         "payment_intent_id" => invoice["payment_intent"],
@@ -179,16 +179,16 @@ module Webhooks
       )
     end
 
-    # The cafaye reference, wherever the live shape carries it: the invoice's
+    # The anywaye reference, wherever the live shape carries it: the invoice's
     # own metadata, the subscription's (which the live shape nests under
     # `parent`), or the first line item's. Measured, 2026-10-16: the top level
     # is empty and the other two carry it.
-    def self.cafaye_customer_of(invoice)
-      invoice.dig("metadata", "cafaye_customer_id") ||
-        invoice.dig("parent", "subscription_details", "metadata", "cafaye_customer_id") ||
-        invoice.dig("lines", "data", 0, "metadata", "cafaye_customer_id")
+    def self.anywaye_customer_of(invoice)
+      invoice.dig("metadata", "anywaye_customer_id") ||
+        invoice.dig("parent", "subscription_details", "metadata", "anywaye_customer_id") ||
+        invoice.dig("lines", "data", 0, "metadata", "anywaye_customer_id")
     end
-    private_class_method :cafaye_customer_of
+    private_class_method :anywaye_customer_of
 
     # Whether the processor says this invoice was paid. Two shapes, one fact:
     # the old fixture carries `paid`, the live one (`2026-03-25.dahlia`)
@@ -222,7 +222,7 @@ module Webhooks
     # separate envelope ids. Emitting both would state one fact twice, and a
     # consumer counting `billing.subscription.started` would count every Checkout
     # signup twice. So it is deliberately ignored, with the reason recorded, rather
-    # than emitted and left for a consumer to deduplicate. See DECISION in cafaye.yml.
+    # than emitted and left for a consumer to deduplicate. See DECISION in anywaye.yml.
     def self.checkout_session_of(payload)
       session = object_of(payload)
       base = provenance(payload).merge("customer_id" => session["customer"])
@@ -309,7 +309,7 @@ module Webhooks
     end
     private_class_method :payment_emission
 
-    # The recipient fact: the cafaye customer's billing email, carried on the
+    # The recipient fact: the anywaye customer's billing email, carried on the
     # payment events because the fleet's consumer cannot read it anywhere else.
     #
     # courier — the consumer that would mail a receipt for a settled charge and a
@@ -325,7 +325,7 @@ module Webhooks
     # ## What it costs, stated rather than hidden
     #
     # This is the one lookup the payment path makes that the normalizer does
-    # not: one or two indexed reads per payment event — the cafaye id's primary
+    # not: one or two indexed reads per payment event — the anywaye id's primary
     # key first, the processor's id (unique, partial — billing-13) when the
     # event names one. The webhook path is not a user-facing request, and the
     # ingestion transaction is already writing three rows; a couple of indexed
@@ -334,8 +334,8 @@ module Webhooks
     #
     # ## Absent, never null
     #
-    # A customer created in the processor's dashboard has no cafaye row, and a
-    # cafaye customer created through `/v1` has no email until the client sets
+    # A customer created in the processor's dashboard has no anywaye row, and a
+    # anywaye customer created through `/v1` has no email until the client sets
     # one (`customers.email` is nullable on purpose). Both cases leave the field
     # **absent** rather than null, the same rule the normalizer applies to a field
     # the processor did not send: an event that promises a mail it cannot address
@@ -346,7 +346,7 @@ module Webhooks
       email ? data.merge("email" => email) : data
     end
 
-    # Resolved the way the charge recorder resolves the customer — the cafaye id
+    # Resolved the way the charge recorder resolves the customer — the anywaye id
     # first, the processor's id second — and the order is the same measured fix
     # on the other half of the payment path (see `Charges::Recorder`): on an
     # account's FIRST payment the row has no `processor_customer_id` yet, because
@@ -356,12 +356,12 @@ module Webhooks
     # opens the relationship, and the receipt event goes out unaddressed — which
     # the fleet's consumer refuses by design (measured on the launch stack,
     # 2026-10-16: a real $49 first payment's event was refused ten times for a
-    # missing address). The cafaye id is the one our own Checkout session put on
+    # missing address). The anywaye id is the one our own Checkout session put on
     # the subscription's metadata, so it is present on every event from this
     # service's checkout path; the processor's id remains the fallback for a
     # customer created in the dashboard.
     def self.recipient_email(data)
-      customer = find_customer(data["cafaye_customer_id"]) || find_customer(data["customer_id"])
+      customer = find_customer(data["anywaye_customer_id"]) || find_customer(data["customer_id"])
       customer&.email.presence
     end
     private_class_method :recipient_email

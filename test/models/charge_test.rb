@@ -3,7 +3,7 @@ require "test_helper"
 # The receipt's own record: what a customer was charged.
 #
 # The property that shapes every case here: **a charge is a fact about money that
-# moved, recorded by the processor's own webhook and never by a cafaye request.**
+# moved, recorded by the processor's own webhook and never by a anywaye request.**
 # So what is tested is the shape of the record and the uniqueness rule that makes
 # a redelivery harmless — not the writing path, which is the recorder's spec.
 class ChargeTest < ActiveSupport::TestCase

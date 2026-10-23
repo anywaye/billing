@@ -39,8 +39,8 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
     deliver_fixture("customer.subscription.deleted")
     @plan.update!(name: "Renamed")
 
-    publisher = Cafaye::Outbox.publisher(
-      connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+    publisher = Anywaye::Outbox.publisher(
+      connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
       clock: -> { Time.current },
       logger: nil,
       deliverer: ->(envelope) { @transport.publish(envelope) }
@@ -247,8 +247,8 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
       deliver_fixture("customer.subscription.deleted")
       @plan.update!(name: "Renamed")
 
-      publisher = Cafaye::Outbox.publisher(
-        connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+      publisher = Anywaye::Outbox.publisher(
+        connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
         clock: -> { Time.current },
         logger: nil,
         deliverer: ->(envelope) { @transport.publish(envelope) }

@@ -63,7 +63,7 @@ gem "sentry-rails", "~> 5.24"
 # with the same shape, not a gem that owns its own schema. See
 # `REPORT-billing-fake-client-01` for the exit.
 
-# The transactional outbox substrate, from the fleet's shared gem `cafaye-rb`.
+# The transactional outbox substrate, from the fleet's shared gem `anywaye-rb`.
 #
 # This is the gem that owns the outbox claim (`select ... for update skip
 # locked`), the envelope grammar and the publish pass — one mechanism for the
@@ -71,15 +71,15 @@ gem "sentry-rails", "~> 5.24"
 # a batch claimed". A publisher in billing that bypassed it would be a second
 # mechanism for one thing, which is the thing the gem exists to prevent.
 #
-# WHY A PATH GEM AT `vendor/cafaye` AND NOT A RELEASED OR GIT DEPENDENCY: the
-# gem is not published to rubygems.org and github.com/cafaye/cafaye-rb is not
+# WHY A PATH GEM AT `vendor/anywaye` AND NOT A RELEASED OR GIT DEPENDENCY: the
+# gem is not published to rubygems.org and github.com/anywaye/anywaye-rb is not
 # reachable from this environment (both verified). Until the fleet publishes it
-# — see the report, `cafaye-rb` at 5056500 is the pinned copy — this is the
+# — see the report, `anywaye-rb` at 5056500 is the pinned copy — this is the
 # pinned source of the same bytes, not a fork: `VENDORED.md` records the commit
 # and `test/contract/vendored_gem_test.rb` fails when the copy drifts from the
 # upstream checkout whenever that checkout is on disk. The gem's own Railtie is
 # inert unless a host configures it, so this dependency configures nothing.
-gem "cafaye", path: "vendor/cafaye"
+gem "anywaye", path: "vendor/anywaye"
 
 # Token accounting foundation (shared with ship and other projects). ask-tokens
 # is the ledger engine; ask-tokens-rails provides the ActiveRecord-backed

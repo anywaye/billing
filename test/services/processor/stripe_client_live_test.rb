@@ -50,7 +50,7 @@ class StripeClientLiveTest < ActiveSupport::TestCase
       session = client.create_checkout_session(
         plan_price_id: PRICE_A,
         customer_reference: "11111111-1111-4111-8111-111111111111",
-        success_url: "https://app.cafaye.com/billing",
+        success_url: "https://app.anywaye.com/billing",
         processor_customer_id: CUSTOMER
       )
 
@@ -127,7 +127,7 @@ class StripeClientLiveTest < ActiveSupport::TestCase
   test "a real portal session comes back as a URL, or as the processor's own refusal" do
     VCR.use_cassette("stripe/billing_portal") do
       begin
-        url = client.billing_portal_url(processor_customer_id: CUSTOMER, return_url: "https://app.cafaye.com/billing")
+        url = client.billing_portal_url(processor_customer_id: CUSTOMER, return_url: "https://app.anywaye.com/billing")
         assert url.is_a?(String) && url.start_with?("https://")
       rescue Processor::StripeClient::RequestFailed => refusal
         # A test-mode account with no Billing Portal configuration answers

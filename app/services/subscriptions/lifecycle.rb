@@ -104,7 +104,7 @@ module Subscriptions
     # the honest reading of that row is the earlier problem.
     ACCOUNT_REASON = "account_mismatch".freeze
 
-    # The three processor types this lifecycle acts on, and the cafaye event each
+    # The three processor types this lifecycle acts on, and the anywaye event each
     # of them can become. The same three the outbox and the manifest declare, so a
     # type cannot be emitted that core's catalog does not list.
     CREATED = "customer.subscription.created".freeze
@@ -201,7 +201,7 @@ module Subscriptions
         # because a customer created through /v1 has a null `processor_customer_id`
         # until its first subscription tells us what the processor calls it.
         resolve(
-          data["cafaye_customer_id"] && Customer.find_by(id: data["cafaye_customer_id"]),
+          data["anywaye_customer_id"] && Customer.find_by(id: data["anywaye_customer_id"]),
           Customer.find_by(processor_customer_id: data["customer_id"]),
           "unknown_customer"
         )
@@ -266,7 +266,7 @@ module Subscriptions
 
       # Records the processor's id for the customer, once, and never overwrites
       # one already there. The id is the event's own `customer`, and the customer
-      # is the row `resolution` already resolved (by the cafaye reference in the
+      # is the row `resolution` already resolved (by the anywaye reference in the
       # subscription's metadata, or by the processor id it already held).
       #
       # **Never overwrites, and the direction matters.** The column is one
@@ -275,7 +275,7 @@ module Subscriptions
       # derived id, and letting it rewrite a real one was a measured defect
       # (2026-10-16) — the walk's receipt stopped resolving after its own
       # checkout. A customer another row already claims is left alone for the
-      # same reason: `processor_customer_id` is unique, and a second cafaye
+      # same reason: `processor_customer_id` is unique, and a second anywaye
       # customer answering to one processor customer is a disagreement for a
       # human, not something a webhook settles.
       def backfill_processor_customer_id
@@ -357,7 +357,7 @@ module Subscriptions
       # does not have" — which was true of billing-03b and stopped being true when
       # this table landed. Its `started`, `updated` and `canceled` schemas are the
       # processor-normalised shape, closed with `additionalProperties: false`, so
-      # the cafaye ids below are exactly the fields core refuses and the `kind`,
+      # the anywaye ids below are exactly the fields core refuses and the `kind`,
       # `processor`, `processor_event_id` and `customer_id` it requires are exactly
       # the ones absent here. core's own D10 anticipates this — "when billing grows
       # a subscriptions table, the shape moves again … that is a second breaking
@@ -365,7 +365,7 @@ module Subscriptions
       # read.
       #
       # So the difference is written down in `PENDING_PAYLOAD_ALIGNMENT` in
-      # `test/contract/outbox_envelope_contract_test.rb` and in `cafaye.yml`, and
+      # `test/contract/outbox_envelope_contract_test.rb` and in `anywaye.yml`, and
       # asserted in both directions. Matching core here instead would be one of the
       # two ways this service can change a published contract without anyone
       # deciding to: emit a payload no consumer has agreed to, or drop `plan_id`

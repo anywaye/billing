@@ -23,9 +23,9 @@ module V1
 
     # The database half of the boundary, turned on for every request that reaches
     # this class. Every account-scoped table carries row level security policies
-    # written by `cafaye.protect_table` — and, for `customers`, by hand, see
+    # written by `anywaye.protect_table` — and, for `customers`, by hand, see
     # `db/tenancy/account_isolation.sql` — and those policies read
-    # `cafaye.current_account_id()`, a GUC set once per request inside the
+    # `anywaye.current_account_id()`, a GUC set once per request inside the
     # request's own transaction. So a query that forgot its `where account_id = ?`
     # reads zero rows rather than another business's rows, and `for_account` is
     # defence in depth rather than the only defence.

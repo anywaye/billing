@@ -91,7 +91,7 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
   # itself holds.
   test "a subscription starting records the processor's id for a customer that had none" do
     body = JSON.parse(stripe_fixture("customer.subscription.created"))
-    body.dig("data", "object")["metadata"] = { "cafaye_customer_id" => @customer.id }
+    body.dig("data", "object")["metadata"] = { "anywaye_customer_id" => @customer.id }
     @customer.update!(processor_customer_id: nil)
 
     Webhooks::Ingestion.new(processor: :stripe, event_id: body["id"], type: body["type"], payload: body).call
@@ -966,11 +966,11 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
 
       if (customer = overrides[:customer])
         # **Both** halves of the customer reference, because
-        # `Lifecycle#customer` consults both and consults the cafaye one first. A
+        # `Lifecycle#customer` consults both and consults the anywaye one first. A
         # body naming the other account's `cus_` while its metadata still named
         # this account's row would resolve here, and the case would prove nothing.
         subscription["customer"] = customer.processor_customer_id
-        subscription["metadata"] = { "cafaye_customer_id" => customer.id }
+        subscription["metadata"] = { "anywaye_customer_id" => customer.id }
       end
 
       body

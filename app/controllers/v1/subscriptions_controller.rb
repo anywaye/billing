@@ -572,7 +572,7 @@ module V1
         )
       end
 
-      # The processor is not a cafaye client, and its refusals are its own business.
+      # The processor is not a anywaye client, and its refusals are its own business.
       # This service's own misconfiguration is a 503 — the caller's request was fine
       # and saying otherwise would send an operator looking in the wrong place — and
       # a processor refusal is a 422 naming the field the endpoint's client sent,

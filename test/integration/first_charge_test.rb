@@ -96,7 +96,7 @@ class FirstChargeTest < ActionDispatch::IntegrationTest
     assert_equal ACCOUNT_ID, charge.account_id, "the account is denormalised at recording time, so the receipt needs no join"
 
     # A payment event's subject is the processor's own subscription id, read off
-    # the payload — the same decision `cafaye.yml` records for subscription
+    # the payload — the same decision `anywaye.yml` records for subscription
     # events ("the processor's id as their subject, because an invoice references
     # a subscription rather than being one"). Note what that id is: the FIXTURE's
     # `sub_1PZQaBcDeFgHiJkLmNoPqR1`, which is not the id this checkout's

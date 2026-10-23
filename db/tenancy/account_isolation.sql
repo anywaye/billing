@@ -12,14 +12,14 @@
 --      against a database with no boundary at all and every test in it would pass
 --      or fail for a reason that has nothing to do with the boundary.
 --
--- A third reader is `cafaye/core/harness/bin/tenancy-check`, which reads `.sql`
+-- A third reader is `anywaye/core/harness/bin/tenancy-check`, which reads `.sql`
 -- DDL and cannot read a Ruby migration. `billing/tenancy.yml` declares
 -- `databaseEnforced: true` and names these policies; the checker can only hold
 -- that declaration against the tree because the DDL is in a file it can read.
 -- A change here therefore reaches an EXISTING database only through a new
 -- migration — the file is read by the migration, it is not watched by it.
 --
--- THE TWO TABLES THAT SPELL THE KEY `account_id`. `cafaye.protect_table` writes
+-- THE TWO TABLES THAT SPELL THE KEY `account_id`. `anywaye.protect_table` writes
 -- everything they need: ENABLE, FORCE, one policy per command (select, insert,
 -- update, delete), the `account_id` index, the REVOKE from PUBLIC and the DML
 -- grant to the login role. Nothing here repeats any of it.
@@ -27,8 +27,8 @@
 -- THE THIRD TABLE, `customers`, CANNOT USE IT, and the refusal is measured rather
 -- than assumed. Its tenancy key is `owner_type` + `owner_id`, not `account_id`:
 --
---     $ psql -U billing -d … -c "select cafaye.protect_table('probe_no_account')"
---     ERROR:  cafaye.protect_table(probe_no_account, billing_app): the table has no
+--     $ psql -U billing -d … -c "select anywaye.protect_table('probe_no_account')"
+--     ERROR:  anywaye.protect_table(probe_no_account, billing_app): the table has no
 --             account_id column, so there is nothing to scope it by.
 --     HINT:   Either the column is spelled something else — write the policy
 --             yourself and name the fleet's key — or this table is not
@@ -54,14 +54,14 @@
 -- the webhook path's. Read this paragraph before widening it.
 --
 -- `POST /v1/webhooks/stripe` is authenticated by signature, not by a token, and
--- it has no account identity to hand `cafaye.begin_account/1`: it knows a
--- processor's `cus_…` id and, on the checkout path, the cafaye customer uuid our
+-- it has no account identity to hand `anywaye.begin_account/1`: it knows a
+-- processor's `cus_…` id and, on the checkout path, the anywaye customer uuid our
 -- own session put in the subscription's metadata. The account is WHAT THE
 -- RESOLUTION QUERY IS FOR — `Lifecycle#customer` and `Charges::Recorder` both
 -- read a customer row and learn `owner_id` from it — so a query with no identity
 -- cannot be scoped by an identity it has not computed yet. That is kit's MD24
 -- case, and the substrate's answer to it is a resolve policy plus
--- `cafaye.begin_credential/1`: the caller presents a value it already holds, and
+-- `anywaye.begin_credential/1`: the caller presents a value it already holds, and
 -- the policy widens the read to exactly the row whose column equals that value.
 --
 -- The predicate is in the POLICY and not only in the caller's query, which is the
@@ -88,13 +88,13 @@
 --     which means an uppercase or non-canonical uuid resolves nothing rather
 --     than erroring: the safe direction, and the same direction as an absent
 --     identity.
---   * it is NOT audited at runtime. `cafaye.credential_tables()` lists it (the
---     policy's name ends `_cafaye_resolve` and its qualifier calls
---     `cafaye.current_credential_digest()`), with `(unresolved)` in the column
+--   * it is NOT audited at runtime. `anywaye.credential_tables()` lists it (the
+--     policy's name ends `_anywaye_resolve` and its qualifier calls
+--     `anywaye.current_credential_digest()`), with `(unresolved)` in the column
 --     because the qualifier names two of the table's own columns — an audit
 --     finding an operator can read, not a silent widening.
 --
--- Every clause below is written `(select cafaye.…())`, wrapped, and that is not
+-- Every clause below is written `(select anywaye.…())`, wrapped, and that is not
 -- style: Postgres evaluates a bare function call in a policy qualifier once per
 -- candidate row and hoists the wrapped form into an InitPlan that runs once per
 -- statement. Measured on this cluster, two rows, identity unset:
@@ -109,27 +109,27 @@
 -- `drop policy if exists` before each `create policy`, so this file is
 -- re-runnable: the test database's installer (`test/support/database_boundary.rb`)
 -- executes it on every suite boot, and a second `create policy` with the same name
--- is an error rather than a no-op. `cafaye.protect_table` does the same thing for
+-- is an error rather than a no-op. `anywaye.protect_table` does the same thing for
 -- the two tables below, and for the same reason — a re-run converges instead of
 -- failing, and a policy whose definition was corrected here cannot survive one.
 
 alter table customers enable row level security;
 alter table customers force row level security;
 
-drop policy if exists customers_cafaye_select on customers;
-drop policy if exists customers_cafaye_insert on customers;
-drop policy if exists customers_cafaye_update on customers;
-drop policy if exists customers_cafaye_delete on customers;
-drop policy if exists customers_cafaye_resolve on customers;
+drop policy if exists customers_anywaye_select on customers;
+drop policy if exists customers_anywaye_insert on customers;
+drop policy if exists customers_anywaye_update on customers;
+drop policy if exists customers_anywaye_delete on customers;
+drop policy if exists customers_anywaye_resolve on customers;
 
-create policy customers_cafaye_select on customers for select to billing, billing_app using (owner_type = 'Account' and owner_id = (select cafaye.current_account_id()));
-create policy customers_cafaye_insert on customers for insert to billing, billing_app with check (owner_type = 'Account' and owner_id = (select cafaye.current_account_id()));
-create policy customers_cafaye_update on customers for update to billing, billing_app using (owner_type = 'Account' and owner_id = (select cafaye.current_account_id())) with check (owner_type = 'Account' and owner_id = (select cafaye.current_account_id()));
-create policy customers_cafaye_delete on customers for delete to billing, billing_app using (owner_type = 'Account' and owner_id = (select cafaye.current_account_id()));
+create policy customers_anywaye_select on customers for select to billing, billing_app using (owner_type = 'Account' and owner_id = (select anywaye.current_account_id()));
+create policy customers_anywaye_insert on customers for insert to billing, billing_app with check (owner_type = 'Account' and owner_id = (select anywaye.current_account_id()));
+create policy customers_anywaye_update on customers for update to billing, billing_app using (owner_type = 'Account' and owner_id = (select anywaye.current_account_id())) with check (owner_type = 'Account' and owner_id = (select anywaye.current_account_id()));
+create policy customers_anywaye_delete on customers for delete to billing, billing_app using (owner_type = 'Account' and owner_id = (select anywaye.current_account_id()));
 
 -- --- customers: the webhook path's resolve policy ----------------------------
 
-create policy customers_cafaye_resolve on customers for select to billing, billing_app using (id::text = (select cafaye.current_credential_digest()) or processor_customer_id = (select cafaye.current_credential_digest()));
+create policy customers_anywaye_resolve on customers for select to billing, billing_app using (id::text = (select anywaye.current_credential_digest()) or processor_customer_id = (select anywaye.current_credential_digest()));
 
 -- The REVOKE belongs with the policies — `protect_table` does the same thing, right
 -- after ENABLE and before its own `grant`s, so that "who can read this table" is
@@ -164,5 +164,5 @@ revoke all on table customers from public;
 -- — the same everywhere; the owner side stays `current_user`, which is `billing`
 -- wherever the boundary is real.
 
-select cafaye.protect_table('subscriptions', 'billing_app');
-select cafaye.protect_table('charges', 'billing_app');
+select anywaye.protect_table('subscriptions', 'billing_app');
+select anywaye.protect_table('charges', 'billing_app');

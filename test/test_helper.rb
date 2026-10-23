@@ -118,8 +118,8 @@ module ActiveSupport
     # Rails creates `…_test_0` … `…_test_7` and loads `db/schema.rb` into them in the
     # PARENT process, before forking — so the install at the top of this file reached
     # only the primary test database, and every worker's database had the three
-    # tables and no `cafaye` schema at all. Measured, with that install alone: 285 of
-    # 1256 tests failed with `schema "cafaye" does not exist`, which is a missing
+    # tables and no `anywaye` schema at all. Measured, with that install alone: 285 of
+    # 1256 tests failed with `schema "anywaye" does not exist`, which is a missing
     # boundary reported as a missing function. `parallelize_setup` is the
     # after-fork hook, so it runs in the worker, against the worker's connection.
     parallelize_setup { Tenancy::Substrate.install! }

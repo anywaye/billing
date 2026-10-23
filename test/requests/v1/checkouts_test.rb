@@ -253,7 +253,7 @@ class V1CheckoutsTest < ActionDispatch::IntegrationTest
     subscription = Subscription.sole
 
     post "/v1/subscriptions/#{subscription.id}/payment_method",
-      params: { return_url: "https://app.cafaye.com/billing" }, as: :json
+      params: { return_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_response :unprocessable_entity
     assert_includes problem_fields, "subscription_id"

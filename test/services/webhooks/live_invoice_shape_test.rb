@@ -28,7 +28,7 @@ class LiveInvoiceShapeTest < ActiveSupport::TestCase
     travel_to(frozen_now)
     @customer = Customer.create!(
       owner_type: "Account", owner_id: SecureRandom.uuid, processor: "stripe",
-      processor_customer_id: LIVE_CUSTOMER_PROCESSOR_ID, email: "billing-live-test@cafaye.com"
+      processor_customer_id: LIVE_CUSTOMER_PROCESSOR_ID, email: "billing-live-test@anywaye.com"
     )
     @plan = Plan.create!(
       name: "Live Drill", slug: "live-drill-#{SecureRandom.hex(4)}",
@@ -74,11 +74,11 @@ class LiveInvoiceShapeTest < ActiveSupport::TestCase
   # `charges` at zero with Stripe holding a paid 19.00 invoice.
   test "an invoice.paid that arrives before any subscription event still records the charge" do
     body = stripe_fixture("invoice.paid.live-first-checkout")
-    cafaye_id = JSON.parse(body).dig("data", "object", "parent", "subscription_details", "metadata", "cafaye_customer_id")
+    anywaye_id = JSON.parse(body).dig("data", "object", "parent", "subscription_details", "metadata", "anywaye_customer_id")
 
     customer = Customer.create!(
-      id: cafaye_id, owner_type: "Account", owner_id: SecureRandom.uuid, processor: "stripe",
-      email: "first-checkout@cafaye.com"
+      id: anywaye_id, owner_type: "Account", owner_id: SecureRandom.uuid, processor: "stripe",
+      email: "first-checkout@anywaye.com"
     )
     assert_nil customer.processor_customer_id, "the case under test is a customer the processor's id cannot resolve"
 

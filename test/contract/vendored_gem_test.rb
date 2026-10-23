@@ -6,8 +6,8 @@ require "test_helper"
 
 # The pinned copy of the fleet's shared gem, held to its pin.
 #
-# `vendor/cafaye` exists because the gem is not on rubygems and github is not
-# reachable from this environment — see `vendor/cafaye/VENDORED.md`. A pinned
+# `vendor/anywaye` exists because the gem is not on rubygems and github is not
+# reachable from this environment — see `vendor/anywaye/VENDORED.md`. A pinned
 # copy is honest only while it stays pinned, and a pin nothing can check is a
 # pin in name only, so `DIGESTS` records a sha256 for every file the gem's
 # gemspec ships and this test re-reads them on every run. There is no skip in
@@ -22,7 +22,7 @@ require "test_helper"
 # two trees and re-copy deliberately, rewriting the manifest and the pinned
 # commit in the same commit.
 class VendoredGemTest < ActiveSupport::TestCase
-  VENDOR = Pathname.new(File.expand_path("../../vendor/cafaye", __dir__))
+  VENDOR = Pathname.new(File.expand_path("../../vendor/anywaye", __dir__))
 
   test "every vendored file is the file the manifest pinned" do
     drifted = DIGESTS.reject do |relative, digest|
@@ -31,7 +31,7 @@ class VendoredGemTest < ActiveSupport::TestCase
     end
 
     assert_empty drifted.keys,
-      "vendor/cafaye no longer matches its DIGESTS manifest. Either an edit crept " \
+      "vendor/anywaye no longer matches its DIGESTS manifest. Either an edit crept " \
       "into the copy — revert it — or the pin was deliberately refreshed: re-copy " \
       "the gem's shipped files, rewrite DIGESTS and VENDORED.md's commit in the " \
       "same commit, and say why."
@@ -57,10 +57,10 @@ class VendoredGemTest < ActiveSupport::TestCase
     # adapter. This is the assertion that stops a second `for update skip
     # locked` being written in this repository: the SQL billing drains with is
     # the vendored gem's constant.
-    assert_includes Cafaye::Outbox::PgConnection::CLAIM_SQL, "for update skip locked"
-    assert_includes Cafaye::Outbox::PgConnection::CLAIM_SQL, "published_at is null"
-    assert_includes Cafaye::Outbox::PgConnection::CLAIM_SQL, "order by created_at, id"
-    assert_kind_of Cafaye::Outbox::ActiveRecordConnection,
+    assert_includes Anywaye::Outbox::PgConnection::CLAIM_SQL, "for update skip locked"
+    assert_includes Anywaye::Outbox::PgConnection::CLAIM_SQL, "published_at is null"
+    assert_includes Anywaye::Outbox::PgConnection::CLAIM_SQL, "order by created_at, id"
+    assert_kind_of Anywaye::Outbox::ActiveRecordConnection,
       Outbox::Relay.send(:build_publisher, Outbox::NatsPublisher.build("nats://127.0.0.1:1"),
         logger: nil).instance_variable_get(:@connection)
   end

@@ -8,7 +8,7 @@ module Webhooks
     # only thing consulted is the processor's own `paid` on the normalised
     # payload, because a receipt is a claim that a customer paid, and only the
     # party that took the money can make that claim. Nothing in this file looks at
-    # a cafaye request, a plan, a price, or an intent — a charge written from
+    # a anywaye request, a plan, a price, or an intent — a charge written from
     # anything but a settled processor payment would be a receipt for something
     # this service decided rather than something that happened.
     #
@@ -120,14 +120,14 @@ module Webhooks
           event_time
         end
 
-        # The cafaye customer. A charge with no resolvable customer is not
+        # The anywaye customer. A charge with no resolvable customer is not
         # recorded: the customer is the link back to the account, and
         # `belongs_to :customer` is required, so proceeding would raise over a
         # payment that was perfectly real. This is a known gap, not a rule — an
         # `invoice.paid` for a customer created in the processor's dashboard has
-        # no cafaye customer, and its receipt is therefore not written.
+        # no anywaye customer, and its receipt is therefore not written.
         #
-        # **The cafaye link is consulted first**, and the order is the fix for a
+        # **The anywaye link is consulted first**, and the order is the fix for a
         # measured defect (2026-10-16): the first checkout's `invoice.paid`
         # arrives before `customer.subscription.created`, and a customer
         # created through `/v1` has no `processor_customer_id` until a
@@ -136,7 +136,7 @@ module Webhooks
         # was silently not written. The metadata the Checkout session set is
         # the id this service minted; the processor's id is the fallback.
         def resolved_customer
-          @resolved_customer ||= find_customer(data["cafaye_customer_id"]) || find_customer(data["customer_id"])
+          @resolved_customer ||= find_customer(data["anywaye_customer_id"]) || find_customer(data["customer_id"])
         end
 
         def find_customer(identifier)
@@ -157,7 +157,7 @@ module Webhooks
         # A `User`-owned customer answers nothing — that is the rule
         # `Customer.for_account` encodes, and a receipt in no account is a receipt
         # nobody can read. `client_reference_id` is the last resort because it is
-        # the one field a cafaye request put on the processor's session, and it is
+        # the one field a anywaye request put on the processor's session, and it is
         # shape-checked before use: an unchecked value from the processor's side
         # of a session would be a caller naming their own account, which is the
         # one thing `AGENTS.md` (Authorization) forbids outright.

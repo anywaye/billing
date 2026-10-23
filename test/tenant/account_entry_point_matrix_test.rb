@@ -177,12 +177,12 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   #
   # Named rather than filtered out of the comparison below, because a filter
   # would go stale silently and then exclude whatever was added at that path
-  # next. It authenticates the *processor* by signature, not a cafaye client, and
+  # next. It authenticates the *processor* by signature, not a anywaye client, and
   # it must never grow a token check: a `Bearer` on that path would be a second,
   # weaker trust path to the same door.
   NOT_ACCOUNT_SCOPED_ROUTES = {
     [ "POST", "/v1/webhooks/stripe" ] =>
-      "authenticates the processor by signature, not a cafaye client, and must never grow a token check"
+      "authenticates the processor by signature, not a anywaye client, and must never grow a token check"
   }.freeze
 
   # Every data access in `app/`, keyed by `path`, the method it sits in, and its
@@ -231,7 +231,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
 
     # --- the processor delivery path, where an account is resolved from an id -
     [ "app/services/subscriptions/lifecycle.rb", "call", "read" ] => "resolves the row a delivery writes, by the processor's subscription id",
-    [ "app/services/subscriptions/lifecycle.rb", "customer", "read" ] => "resolves a customer from a delivery, by cafaye id or by Stripe id",
+    [ "app/services/subscriptions/lifecycle.rb", "customer", "read" ] => "resolves a customer from a delivery, by anywaye id or by Stripe id",
     [ "app/services/subscriptions/lifecycle.rb", "plan", "read" ] => "resolves a plan from a delivery by its Stripe price id",
     [ "app/services/subscriptions/lifecycle.rb", "apply", "write" ] => "builds the subscription row a delivery created",
     [ "app/services/subscriptions/lifecycle.rb", "apply", "update" ] => "writes the resolved customer's account onto that row",
@@ -258,7 +258,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     [ "app/models/charge.rb", "belongs_to :customer", "read" ] => "declares the join to the account-scoped customer the charge is billed to",
     [ "app/models/charge.rb", "belongs_to :subscription", "read" ] => "declares the join to the subscription the charge is for, which is absent for a one-time checkout",
     [ "app/models/charge.rb", "scope :for_account", "list" ] => "resolves one account's charges by `account_id`, the tenancy key the receipt route reads through",
-    [ "app/services/webhooks/charges/recorder.rb", "find_customer", "read" ] => "resolves the cafaye customer a payment is for, by cafaye id or by processor id",
+    [ "app/services/webhooks/charges/recorder.rb", "find_customer", "read" ] => "resolves the anywaye customer a payment is for, by anywaye id or by processor id",
     [ "app/services/webhooks/charges/recorder.rb", "resolved_subscription", "read" ] => "resolves the subscription a payment is for, by the processor's subscription id",
     [ "app/services/webhooks/charges/recorder.rb", "record", "write" ] => "writes the charge a settled payment is the receipt for",
     [ "app/controllers/v1/charges_controller.rb", "show", "read" ] => "resolves a charge by its uuid inside `for_account`; another account's is a 404",
@@ -267,7 +267,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # --- the recipient fact: the payment payload's one lookup (billing-event-payloads-01)
     # The payment events carry the customer's billing email because the fleet's
     # consumer cannot read it anywhere else, and this is the read that fact costs:
-    # the customer resolved by cafaye id first, by processor id second — the same
+    # the customer resolved by anywaye id first, by processor id second — the same
     # resolution the recorder's `find_customer` makes, and for the same measured
     # reason (2026-10-16): on an account's FIRST payment the row has no
     # `processor_customer_id` yet, so a lookup by the processor's id alone misses
@@ -276,7 +276,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # resolution cannot be the one the event relies on; the scanner files the
     # lookup under this method because the innermost `def` is what it attributes
     # to, and the row names that method rather than the caller.
-    [ "app/services/webhooks/stripe_events.rb", "find_customer", "read" ] => "resolves the cafaye customer a payment is for, by cafaye id or by processor id, for the recipient fact on the event",
+    [ "app/services/webhooks/stripe_events.rb", "find_customer", "read" ] => "resolves the anywaye customer a payment is for, by anywaye id or by processor id, for the recipient fact on the event",
 
     # --- the keyset every list goes through ----------------------------------
     [ "app/controllers/concerns/cursor_paging.rb", "apply_cursor", "list" ] => "applies a client-supplied keyset to a relation the caller chose",
@@ -285,16 +285,16 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     # The one read on this surface with NO account to be scoped by, and it is here
     # rather than exempted because that is exactly what it is: `POST
     # /v1/webhooks/stripe` is authenticated by signature, not by a token, so it has
-    # no claim to hand `cafaye.begin_account/1` — and the query that would tell it
+    # no claim to hand `anywaye.begin_account/1` — and the query that would tell it
     # which account the event belongs to is a read of `customers`. It performs the
-    # same two lookups `Recorder#find_customer` makes (cafaye id first, the
+    # same two lookups `Recorder#find_customer` makes (anywaye id first, the
     # processor's id second) for the same measured reason, and it is a third copy
     # rather than a call to one of the others because of a difference that matters:
     # the value it looks up comes straight off a processor payload, so a value that
     # cannot be a uuid must be looked up as the processor's id and never handed to
     # `find_by(id:)`, where Postgres would answer 22P02 rather than a miss.
     #
-    # What keeps it inside the boundary is `customers_cafaye_resolve`
+    # What keeps it inside the boundary is `customers_anywaye_resolve`
     # (`db/tenancy/account_isolation.sql`): a `for select` policy whose qualifier is
     # the value this method presents, so the read is widened to exactly the row
     # that value names and nothing else — asserted, in raw SQL, by
@@ -365,7 +365,7 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
     "app/lib/parameter_error.rb" => "the error a bad query parameter raises; it holds no query",
     "app/lib/problem.rb" => "the problem vocabulary, a frozen table of codes and no model access",
     # The file the Postgres-boundary packet added. It writes the transaction-local
-    # GUC the policies read — `cafaye.begin_account/1` and `cafaye.begin_credential/1`
+    # GUC the policies read — `anywaye.begin_account/1` and `anywaye.begin_credential/1`
     # — and reaches no table: the boundary it serves is the database's, and the
     # scanner's "no data access" is the right answer for it rather than a miss.
     # Naming it here is what keeps the list closed, exactly as the comment above the
@@ -670,13 +670,13 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # Three methods now do two things, for three different reasons:
   #
   #   * `Subscriptions::Lifecycle#customer` performs **two lookups** —
-  #     `Customer.find_by(id: cafaye_customer_id)` and
+  #     `Customer.find_by(id: anywaye_customer_id)` and
   #     `Customer.find_by(processor_customer_id:)` — under one description,
   #     because one row can be found by either identifier and a delivery may
   #     carry only one.
   #   * `Webhooks::Charges::Recorder#find_customer` performs the same **two
   #     lookups** under one description, for the same reason: a payment may
-  #     carry a cafaye id or a processor id and never both.
+  #     carry a anywaye id or a processor id and never both.
   #   * `Subscriptions::Lifecycle#apply` builds a row that did not exist **and**
   #     writes to the one that did, so it has two keys. So there are more keys
   #     than methods.
@@ -684,9 +684,9 @@ class TenantAccountEntryPointMatrixTest < ActiveSupport::TestCase
   # A single number would have hidden all three, and all three are the shape of the code.
   #
   # billing-event-payloads-01's 44 became 45, and the new one is the recipient
-  # fact's lookup: `StripeEvents.find_customer` resolves the cafaye customer a
-  # payment is for — by cafaye id first, by processor id second, the order the
-  # cafaye-first packet measured (2026-10-16) — so the payment events can carry
+  # fact's lookup: `StripeEvents.find_customer` resolves the anywaye customer a
+  # payment is for — by anywaye id first, by processor id second, the order the
+  # anywaye-first packet measured (2026-10-16) — so the payment events can carry
   # the customer's billing email. It is the same resolution the recorder's
   # `find_customer` makes for the charge, made for the event — a failed payment
   # records no charge, so the recorder's resolution cannot be the one the event

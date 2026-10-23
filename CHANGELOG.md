@@ -14,15 +14,15 @@ All notable changes to billing are recorded here. The format follows
   forgotten predicate, or one `find_by_sql`, was a cross-tenant read with a green
   suite. `db/tenancy/substrate.sql` (kit's template at ref `46d08f2`, kept as a
   standalone file so the copy stays comparable by hash) and
-  `db/tenancy/account_isolation.sql` (this service's half: `cafaye.protect_table`
+  `db/tenancy/account_isolation.sql` (this service's half: `anywaye.protect_table`
   for the two tables whose key is a column, and five hand-written policies for
   `customers`, whose key is `owner_type`/`owner_id`) are installed by
   `db/migrate/20261016120000_account_isolation.rb`, which refuses to finish unless
-  `cafaye.unprotected_tables()` is empty. Every request runs inside a transaction
-  whose `cafaye.begin_account/1` the policies read — `V1::BaseController` for the
+  `anywaye.unprotected_tables()` is empty. Every request runs inside a transaction
+  whose `anywaye.begin_account/1` the policies read — `V1::BaseController` for the
   token-authenticated surface, and `Webhooks::StripeController` for the
   signature-authenticated one, which resolves its own account through
-  `customers_cafaye_resolve` and `Webhooks::AccountResolution` because a webhook
+  `customers_anywaye_resolve` and `Webhooks::AccountResolution` because a webhook
   has no claim to be given (without it every delivery would be recorded
   `unknown_customer` and answered 200: a money service silently billing nobody).
   A third path is closed with it: `db/schema.rb` cannot express a policy, and
@@ -58,17 +58,17 @@ All notable changes to billing are recorded here. The format follows
 ### Fixed
 
 - **The image build, and with it the publish** (2026-10-16, branch
-  `fix/image-copy`). The `build` stage copied the vendored `cafaye` gem with
+  `fix/image-copy`). The `build` stage copied the vendored `anywaye` gem with
   `COPY vendor/* ./vendor/`, and Docker copies the **contents** of a source
   directory into the destination while dropping the directory's own name. The
-  glob matched `cafaye/`, a directory, so its contents were flattened into
-  `vendor/` and `/rails/vendor/cafaye` never existed in the image. `bundle
+  glob matched `anywaye/`, a directory, so its contents were flattened into
+  `vendor/` and `/rails/vendor/anywaye` never existed in the image. `bundle
   install` then failed with **exit code 13**
-  (``The path `/rails/vendor/cafaye` does not exist``), the image was never
+  (``The path `/rails/vendor/anywaye` does not exist``), the image was never
   built, so the packages were never published, so the substrate's billing
   `Application` pointed at artifacts that do not exist and every box install was
   forced down the credential path. The destination is now spelled out
-  (`COPY vendor/cafaye/ ./vendor/cafaye/`, with `vendor/.keep` on its own line),
+  (`COPY vendor/anywaye/ ./vendor/anywaye/`, with `vendor/.keep` on its own line),
   so the directory name survives. Reproduced and fixed locally from this
   checkout: `docker build --target build .` exits **0** and reports `Bundle
   complete! 22 Gemfile dependencies, 125 gems now installed`; `docker build .`
@@ -103,7 +103,7 @@ All notable changes to billing are recorded here. The format follows
     `customer.subscription.created`, and nothing wrote
     `customers.processor_customer_id` from a webhook — so a real payment
     resolved no customer and was silently skipped. The invoice's metadata
-    carries the cafaye link, the normalizer reads it, the recorder consults it
+    carries the anywaye link, the normalizer reads it, the recorder consults it
     first, and the lifecycle fills the processor id in once (and never
     overwrites one). The same write is what makes `upcoming_invoice` and
     `payment_method` work at all for a customer created through `/v1`.
@@ -125,18 +125,18 @@ All notable changes to billing are recorded here. The format follows
     container too. It is the traces resource URL now
     (`…/v1/traces`), and a test holds the shape the exporter needs.
 
-  Payload: the two payment events carry `cafaye_customer_id`, recorded in
-  `PENDING_PAYLOAD_ALIGNMENT` and `cafaye.yml` because core's payment schemas
+  Payload: the two payment events carry `anywaye_customer_id`, recorded in
+  `PENDING_PAYLOAD_ALIGNMENT` and `anywaye.yml` because core's payment schemas
   are closed and do not declare it.
 
 ### Added
 
 - **billing's deploy artifact, and the publish loop that fills it.** `caf gen
-  chart` generates `chart/` from this repository's own `cafaye.yml` —
+  chart` generates `chart/` from this repository's own `anywaye.yml` —
   `Chart.yaml` `0.1.0`, `name: billing`, the workload with a `/readyz`
   readiness probe, and an Ingress that ships **off** because billing is an
   internal service reached through its namespace (gateway and parlor are the
-  two exposed ones, per `cafaye/notes/deployment.md`'s "Who owns the Application"). The
+  two exposed ones, per `anywaye/notes/deployment.md`'s "Who owns the Application"). The
   generated chart deliberately carries **no** `templates/application.yaml`:
   kit's substrate owns the `Application`, and a second one named `billing` in
   `argocd` fighting the substrate's would be split brain. The substrate gains
@@ -155,7 +155,7 @@ All notable changes to billing are recorded here. The format follows
   reason is the fleet's direction rather than a gap.** The October wave's test
   asserted Kamal's `config/deploy.yml` — healthcheck path, `env.secret`, no
   placeholder host — against a file that is still the stock template, and
-  `cafaye/notes/deployment.md` is explicit that no new work is Kamal work: the substrate is
+  `anywaye/notes/deployment.md` is explicit that no new work is Kamal work: the substrate is
   k3s + Traefik + cert-manager + Argo CD, and Kamal retires at parity. A Kamal
   config test would invest in a file this service has never deployed with, so
   the assertion moved to the artifact that actually deploys it.
@@ -386,7 +386,7 @@ All notable changes to billing are recorded here. The format follows
   the resolution works **with nothing configured**, from this directory. It also
   pins the two bugs the module had on first write, both of which are the same
   failure one level down: `primary_worktree` returned `Pathname.new("")`, which
-  expands to the working directory — a real directory carrying a `cafaye.yml`, so
+  expands to the working directory — a real directory carrying a `anywaye.yml`, so
   a failed lookup validated as "found" and answered the worktree itself; and a
   directory is only core if it holds `schemas/`.
 
@@ -432,17 +432,17 @@ All notable changes to billing are recorded here. The format follows
 
   Three files, and the third is the only one that names a broker:
 
-  * `Cafaye::Outbox` — the fleet's shared gem — owns the claim
+  * `Anywaye::Outbox` — the fleet's shared gem — owns the claim
     (`select ... for update skip locked`, ordered, bounded, with the per-row
     backoff core specifies), the envelope grammar and the publish pass.
-    **No second claim mechanism was written**: `vendor/cafaye` is a pinned copy
-    of `cafaye-rb` at `5056500`, because the gem is not on rubygems and
-    github.com/cafaye/cafaye-rb is unreachable from this environment.
-    `vendor/cafaye/DIGESTS` pins every shipped file by sha256 and
+    **No second claim mechanism was written**: `vendor/anywaye` is a pinned copy
+    of `anywaye-rb` at `5056500`, because the gem is not on rubygems and
+    github.com/anywaye/anywaye-rb is unreachable from this environment.
+    `vendor/anywaye/DIGESTS` pins every shipped file by sha256 and
     `test/contract/vendored_gem_test.rb` re-reads them on every run — a check
     with no skip, so it holds in CI. The action item (publish the gem, or make
     it reachable, and replace the `path:` dependency) is recorded in
-    `vendor/cafaye/VENDORED.md`.
+    `vendor/anywaye/VENDORED.md`.
   * `Outbox::NatsPublisher` is the transport: one method — put this envelope on
     the bus, return only once the broker has it. JetStream and not core NATS,
     because `published_at` is set from the broker's acknowledgement and only
@@ -546,12 +546,12 @@ All notable changes to billing are recorded here. The format follows
     which plan, and a uuid does not say it.
   - **The field is named `email`, matching identity's events** — one fleet, one
     field name for the address a consumer cannot look up. It is **absent, never
-    null**, when the customer has no address on file or no cafaye row at all: an
+    null**, when the customer has no address on file or no anywaye row at all: an
     event that promises a mail it cannot address is worse than one that carries
     no address, and a consumer refuses the latter by design.
   - **The gap to core is recorded, not matched.** core's payload schemas are
     closed with `additionalProperties: false` and do not declare either field, so
-    `PENDING_PAYLOAD_ALIGNMENT` gains the five entries and `cafaye.yml` a
+    `PENDING_PAYLOAD_ALIGNMENT` gains the five entries and `anywaye.yml` a
     DECISION NEEDED — the same recorded-not-matched mechanism as `entitlements`,
     and the same reason: core is read-only from a service worktree. The contract
     test's corpus customer carries an email, because the payment payloads are
@@ -725,7 +725,7 @@ All notable changes to billing are recorded here. The format follows
   subscribes to. Nothing checks a capability for it, because billing has no scope
   vocabulary to check against and a scope invented here would be one nothing else
   in the fleet grants. `Principal#scope_set` parses the token's `scope` claim and
-  nothing reads it yet. This is a DECISION NEEDED in `cafaye.yml` and a known gap
+  nothing reads it yet. This is a DECISION NEEDED in `anywaye.yml` and a known gap
   in `README.md`, and closing it is a decision about what a catalogue write is for
   rather than a missing line.
 
@@ -745,7 +745,7 @@ All notable changes to billing are recorded here. The format follows
   `LICENSE` file is the entire grant.
 
   The copyright line matches the three repositories that already shipped a
-  licence exactly: `Copyright (c) 2026 cafaye`.
+  licence exactly: `Copyright (c) 2026 anywaye`.
 
 - **billing emits OpenTelemetry spans into the collector that ships with kit's
   stack.** `BILLING_OTEL_ENDPOINT` is the only contract (core D16) and it is **on
@@ -835,7 +835,7 @@ All notable changes to billing are recorded here. The format follows
   `bin/rails db:prepare` fallback is in its header: on a machine where bundler
   installs into its own `libexec/gems`, `bin/rails` cannot find the gems.
 - **`gate.yml`: this repository's gate is now declared, and `bin/prime` refuses
-  an unpinned Ruby.** billing was one of the six cafaye services with no gate
+  an unpinned Ruby.** billing was one of the six anywaye services with no gate
   declaration, so a developer here could run `bin/prime`, see green, and learn
   nothing about whether the gate could detect anything. `gate.yml` is written
   against `core/schemas/gate.schema.json` and checked by
@@ -1314,7 +1314,7 @@ All notable changes to billing are recorded here. The format follows
 
 - **CI now calls kit's reusable workflow, and holds master's suite size.**
   `.github/workflows/ci.yml` replaces the Rails-generated workflow with
-  `uses: cafaye/kit/.github/workflows/ci.reusable.yml@master` and
+  `uses: anywaye/kit/.github/workflows/ci.reusable.yml@master` and
   `language: ruby` — the fleet's first Ruby adopter of it — plus the half kit
   cannot own: a `gate` job that runs `bin/prime` against a real PostgreSQL, a
   `security` job for `brakeman` and `bundler-audit`, and a `pins` job that
@@ -1332,7 +1332,7 @@ All notable changes to billing are recorded here. The format follows
   | `CORE_PATH` pointing at nothing | 19 runs, 0 assertions, **19 skips** |
 
   and the whole-suite summary line reads the same in both cases. So CI checks
-  `cafaye/core` out of the repository itself — public, `schemas` and `docs`
+  `anywaye/core` out of the repository itself — public, `schemas` and `docs`
   only, at `master` rather than a pinned SHA, because a pinned ref would blind
   the one guard that exists to catch a change in core — and **fails the build on
   a single skipped test**. A suite that reports `0 assertions; 19 skipped` has
@@ -1453,7 +1453,7 @@ All notable changes to billing are recorded here. The format follows
 - **One Stripe event id could produce two `billing.payment.succeeded` events.**
   A duplicate charge, and the most expensive defect this service has found.
   `Webhooks::Ingestion#call` is a check followed by an act — it reads
-  `ProcessorWebhook#handled?` and, on `false`, writes the cafaye event and marks
+  `ProcessorWebhook#handled?` and, on `false`, writes the anywaye event and marks
   the delivery finished. The unique index on `processor_webhooks.stripe_event_id`
   makes two concurrent deliveries of one event id agree about *which row* they
   hold, and that is not the same as agreeing about the answer: `handled?` reads
@@ -1706,7 +1706,7 @@ All notable changes to billing are recorded here. The format follows
   with `additionalProperties: false`.
 
   Recorded in `PENDING_PAYLOAD_ALIGNMENT` and asserted in both directions, and
-  raised as a DECISION NEEDED in `cafaye.yml`. core's own D10 names this as the
+  raised as a DECISION NEEDED in `anywaye.yml`. core's own D10 names this as the
   second breaking change and core is read-only from a service worktree, so it is
   core's to make. Matching core from here would mean either emitting a payload no
   consumer has agreed to or dropping `plan_id` and `account_id`, which are the
@@ -1855,7 +1855,7 @@ was already here, for `Stripe::Webhook.construct_event`.
   it already had is what puts the domain write and the event in one commit.
 - `openapi/v1.yaml` is at `1.1.0` and `Plan#as_json` carries `entitlements`. Both
   are non-breaking additions under the same `/v1` prefix, which is core's rule.
-- `cafaye.yml`'s `DECISION NEEDED` notes are updated rather than accumulated: the
+- `anywaye.yml`'s `DECISION NEEDED` notes are updated rather than accumulated: the
   `subject` decision is closed, and a new one records that this service now talks
   to Stripe, with the narrower claim that replaces the old one.
 
@@ -1868,7 +1868,7 @@ was already here, for `Stripe::Webhook.construct_event`.
   a question about what a consumer does with them; a manager who wants the second
   type needs a row agreed in core first, and the mapping is then one line.
 - **A subscription created directly in Stripe's dashboard is recorded as
-  `ignored:unknown_customer`, not tracked.** It carries no cafaye customer id, and
+  `ignored:unknown_customer`, not tracked.** It carries no anywaye customer id, and
   matching it to whoever shares an id would be a guess about whose money it is.
 - **No trials, no usage-based and no seat-based billing.** Only the flat plan
   lifecycle the packet asked for. A `quantity` is reported in the event payload
@@ -1909,7 +1909,7 @@ was already here, for `Stripe::Webhook.construct_event`.
   `billing.plan.updated`, which fires only when a field actually changed — and
   five from the Stripe webhook mapping: `billing.subscription.started`,
   `billing.subscription.updated`, `billing.subscription.canceled`,
-  `billing.payment.succeeded`, `billing.payment.failed`. `cafaye.yml` and
+  `billing.payment.succeeded`, `billing.payment.failed`. `anywaye.yml` and
   `OutboxEvent::TYPES` hold the same eight, and `test/contract/` fails if either
   drifts, so a type cannot be emitted without a manifest row or advertised
   without an emitter.
@@ -1938,7 +1938,7 @@ was already here, for `Stripe::Webhook.construct_event`.
   and a replay with a different body is a `409 idempotency_key_reused`. Only
   successful responses are remembered: a frozen 422 would lock a client out for
   24 hours for fixing nothing.
-- **`openapi/v1.yaml`** — the HTTP contract, and `cafaye.yml` now declares it
+- **`openapi/v1.yaml`** — the HTTP contract, and `anywaye.yml` now declares it
   plus the published event types. This closes the `> DECISION NEEDED` that
   billing-01 recorded about the absent `exposes`.
 - **`test/contract/`** — checks the emitted envelopes against core's real
@@ -2036,7 +2036,7 @@ never calls.
   migration; billing-02's is the one that stands, and each later packet adds a
   table or a constraint rather than a second definition of anything.
 
-- `core: ^0.1.0` → `^0.2.0` in `cafaye.yml`. Spec v0.2 made three-segment event
+- `core: ^0.1.0` → `^0.2.0` in `anywaye.yml`. Spec v0.2 made three-segment event
   types mandatory, which is a breaking manifest change, and core's own
   guidance is to move the pin in the same commit as the rename.
 - `config.consider_all_requests_local` is `false` in the test environment, not
@@ -2054,7 +2054,7 @@ never calls.
   still report when the change happened, and it is the only way an out-of-order
   delivery is detectable: two events stamped on arrival appear to have happened
   in the order they arrived.
-- `OutboxEvent::TYPES` and `cafaye.yml`'s `exposes.events` went from three types
+- `OutboxEvent::TYPES` and `anywaye.yml`'s `exposes.events` went from three types
   to eight (packet billing-03b). The list is now closed in the enforcement
   direction too — a type that is not on it cannot be written at all, which is
   what stops a mapping from parking every delivery as a failure.
@@ -2108,7 +2108,7 @@ never calls.
   fixture carries `amount_paid: 0`, and `0` is truthy in Ruby, so it would report
   a failed 29.00 charge as a settled 0.00. Money is not worth a clever fallback.
 - **Nothing on the webhook is token-authenticated, and nothing there may become
-  so** (packet billing-03b). The sender is a processor, not a cafaye client. A
+  so** (packet billing-03b). The sender is a processor, not a anywaye client. A
   `Bearer` on that path would be a second, weaker trust path to the same door.
 
 ### Not in this release
@@ -2128,7 +2128,7 @@ never calls.
   holds the money. The webhook is the **report** of a state change, not the
   state: nothing in this packet writes a subscription or a payment, and
   `subject` is therefore the processor's own id (recorded as a `> DECISION
-  NEEDED` in `cafaye.yml`; flipping it is one line in
+  NEEDED` in `anywaye.yml`; flipping it is one line in
   `Webhooks::StripeEvents.subject_for`).
 - **The webhook receives and never calls.** `processor`,
   `processor_product_id` and `processor_price_id` are still stored and returned
@@ -2143,7 +2143,7 @@ never calls.
   consumer counting `billing.subscription.started` would count every Checkout
   signup twice.
 - `billing.plan.updated` has no catalog row in core, and core has no payload
-  schema for any event except one. Both gaps are recorded in `cafaye.yml` and
+  schema for any event except one. Both gaps are recorded in `anywaye.yml` and
   enforced against this repository by `test/contract/` — asserted **as sets**,
   not subtracted from the failures, so a payload that starts matching still has
   to be deleted from the list deliberately. `billing.subscription.started` is
@@ -2153,7 +2153,7 @@ never calls.
   requires `plan_id` and `account_id` as `pln_…` and `acc_…` values and is
   closed over eight fields; this build has no subscriptions table, `Plan#id` is a
   uuid, and the normalized payload carries eleven keys core does not name. The
-  difference is recorded as a `> DECISION NEEDED` in `cafaye.yml`; closing it is
+  difference is recorded as a `> DECISION NEEDED` in `anywaye.yml`; closing it is
   a core-side decision plus a subscriptions table.
 - The cursor is unsigned, the unique-index race path is handled but not
   covered by a spec, and idempotency keys are never pruned. All three are listed
@@ -2185,18 +2185,18 @@ never calls.
 - **`LICENSE` is a Business Source License 1.1, and it was MIT.** OPS-D2 splits the
   fleet — the framework (`core`, `cafe`, `kit`, `pantry`) stays permissive, the
   **services move to a Business Source Licence**: free to run, free to self-host,
-  never to offer a competing service (`cafaye/notes/ops.md:181`, OPS-D2). billing is a
+  never to offer a competing service (`anywaye/notes/ops.md:181`, OPS-D2). billing is a
   service, so its grant moved with the policy in one commit rather than being left
   to contradict it. The move down is recorded here because OPS-D3's rule is that a
   superseded grant is superseded *out loud*: a repo whose grant quietly changes
   while its policy changed looks like a bait-and-switch to whoever read the old one,
-  and the ambiguity is worse than either licence (`cafaye/notes/ops.md:182`, OPS-D3, and
-  the risk-8 entry at `cafaye/notes/ops.md:1081`).
+  and the ambiguity is worse than either licence (`anywaye/notes/ops.md:182`, OPS-D3, and
+  the risk-8 entry at `anywaye/notes/ops.md:1081`).
 
-  The parameters are Licensor `Cafaye`, Licensed Work `billing`, Additional Use
+  The parameters are Licensor `Anywaye`, Licensed Work `billing`, Additional Use
   Grant `None`, Change Date `2030-10-10` — four years out, the fleet's fixed
   wording — and Change License `Apache License, Version 2.0`. The body is the
-  reference BSL 1.1 text, so a diff between two cafaye services shows only the
+  reference BSL 1.1 text, so a diff between two anywaye services shows only the
   `Licensed Work` line.
 
   **Anyone who already holds a copy keeps the grant it was published under.** A
@@ -2205,10 +2205,10 @@ never calls.
   carries. `README.md`'s licence section says the same thing where a reader looks
   first.
 
-  **No manifest field moved, because billing has none to move.** `cafaye.yml`
+  **No manifest field moved, because billing has none to move.** `anywaye.yml`
   declares no licence key and none can be added: core's manifest schema is a closed
   object — `additionalProperties: false` with no licence property among its twelve
-  top-level keys (`core/schemas/cafaye.manifest.schema.json:7-9`, and core is
+  top-level keys (`core/schemas/anywaye.manifest.schema.json:7-9`, and core is
   read-only from a service worktree). billing also publishes no gem — no gemspec,
   and the `Gemfile` carries no `gemspec` directive — so there is no package
   metadata field to reconcile either. That is the same fact the MIT landing
@@ -2249,12 +2249,12 @@ later billing packet builds on, with no billing logic in it.
   `docker-compose.yml` running postgres:17 with a healthcheck. The Ruby version
   is written in exactly three places — `mise.toml`, `.ruby-version`, and the
   `Dockerfile` build arg — and they must move in one commit.
-- `cafaye.yml`, validated against `core`'s frozen manifest schema. It declares
+- `anywaye.yml`, validated against `core`'s frozen manifest schema. It declares
   identity, language, the `^0.1.0` core constraint, and the SSH remote. It has
   no `exposes`, which is a recorded gap rather than a judgement: that needs an
   OpenAPI 3.1 document, and specs are manager-owned. Marked in the file with a
   `> DECISION NEEDED` callout pointing at `core`'s
-  `examples/valid/ruby-api.cafaye.yml`.
+  `examples/valid/ruby-api.anywaye.yml`.
 - `AGENTS.md` and this changelog, so the conventions that keep money correct are
   written down before the first price is modelled rather than after.
 
@@ -2267,10 +2267,10 @@ later billing packet builds on, with no billing logic in it.
 - CI runs Brakeman, `bundler-audit`, RuboCop and the suite. Nothing was
   disabled to make it green. Its PostgreSQL service is pinned to `postgres:17` to
   match `docker-compose.yml`.
-- CI calls `cafaye/kit/.github/workflows/ci.reusable.yml@master`, which is kit's
+- CI calls `anywaye/kit/.github/workflows/ci.reusable.yml@master`, which is kit's
   path and not the one an earlier note here named. kit-04 moved the file: GitHub
   documents that subdirectories of `.github/workflows` are not supported, so
-  `cafaye/kit/workflows/ci.reusable.yml@master` resolved to nothing and no
+  `anywaye/kit/workflows/ci.reusable.yml@master` resolved to nothing and no
   repository in the fleet was calling it. The `ruby` job is expected to be red
   on two steps for reasons that live in kit's file — `bundle exec rake` with no
   database, and `bundle exec rake coverage` against a task this service does not

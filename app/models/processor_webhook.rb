@@ -75,7 +75,7 @@ class ProcessorWebhook < ApplicationRecord
     error.to_s.start_with?(FAILED_PREFIX)
   end
 
-  # The event was handled: it became a cafaye event, and there is nothing to
+  # The event was handled: it became a anywaye event, and there is nothing to
   # look at. `processed_at` is the receipt.
   def handled!
     mark_processed!(error: nil)

@@ -1,7 +1,7 @@
 # The local records a Stripe subscription fixture resolves to.
 #
-# A subscription event is only acted on when it can be attached to a cafaye
-# customer and a cafaye plan — a subscription this service did not sell is not one
+# A subscription event is only acted on when it can be attached to a anywaye
+# customer and a anywaye plan — a subscription this service did not sell is not one
 # it bills, and the delivery is recorded as `unknown_customer` / `unknown_plan`
 # rather than matched to whoever shares an id. Every spec that ingests a
 # subscription fixture therefore needs those two records, with the *processor's*
@@ -73,7 +73,7 @@ module StripeSubscriptionFixtures
     price_FAKEyearlyplanBBBBBBBB
   ].freeze
 
-  # The cafaye customer a fixture's subscription belongs to. `account_owner_type`
+  # The anywaye customer a fixture's subscription belongs to. `account_owner_type`
   # is a parameter only so a spec can arrange the one case where a customer cannot
   # hold a subscription at all.
   #

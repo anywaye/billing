@@ -22,7 +22,7 @@
         "liability": null
       },
       "billing_address_collection": "auto",
-      "cancel_url": "https://app.cafaye.com/settings/billing/canceled",
+      "cancel_url": "https://app.anywaye.com/settings/billing/canceled",
       "client_reference_id": "acc_01J9Z8RR7B2QK3M4N5P6Q7R8S9T",
       "client_secret": null,
       "consent": null,
@@ -42,7 +42,7 @@
       "status": "complete",
       "status_expiration": null,
       "subscription": null,
-      "success_url": "https://app.cafaye.com/welcome",
+      "success_url": "https://app.anywaye.com/welcome",
       "ui_mode": "hosted"
     }
   }

@@ -2,7 +2,7 @@
 # test-box-webhook: end-to-end Stripe webhook walk on an instabox test box.
 #
 # Run this ON the test box (it needs kubectl + stripe CLI + cluster access):
-#   instabox exec cafaye-test --stdin < /path/to/billing/bin/test-box-webhook
+#   instabox exec anywaye-test --stdin < /path/to/billing/bin/test-box-webhook
 # or copy it into the box and run directly.
 #
 # What it does:

@@ -19,7 +19,7 @@
 #
 # ## As which role, and why it matters
 #
-# `cafaye.protect_table` binds every policy it writes to `current_user` and
+# `anywaye.protect_table` binds every policy it writes to `current_user` and
 # `current_user || '_app'`, so the role that INSTALLS the boundary is the role the
 # boundary is about. This installs it as `billing`:
 #
@@ -38,7 +38,7 @@
 #
 # ## What it proves while it is there
 #
-# `cafaye.unprotected_tables()` has to be empty when the install finishes, and a
+# `anywaye.unprotected_tables()` has to be empty when the install finishes, and a
 # non-empty answer RAISES. The isolation suite asserts the same thing again with a
 # planted unprotected table as the control, because an empty result from a broken
 # sweep looks exactly like a clean database.
@@ -75,7 +75,7 @@ module Tenancy
         # refused with the same 42501 a policy raises. See `db/tenancy/app_role.sql`.
         connection.execute(read("app_role.sql"))
 
-        unprotected = connection.select_rows("select table_schema, table_name, why from cafaye.unprotected_tables()")
+        unprotected = connection.select_rows("select table_schema, table_name, why from anywaye.unprotected_tables()")
         next if unprotected.empty?
 
         raise "these account-scoped tables are not protected: " \
@@ -135,11 +135,11 @@ module Tenancy
     #     gets it through `pg_database_owner`; a test database, created by whatever
     #     role the suite connects as, does not.
     #   * `create` on the DATABASE, because the substrate's first statement is
-    #     `create schema if not exists cafaye`. Without it the install dies with
+    #     `create schema if not exists anywaye`. Without it the install dies with
     #     `permission denied for database <name>` — measured — which names the object
     #     and not the missing grant.
     #
-    # And the `cafaye` schema: when it exists and is not already `billing`'s, it is
+    # And the `anywaye` schema: when it exists and is not already `billing`'s, it is
     # DROPPED and rebuilt, rather than re-owned. Measured, and the measurement is why
     # this is a drop rather than an `alter schema … owner to`:
     #
@@ -170,16 +170,16 @@ module Tenancy
         connection.execute("alter #{kind} public.#{connection.quote_table_name(name)} owner to #{OWNER_ROLE}")
       end
 
-      cafaye_owner = connection.select_value("select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'cafaye'")
+      anywaye_owner = connection.select_value("select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'anywaye'")
       foreign_functions = connection.select_value(<<~SQL).to_i
         select count(*)
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'cafaye' and pg_get_userbyid(p.proowner) <> #{connection.quote(OWNER_ROLE)}
+        where n.nspname = 'anywaye' and pg_get_userbyid(p.proowner) <> #{connection.quote(OWNER_ROLE)}
       SQL
-      return if cafaye_owner.nil? || (cafaye_owner == OWNER_ROLE && foreign_functions.zero?)
+      return if anywaye_owner.nil? || (anywaye_owner == OWNER_ROLE && foreign_functions.zero?)
 
-      connection.execute("drop schema cafaye cascade")
+      connection.execute("drop schema anywaye cascade")
     end
 
     # kit's tenancy substrate and billing's own half of the boundary, from the files

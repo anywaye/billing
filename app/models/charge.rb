@@ -11,7 +11,7 @@
 # The whole model turns on one fact about it: **a charge is recorded when a
 # payment succeeds, and never when it fails or is pending.** The processor
 # says so on a signed webhook, and this table is the record of what it said.
-# There is no code path that writes a charge from a cafaye request — a charge
+# There is no code path that writes a charge from a anywaye request — a charge
 # is a fact about money that moved, and only the party that moved it can say
 # so.
 #

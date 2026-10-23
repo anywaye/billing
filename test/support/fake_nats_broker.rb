@@ -30,7 +30,7 @@ class FakeNatsBroker
   # the sequence number it was stored under. Bare JSON and not core NATS'
   # `+ACK` preface: `JetStream#publish` parses the reply payload as JSON, and a
   # preface is a parse error at every consumer.
-  ACK = '{"stream":"CAFAYE","seq":%d,"duplicate":false}'
+  ACK = '{"stream":"ANYWAYE","seq":%d,"duplicate":false}'
 
   INFO = {
     server_id: "fake-broker",

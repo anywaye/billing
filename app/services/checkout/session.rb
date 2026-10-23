@@ -281,7 +281,7 @@ module Checkout
       # produces — because `Lifecycle` is written against that shape and this
       # class is deliberately not a second normaliser.
       #
-      # `cafaye_customer_id` is this service's own id for the customer, and it is
+      # `anywaye_customer_id` is this service's own id for the customer, and it is
       # the field `Lifecycle#customer` prefers over the processor's id, because a
       # customer created through `/v1` has a null `processor_customer_id` until its
       # first subscription tells us what the processor calls it. Sending it means
@@ -308,7 +308,7 @@ module Checkout
         {
           "subscription_id" => subscription.processor_id,
           "status" => status_for(subscription),
-          "cafaye_customer_id" => customer.id,
+          "anywaye_customer_id" => customer.id,
           "customer_id" => @processor.customer_id_for(customer),
           "price_id" => plan.processor_price_id,
           "quantity" => quantity,

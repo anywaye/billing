@@ -14,7 +14,7 @@
 # exists to leave behind.
 #
 # WHAT IT DOES. Runs the same two DDL files the migration runs, through
-# `Tenancy::Substrate.install!`, which also asserts `cafaye.unprotected_tables()`
+# `Tenancy::Substrate.install!`, which also asserts `anywaye.unprotected_tables()`
 # is empty and refuses to finish otherwise. Idempotent: every statement in those
 # files either converges (`protect_table` drops and recreates its policies,
 # `create or replace function`, `create schema if not exists`) or is preceded by a

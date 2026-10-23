@@ -98,7 +98,7 @@ module TestSupport
       end
 
       # `..`, not the worktree itself. A worktree is a checkout of *this*
-      # repository and carries its own `cafaye.yml`, so resolving the worktree
+      # repository and carries its own `anywaye.yml`, so resolving the worktree
       # root looks like a success and hands the caller a directory with no
       # `schemas/` in it — a skip wearing a found path's clothes. core is what is
       # beside the main checkout, and beside the main checkout is where it is
@@ -109,7 +109,7 @@ module TestSupport
 
       # The primary worktree's path, or nil. **nil, never an empty Pathname** —
       # `Pathname("").expand_path` is the process's working directory, which is
-      # a real directory and, in this repository, one carrying a `cafaye.yml`. An
+      # a real directory and, in this repository, one carrying a `anywaye.yml`. An
       # empty result would therefore validate as "found" for the very checkout
       # the lookup failed to name, which is the silent green this module exists
       # to remove.
@@ -129,8 +129,8 @@ module TestSupport
         Pathname.new(path.to_s).expand_path
       end
 
-      # What makes a directory **core** rather than another cafaye checkout. A
-      # `cafaye.yml` on its own is not enough — this repository has one, and so
+      # What makes a directory **core** rather than another anywaye checkout. A
+      # `anywaye.yml` on its own is not enough — this repository has one, and so
       # does every other service in the fleet, and the checkout it lives in is
       # exactly what a failed lookup would otherwise resolve to. The event
       # schemas are what this whole tier reads, so their presence is the
@@ -138,7 +138,7 @@ module TestSupport
       def readable?(path)
         return false if path.blank?
 
-        path.directory? && path.join("schemas").directory? && path.join("cafaye.yml").file?
+        path.directory? && path.join("schemas").directory? && path.join("anywaye.yml").file?
       end
   end
 end

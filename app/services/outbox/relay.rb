@@ -185,8 +185,8 @@ module Outbox
       # inserts timestamps with is a loop whose backoff is a function of clock
       # skew.
       def self.build_publisher(transport, logger:)
-        Cafaye::Outbox.publisher(
-          connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+        Anywaye::Outbox.publisher(
+          connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
           clock: -> { Time.current },
           logger: logger,
           deliverer: ->(envelope) { transport.publish(envelope) }

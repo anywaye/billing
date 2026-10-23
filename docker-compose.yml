@@ -152,11 +152,11 @@ services:
       # is refused at the door of the other:
       #
       #   select rolname, rolsuper, rolcreatedb from pg_roles
-      #    where rolname in ('cafaye','billing','neighbour');
+      #    where rolname in ('anywaye','billing','neighbour');
       #    rolname   | rolsuper | rolcreatedb
       #   -----------+----------+-------------
       #    billing   | f        | f
-      #    cafaye    | t        | t
+      #    anywaye    | t        | t
       #    neighbour | f        | f
       #
       #   $ psql -U billing -d billing     -tAc "select current_user, current_database()"
@@ -169,7 +169,7 @@ services:
       # and the admin role this file no longer takes over reaches all of them,
       # which is the whole of what it was giving away:
       #
-      #   $ psql -U cafaye -d neighbour   -tAc "select current_database()"
+      #   $ psql -U anywaye -d neighbour   -tAc "select current_database()"
       #   neighbour
       #
       # Trust auth, and it is spelled out because kit does not default it. This is a
@@ -238,7 +238,7 @@ services:
   #
   # `DATABASE_URL` here is the OWNER (`billing`) for the same reason darkroom's
   # `DATABASE_URL` stays the owner: it owns the database and every table, it is what
-  # `cafaye.protect_table` binds as the policies' owner side, and a service that runs
+  # `anywaye.protect_table` binds as the policies' owner side, and a service that runs
   # its own migrations cannot stop needing it. It is also what `db:prepare` needs to
   # create a database that does not exist yet, which `billing_app` cannot do.
   #
@@ -250,11 +250,11 @@ services:
   billing-migrate:
     build:
       context: .
-    image: cafaye/billing:dev
+    image: anywaye/billing:dev
     command: ["./bin/rails", "db:prepare"]
     environment:
       RAILS_ENV: development
-      DATABASE_URL: postgresql://billing:${KIT_POSTGRES_PASSWORD:-cafaye}@postgres:5432/billing
+      DATABASE_URL: postgresql://billing:${KIT_POSTGRES_PASSWORD:-anywaye}@postgres:5432/billing
     depends_on:
       postgres:
         condition: service_healthy
@@ -282,7 +282,7 @@ services:
   billing:
     build:
       context: .
-    image: cafaye/billing:dev
+    image: anywaye/billing:dev
     # A literal, and NOT a `${KIT_*:default}` — this is billing's OWN port, not one
     # of kit's. kit's port block is a statement about the shared infrastructure, and
     # 3000 is what a Rails API defaults to and what billing's own documented port
@@ -309,7 +309,7 @@ services:
       # The password is INTERPOLATED, and it used to be the literal `billing` to
       # match a `POSTGRES_PASSWORD: billing` this file no longer sets. Every role
       # `10-cluster.sh` creates takes the cluster's `POSTGRES_PASSWORD`, so that
-      # role's password is now kit's `${KIT_POSTGRES_PASSWORD:-cafaye}` and the
+      # role's password is now kit's `${KIT_POSTGRES_PASSWORD:-anywaye}` and the
       # pair in this URL would have been a credential no role holds. A cluster
       # password changed in `.env` cannot leave this file authenticating as a
       # password that no longer exists. (A password containing `@` or `/` will not
@@ -348,7 +348,7 @@ services:
       # deliberately so: the name here has to match the ROLE name, and the role
       # name is the first entry of a list. Interpolating the list would hand a
       # comma-separated string to a URL path.
-      DATABASE_URL: postgresql://billing_app:${KIT_POSTGRES_PASSWORD:-cafaye}@postgres:5432/billing
+      DATABASE_URL: postgresql://billing_app:${KIT_POSTGRES_PASSWORD:-anywaye}@postgres:5432/billing
 
       # ---------------------------------------------------------------------
       # OBSERVABILITY, ON BY DEFAULT
@@ -401,7 +401,7 @@ services:
     # anything else on the machine.
     #
     # `tag` is the process identity the collector promotes to `service.name` when a
-    # record has none — see `transform/cafaye_logs`. It has to match the service name
+    # record has none — see `transform/anywaye_logs`. It has to match the service name
     # or a crash is filed against `unknown`.
     # NO LOG-DRIVER OVERRIDE. See the identical note in identity/docker-compose.yml
     # for the full argument; the short form is that `syslog` makes the DOCKER
@@ -424,7 +424,7 @@ services:
     # the embedded DNS answers. Same receiver, same bytes, and it does not depend
     # on the daemon's resolver.
     #
-    # `tag: "billing"` had one job: the collector's `transform/cafaye_logs`
+    # `tag: "billing"` had one job: the collector's `transform/anywaye_logs`
     # promotes it to `service.name` when a record carries none. OTLP log records
     # carry `service.name` from the SDK's resource attributes instead, so nothing
     # is lost on that axis either.

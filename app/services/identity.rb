@@ -1,7 +1,7 @@
 # Identity, as this service sees it: one issuer, one token format, one answer to
 # "who is calling".
 #
-# `identity` is the only issuer in cafaye (core's openapi-conventions.md, "Auth"),
+# `identity` is the only issuer in anywaye (core's openapi-conventions.md, "Auth"),
 # so everything about verifying a caller lives in this namespace and nowhere else.
 # There is no second path: a resolver seam that a deployment can point somewhere
 # else would be a second trust path to `/v1`, and the webhook already teaches the

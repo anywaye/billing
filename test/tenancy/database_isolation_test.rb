@@ -7,7 +7,7 @@ require "test_helper"
 #
 # `scope :for_account` is one layer and the policies are a second. Every test in
 # `test/tenant/` passes on the first layer alone — it is green whether or not
-# `cafaye.protect_table` was ever called, whether or not the policies are FORCED,
+# `anywaye.protect_table` was ever called, whether or not the policies are FORCED,
 # and whether or not the role the service runs as is exempt from them. Those files
 # are the application-level proof and this one does not replace them; what is
 # green here is POSTGRES refusing, and nothing else can make it green. The
@@ -73,7 +73,7 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
   PROTECTED = { "subscriptions" => 4, "charges" => 4, "customers" => 5 }.freeze
 
   # The processor customer id `test/fixtures/stripe/invoice.paid.json` carries.
-  # The webhook specs need the cafaye customer that answers to it, or the delivery
+  # The webhook specs need the anywaye customer that answers to it, or the delivery
   # is recorded `unknown_customer` and no charge is written — which is a
   # legitimate outcome this file also asserts, one test below.
   INVOICE_CUSTOMER = "cus_R1pQKz9xLp2mN4vB6yH8jL0".freeze
@@ -140,10 +140,10 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
         #
         # The two spellings below are the same predicate under two `search_path`s
         # — kit's `credential_tables()` records that a deparsed policy drops the
-        # schema for a reader whose own schema is `cafaye`, so a check that
+        # schema for a reader whose own schema is `anywaye`, so a check that
         # insisted on one spelling would pass or fail on who ran it.
-        assert_match(/select\s+(cafaye\.)?(current_account_id|current_credential_digest)\(\)/i, clause,
-          "#{table}.#{name} does not call its identity as `(select cafaye.…())`: #{clause}")
+        assert_match(/select\s+(anywaye\.)?(current_account_id|current_credential_digest)\(\)/i, clause,
+          "#{table}.#{name} does not call its identity as `(select anywaye.…())`: #{clause}")
       end
     end
   end
@@ -194,7 +194,7 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
     # app role that is refused a PLAIN SELECT — with SQLSTATE 42501, the same code
     # a policy raises. A broken test database therefore looks exactly like a
     # working boundary, which is why the install path (`test/support/
-    # database_boundary.rb`) runs `cafaye.protect_table`, and why this asserts the
+    # database_boundary.rb`) runs `anywaye.protect_table`, and why this asserts the
     # result rather than trusting it.
     PROTECTED.each_key do |table|
       granted = ActiveRecord::Base.connection.select_values(<<~SQL)
@@ -517,7 +517,7 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
     # by the role the running service actually logs in as.
     {
       "disable row level security" => "alter table customers disable row level security",
-      "drop a policy" => "drop policy customers_cafaye_select on customers",
+      "drop a policy" => "drop policy customers_anywaye_select on customers",
       "truncate" => "truncate customers",
       "add a policy that widens" =>
         "create policy billing_app_opens_the_table on customers for select to billing_app using (true)"
@@ -539,18 +539,18 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
     # NAME it, with the reason, before its verdict on the real schema counts. A
     # temporary table, because the sweep deliberately includes this session's
     # `pg_temp` and no other session can put a table in scope by creating one.
-    connection.execute("create temp table cafaye_sweep_control (id bigserial primary key, account_id uuid)")
+    connection.execute("create temp table anywaye_sweep_control (id bigserial primary key, account_id uuid)")
 
-    reported = rows("select table_schema, table_name, why from cafaye.unprotected_tables()")
-    control = reported.find { |_, name, _| name == "cafaye_sweep_control" }
+    reported = rows("select table_schema, table_name, why from anywaye.unprotected_tables()")
+    control = reported.find { |_, name, _| name == "anywaye_sweep_control" }
     assert control,
       "the sweep did not report a planted unprotected account-scoped table, so an empty result from it " \
       "means nothing"
     assert_equal "row level security is not enabled", control[2]
 
-    connection.execute("drop table cafaye_sweep_control")
+    connection.execute("drop table anywaye_sweep_control")
 
-    assert_equal [], rows("select table_schema, table_name, why from cafaye.unprotected_tables()"),
+    assert_equal [], rows("select table_schema, table_name, why from anywaye.unprotected_tables()"),
       "these tables carry an account_id and are not protected"
   end
 
@@ -569,15 +569,15 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
     # what happens when a transaction ENDS. It is also the only way to see the
     # connection as a request opens one: with NO identity.
     with_a_connection_of_its_own do |connection|
-      assert_nil connection.exec("select cafaye.current_account_id()").getvalue(0, 0),
+      assert_nil connection.exec("select anywaye.current_account_id()").getvalue(0, 0),
         "a fresh connection already carries an identity, which it should not"
 
       connection.exec("begin")
-      connection.exec("select cafaye.begin_account('#{ACCOUNT_A}')")
-      assert_equal ACCOUNT_A, connection.exec("select cafaye.current_account_id()").getvalue(0, 0)
+      connection.exec("select anywaye.begin_account('#{ACCOUNT_A}')")
+      assert_equal ACCOUNT_A, connection.exec("select anywaye.current_account_id()").getvalue(0, 0)
       connection.exec("commit")
 
-      assert_nil connection.exec("select cafaye.current_account_id()").getvalue(0, 0),
+      assert_nil connection.exec("select anywaye.current_account_id()").getvalue(0, 0),
         "the identity outlived the transaction that set it. On a pooled connection that is tenant A's " \
         "identity handed to tenant B, which is the leak all of this exists to prevent"
     end
@@ -680,7 +680,7 @@ class DatabaseIsolationTest < ActionDispatch::IntegrationTest
   test "a signed Stripe webhook resolves its own account, where the same row is invisible without one" do
     # The signature-authenticated surface has no token to take an account from, so
     # the account has to come out of the payload — through
-    # `customers_cafaye_resolve` and `Webhooks::AccountResolution`. Under the owner
+    # `customers_anywaye_resolve` and `Webhooks::AccountResolution`. Under the owner
     # role with no identity, which is both the posture a webhook runs in and the role
     # a request logs in as today — the suite's own connection would bypass the
     # policies and hide a broken resolution behind a green test.

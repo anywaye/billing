@@ -1,8 +1,8 @@
 # tenancy.yml — what billing declares about its own account boundary.
 #
-# Checked by cafaye/core's contract harness:
+# Checked by anywaye/core's contract harness:
 #
-#     bash /Users/kaka/Code/any/cafaye/core/harness/bin/tenancy-check .
+#     bash /Users/kaka/Code/any/anywaye/core/harness/bin/tenancy-check .
 #
 # It must report 0 failures. This file is TG-A4's deliverable, and the report
 # that goes with it names what was deliberately NOT declared.
@@ -29,7 +29,7 @@
 # What the packet added is the second half: `db/tenancy/substrate.sql` (kit's
 # template) plus `db/tenancy/account_isolation.sql` (this service's three tables),
 # installed by `db/migrate/20261016120000_account_isolation.rb`, with every request
-# running inside a transaction that calls `cafaye.begin_account/1`. A forgotten
+# running inside a transaction that calls `anywaye.begin_account/1`. A forgotten
 # `for_account` — or one `find_by_sql` — now reads zero rows rather than another
 # account's, and a write into somebody else's account is refused with SQLSTATE
 # 42501. `rls:` below declares it table by table, and
@@ -53,11 +53,11 @@
 #
 #       **AND IT IS THE ONE PLACE THE DATABASE HALF NEEDED AN EXEMPTION.** A
 #       signature-authenticated request has no claim to hand
-#       `cafaye.begin_account/1`, and the query that would tell it which account an
+#       `anywaye.begin_account/1`, and the query that would tell it which account an
 #       event belongs to is a read of `customers` — so with the boundary in place
 #       every delivery would be recorded `unknown_customer` and answered 200, which
 #       is a money service silently billing nobody. The answer is kit's MD24
-#       mechanism rather than a hole: `customers_cafaye_resolve`
+#       mechanism rather than a hole: `customers_anywaye_resolve`
 #       (`rls.tables[customers]`, fifth policy) widens a SELECT to exactly the row
 #       whose value the caller PRESENTS, and `Webhooks::AccountResolution` presents
 #       the ids the payload carried. The event still is not an entry point — it
@@ -130,10 +130,10 @@ rls:
   # Until then this block said `false` and it was the truth: scoping was a property
   # of the query — `scope :for_account` — and every migration under `db/migrate/`
   # was an ordinary `create_table`. Now `db/tenancy/account_isolation.sql` calls
-  # `cafaye.protect_table` for the two tables whose key is a column and writes the
+  # `anywaye.protect_table` for the two tables whose key is a column and writes the
   # five policies of the one whose key is not, `db/tenancy/substrate.sql` is kit's
   # template installed beside it, and every request runs inside a transaction whose
-  # `cafaye.begin_account/1` the policies read.
+  # `anywaye.begin_account/1` the policies read.
   #
   # WHAT CHANGED, in the direction that matters: a forgotten `for_account` — or one
   # `find_by_sql` — now reads zero rows rather than another account's, and a write
@@ -143,7 +143,7 @@ rls:
   # licence to delete a predicate.
   databaseEnforced: true
   # The substrate's own function, and the one every policy below reads.
-  # `protect_table` writes `account_id = (select cafaye.current_account_id())` and
+  # `protect_table` writes `account_id = (select anywaye.current_account_id())` and
   # the hand-written policies write the same call; naming anything else here would
   # make `tenancy.rls-permissive` correct.
   #
@@ -155,7 +155,7 @@ rls:
   #
   #   using (account_id = (select probe_id()))   ->  1 call
   #   using (account_id = probe_id())            ->  2 calls
-  identity: cafaye.current_account_id()
+  identity: anywaye.current_account_id()
   # The DDL tree. `db/migrate` is deliberately NOT in this list: the migration reads
   # the two `.sql` files and executes them, so the policies are written in the files
   # below and nowhere else. `db/tenancy/substrate.sql` is kit's template at ref
@@ -180,28 +180,28 @@ rls:
     - table: subscriptions
       forced: true
       policies:
-        - name: subscriptions_cafaye_select
+        - name: subscriptions_anywaye_select
           command: select
           clause: using
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/substrate.sql
             line: 897
-        - name: subscriptions_cafaye_insert
+        - name: subscriptions_anywaye_insert
           command: insert
           clause: with check
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/substrate.sql
             line: 898
-        - name: subscriptions_cafaye_update
+        - name: subscriptions_anywaye_update
           command: update
           clause: using
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/substrate.sql
             line: 899
-        - name: subscriptions_cafaye_delete
+        - name: subscriptions_anywaye_delete
           command: delete
           clause: using
           roles: [billing, billing_app]
@@ -211,28 +211,28 @@ rls:
     - table: charges
       forced: true
       policies:
-        - name: charges_cafaye_select
+        - name: charges_anywaye_select
           command: select
           clause: using
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/substrate.sql
             line: 897
-        - name: charges_cafaye_insert
+        - name: charges_anywaye_insert
           command: insert
           clause: with check
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/substrate.sql
             line: 898
-        - name: charges_cafaye_update
+        - name: charges_anywaye_update
           command: update
           clause: using
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/substrate.sql
             line: 899
-        - name: charges_cafaye_delete
+        - name: charges_anywaye_delete
           command: delete
           clause: using
           roles: [billing, billing_app]
@@ -240,9 +240,9 @@ rls:
             file: db/tenancy/substrate.sql
             line: 900
     # THE ONE TABLE WHOSE POLICIES ARE HAND-WRITTEN, because its tenancy key is not
-    # a column: `cafaye.protect_table` REFUSES it, measured —
+    # a column: `anywaye.protect_table` REFUSES it, measured —
     #
-    #   ERROR:  cafaye.protect_table(customers, billing_app): the table has no
+    #   ERROR:  anywaye.protect_table(customers, billing_app): the table has no
     #           account_id column, so there is nothing to scope it by.
     #
     # — and the four policies below are the predicate `Customer.for_account` uses,
@@ -259,28 +259,28 @@ rls:
     - table: customers
       forced: true
       policies:
-        - name: customers_cafaye_select
+        - name: customers_anywaye_select
           command: select
           clause: using
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/account_isolation.sql
             line: 125
-        - name: customers_cafaye_insert
+        - name: customers_anywaye_insert
           command: insert
           clause: with check
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/account_isolation.sql
             line: 126
-        - name: customers_cafaye_update
+        - name: customers_anywaye_update
           command: update
           clause: using
           roles: [billing, billing_app]
           constrained:
             file: db/tenancy/account_isolation.sql
             line: 127
-        - name: customers_cafaye_delete
+        - name: customers_anywaye_delete
           command: delete
           clause: using
           roles: [billing, billing_app]
@@ -291,11 +291,11 @@ rls:
         # `for select` and its qualifier is the value a caller PRESENTS rather than
         # an account:
         #
-        #   using (id::text = (select cafaye.current_credential_digest())
-        #          or processor_customer_id = (select cafaye.current_credential_digest()))
+        #   using (id::text = (select anywaye.current_credential_digest())
+        #          or processor_customer_id = (select anywaye.current_credential_digest()))
         #
         # WHY IT EXISTS: `POST /v1/webhooks/stripe` is authenticated by signature,
-        # so it has no token claim to hand `cafaye.begin_account/1` — and the query
+        # so it has no token claim to hand `anywaye.begin_account/1` — and the query
         # that would tell it which account an event belongs to is a read of
         # `customers` (`Subscriptions::Lifecycle#customer`, `Charges::Recorder`).
         # Without this policy every delivery would be recorded `unknown_customer`
@@ -312,7 +312,7 @@ rls:
         # value it presented, which the isolation suite asserts by row count. The
         # `id::text` cast is measured rather than stylistic: `uuid = text` is not an
         # operator, so the bare comparison is `operator does not exist: uuid = text`.
-        - name: customers_cafaye_resolve
+        - name: customers_anywaye_resolve
           command: select
           clause: using
           roles: [billing, billing_app]

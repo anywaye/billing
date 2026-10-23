@@ -5,7 +5,7 @@ repository. If a rule is not written here, it is not a rule.
 
 ## What this service is
 
-- **Name:** `billing` — the cafaye namespace name, the repository name, and the
+- **Name:** `billing` — the anywaye namespace name, the repository name, and the
   `source` on every event this service eventually publishes.
 - **Language / toolchain:** Ruby 4.0.1 on Rails 8.1, API-only — pinned in
   `mise.toml`, `.ruby-version`, and the `ARG RUBY_VERSION` in the `Dockerfile`.
@@ -15,16 +15,16 @@ repository. If a rule is not written here, it is not a rule.
 - **Does not own:** who the caller is (`identity`), how mail reaches them
   (`courier`), what a `pantry` catalogue looks like. billing is a service behind
   the gateway, not a public door.
-- **Upstream specs:** `core`'s `cafaye.yml` manifest schema, event envelope and
+- **Upstream specs:** `core`'s `anywaye.yml` manifest schema, event envelope and
   payload schemas, and `docs/openapi-conventions.md` + `docs/event-outbox.md`.
   This repository is pinned to `core: ^0.2.0`. The spec is the source of truth;
-  the code follows it, never the reverse. `cafaye.yml` carries `> DECISION
+  the code follows it, never the reverse. `anywaye.yml` carries `> DECISION
   NEEDED` callouts recording the obligations this worktree could not discharge —
   read them before changing the manifest, and do not delete one to make a
   complaint go away.
 - **core is read-only from a service worktree.** When core is missing something
   this service owes it — a catalog row, a payload schema, a reserved error code —
-  the obligation is recorded in `cafaye.yml` *and* asserted in `test/contract/`,
+  the obligation is recorded in `anywaye.yml` *and* asserted in `test/contract/`,
   and the action item is named in the worker report. Writing into core from here
   is out of bounds.
 
@@ -52,7 +52,7 @@ first. Read the last one before touching `/v1`.
   schemas for all eight published types and raised D10, and
   `test/contract/outbox_envelope_contract_test.rb` was the thing that noticed.
   No behaviour in `app/` changed except one comment. What it found is written
-  down in `cafaye.yml` as a DECISION NEEDED — core's subscription schemas
+  down in `anywaye.yml` as a DECISION NEEDED — core's subscription schemas
   describe the payload billing-03b emitted, and billing-04 moved those events
   onto billing's own ids.
 - **billing-07** is the document and the router, held to each other: one test
@@ -272,7 +272,7 @@ repository.** No new dependency — the `stripe` gem was already here, for
 
 - **billing-outbox-publisher** is the drain: `outbox_events` now **leaves the
   table**. The claim, the envelope and the publish pass are the fleet's shared
-  gem (`Cafaye::Outbox`, vendored at `vendor/cafaye` because the gem is
+  gem (`Anywaye::Outbox`, vendored at `vendor/anywaye` because the gem is
   unpublished and github is unreachable from here — `VENDORED.md` records the
   pin and `DIGESTS` holds it); billing adds exactly the three things the gem
   says a service owns — `Outbox::NatsPublisher` (the transport, one method,
@@ -286,7 +286,7 @@ repository.** No new dependency — the `stripe` gem was already here, for
   (`test/support/fake_nats_broker.rb`), including that **no published payload
   carries a processor secret, a card, or PII beyond the `email` core's schemas
   name**. Two things this packet deliberately did **not** do: it did not add a
-  `cafaye` gem dependency from rubygems or git (neither is reachable), and it
+  `anywaye` gem dependency from rubygems or git (neither is reachable), and it
   did not touch the subscription payloads' known disagreement with core's
   schemas — that is core's change to make, and it is reported rather than
   shipped around. See `REPORT-billing-outbox-publisher-01`.
@@ -328,7 +328,7 @@ billing/
 ├── docker-compose.yml      # an OVERRIDE on kit's stack: this service, our database,
 │                            #   our crash layer. No collector config, no own postgres.
 ├── Dockerfile              # ruby slim, multi-stage, non-root, via Kamal/Thruster
-├── cafaye.yml              # the manifest; DECISION NEEDED notes are load-bearing
+├── anywaye.yml              # the manifest; DECISION NEEDED notes are load-bearing
 ├── openapi/v1.yaml         # the HTTP contract, and what `exposes.api` points at
 ├── app/
 │   ├── controllers/
@@ -517,7 +517,7 @@ would answer an empty collection to a caller who has subscribed to nothing, whic
 is a wrong answer rather than a safe one. **The consequence is that any
 authenticated account may write the catalogue**, because no capability check
 exists for it: `Principal#scope_set` parses the token's `scope` claim and nothing
-reads it. That gap is recorded in `cafaye.yml` and `README.md`; do not close it by
+reads it. That gap is recorded in `anywaye.yml` and `README.md`; do not close it by
 inventing a scope string nothing in the fleet grants.
 
 ## Money
@@ -594,7 +594,7 @@ The rules are core's, in `core: docs/event-outbox.md` and
   background job. A separate transaction is a window in which the database says
   the plan exists and the event does not.
 - The type is `<service>.<entity>.<action>`, three segments, prefixed with this
-  service's own name (core v0.2, D1). `OutboxEvent::TYPES` and `cafaye.yml`'s
+  service's own name (core v0.2, D1). `OutboxEvent::TYPES` and `anywaye.yml`'s
   `exposes.events` are the same list, and `test/contract/` fails if they drift.
 - A type is not published unless core's catalog has a row for it. An event with
   no catalog row is a manifest that lies to whoever generates an SDK from it.
@@ -611,7 +611,7 @@ The rules are core's, in `core: docs/event-outbox.md` and
 - **The publisher loop that moves rows to NATS exists**: `Outbox::Relay`,
   started by `config/initializers/outbox_relay.rb` when `NATS_URL` names a
   broker, and not started when it does not. It drains through
-  `Cafaye::Outbox`'s claim — `for update skip locked`, bounded, in `created_at`
+  `Anywaye::Outbox`'s claim — `for update skip locked`, bounded, in `created_at`
   order — so N replicas can run it against one table, and it marks a row
   published **from the broker's ack and never before**. The subject on the wire
   is the event type, which is what the fleet's `billing.>` stream covers.
@@ -703,7 +703,7 @@ A `Charge` is billing's own record of a payment, recorded from what the
 processor's signed webhook said. The rule the whole surface turns on: **a charge is
 recorded when a payment succeeds, and never when it fails or is pending.** The
 processor says so on a signed webhook, and the `charges` table is the record of
-what it said. There is no code path that writes a charge from a cafaye request.
+what it said. There is no code path that writes a charge from a anywaye request.
 
 - **`Webhooks::Charges::Recorder` is the only writer of a `Charge`.** It is
   called from `payment_emission`, inside the ingestion transaction, so a charge
@@ -810,12 +810,12 @@ transaction that marks the delivery finished. The rules:
   looking in the wrong place. The cause is logged; the body says only
   `unavailable`.
 - **Nothing here is token-authenticated, and nothing here may become so.** The
-  sender is a processor, not a cafaye client. A `Bearer` on this path would be a
+  sender is a processor, not a anywaye client. A `Bearer` on this path would be a
   second, weaker trust path to the same door.
 - The webhook is **not** the state. Nothing here writes a subscription or a
   payment; it writes the receipt and the event. The tables for that are a later
   packet, and until they exist `subject` is the processor's own id — recorded as
-  a DECISION in `cafaye.yml`, and changed by one line in
+  a DECISION in `anywaye.yml`, and changed by one line in
   `Webhooks::StripeEvents.subject_for`.
 
 ## Observability
@@ -981,7 +981,7 @@ and in this repository the unknown is load-bearing.
 
 | job | what it is |
 |-----|------------|
-| `ruby (kit)` | `uses: cafaye/kit/.github/workflows/ci.reusable.yml@master` with `language: ruby`. The shared half. Fails on two steps, absorbed by `continue-on-error` — see below. |
+| `ruby (kit)` | `uses: anywaye/kit/.github/workflows/ci.reusable.yml@master` with `language: ruby`. The shared half. Fails on two steps, absorbed by `continue-on-error` — see below. |
 | `gate` | THE gate. `bin/prime` against a real Postgres, every environment-gated tier forced on and counted, and `git diff --exit-code`. Four tiers are named: the whole suite (1175 / 3747 by equality), the redaction tier (48 / 118), the contract tier (68 / 479) and the webhook tier (163 / 396). |
 | `security` | `brakeman` and `bundler-audit`, with no database. |
 | `pins` | One Ruby number in three files, the documented `uses:` path, and no secret in the file. No toolchain, so it fails in seconds. |
@@ -1074,8 +1074,8 @@ So:
 - **locally**, a `19 skipped` in the contract tier, or a skipped test named
   "both events courier needs have a row in core's catalog", is a missing core
   checkout, not a pass. Put `core` next to this worktree, or set `CORE_PATH`.
-- **in CI**, `gate` checks `cafaye/core` out of the repository itself and
-  **fails the build on a single skipped test**. `cafaye/core` is public, so no
+- **in CI**, `gate` checks `anywaye/core` out of the repository itself and
+  **fails the build on a single skipped test**. `anywaye/core` is public, so no
   token is involved, and the ref is `master` rather than a pinned SHA on purpose:
   this tier exists to catch a change in core, and a pinned ref would blind it.
 
@@ -1109,12 +1109,12 @@ commented:
 
 - **`primary_worktree` returns `nil`, never `Pathname.new("")`.** An empty
   Pathname expands to the process's working directory, which is a real directory
-  and which carries a `cafaye.yml` — so an empty lookup validated as "found" and
+  and which carries a `anywaye.yml` — so an empty lookup validated as "found" and
   handed the caller the worktree itself, where there are no `schemas/`. That bug
   was written, and it was invisible until the skip was looked at, and it is the
   same failure the module exists to prevent, one level down.
-- **A directory is core only if it holds `schemas/` and a `cafaye.yml`.** A
-  `cafaye.yml` alone is what a failed lookup lands on.
+- **A directory is core only if it holds `schemas/` and a `anywaye.yml`.** A
+  `anywaye.yml` alone is what a failed lookup lands on.
 - **The skip is not weakened and not deleted.** A repository cloned on its own
   has no core beside it and no `CORE_PATH`, and answering "no problem" for a
   schema never read is the outcome a contract test exists to prevent.
@@ -1375,10 +1375,10 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
 ## Contracts
 
 - The two probes are infrastructure, not contract surface. They are not in
-  `cafaye.yml`'s `exposes` and must not grow query parameters, auth, or a
+  `anywaye.yml`'s `exposes` and must not grow query parameters, auth, or a
   versioned payload — an uptime monitor is the only reader.
 - `openapi/v1.yaml` is the HTTP contract, `/v1` on every path and `info.version`
-  present (core v0.2, D4). `cafaye.yml`'s `exposes.api` points at it, and
+  present (core v0.2, D4). `anywaye.yml`'s `exposes.api` points at it, and
   `test/contract/` fails if the file is not there.
 - Every endpoint and event this service publishes is validated against `core`'s
   specs in `test/contract/`. Never hand-write a response shape the OpenAPI
@@ -1388,7 +1388,7 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
   account-scoped routes and 33 data accesses carrying **zero** account scopes — and
   billing-21 closed it. `openapi/v1.yaml` is at **2.0.0** under an **unchanged
   `/v1` prefix**, and the version bump is the signal; see the Authorization section
-  for why a second prefix could not be served beside it, and `cafaye.yml` for the
+  for why a second prefix could not be served beside it, and `anywaye.yml` for the
   DECISION NEEDED that records it. `GET /v1/customers` and
   `GET /v1/subscriptions` return **this account's** rows, and a cross-tenant read
   or write is a **404**. A `User`-owned customer is in no account and is therefore
@@ -1424,7 +1424,7 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
   *explains* this rule in prose containing the word "forbidden", and a scanner
   whose only remedy is deleting the explanation is backwards.
 - **`/v1/webhooks/stripe` is the one path that is not JWT-authenticated, and it is
-  not an oversight.** It authenticates the *processor*, not a cafaye client, by
+  not an oversight.** It authenticates the *processor*, not a anywaye client, by
   signature over the raw body. It is declared in `openapi/v1.yaml` under the
   `webhooks` tag with its own `200`/`400`/`503` responses and **`security: []`**,
   which is a declaration and not a default: an operation that inherits the
@@ -1437,7 +1437,7 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
   test asserts the manifest's `exposes.api` document declares the path that
   `config/routes.rb` serves.
 - Every event type the webhook mapping can produce is in `OutboxEvent::TYPES`
-  and in `cafaye.yml`. A type that is not would be refused at the write, from
+  and in `anywaye.yml`. A type that is not would be refused at the write, from
   inside a processor request, and answered 200 — an outage visible only in the
   processor's dashboard. `test/contract/` and the webhook specs both assert it.
 - **The three subscription events are published in a shape core's payload schemas
@@ -1449,7 +1449,7 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
   was true of billing-03b and stopped being true when billing-04 added one and
   moved the events onto billing's own ids. They are recorded in
   `PENDING_PAYLOAD_ALIGNMENT` and asserted in **both** directions, and named as a
-  DECISION NEEDED in `cafaye.yml`. Do not "fix" this by editing the payload:
+  DECISION NEEDED in `anywaye.yml`. Do not "fix" this by editing the payload:
   matching core means either emitting a payload no consumer has agreed to or
   dropping `plan_id` and `account_id`, which are the two fields that make a
   subscription event actionable. core owns the change; see core's own D10, which
@@ -1512,7 +1512,7 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
   the old prefix beside the new one, because the old prefix is an unauthenticated
   door and "keep serving `/v1` for compatibility" is "keep the vulnerability".
   The reasoning is in the Authorization section, in `README.md`, and as a DECISION
-  NEEDED in `cafaye.yml`; do not "fix" the prefix without reading all three.
+  NEEDED in `anywaye.yml`; do not "fix" the prefix without reading all three.
 - **Every client operation declares `bearerToken`, and the webhook declares
   `security: []`.** `test/contract/http_surface_contract_test.rb` asserts both, so
   an operation added without a security requirement — or the webhook picking one
@@ -1538,7 +1538,7 @@ environment, and the `pins` job fails the build if the workflow file ever gains 
 - [ ] A new subscription status is added to the state machine's table, the model's
       set, the migration's `CHECK` and the spec that asserts the grid — the test
       that covers every status fails if any of the four is missing
-- [ ] Anything published is in `cafaye.yml`, in `OutboxEvent::TYPES`, and in
+- [ ] Anything published is in `anywaye.yml`, in `OutboxEvent::TYPES`, and in
       core's catalog — or the gap is written down in both places
 - [ ] A new `Refused` reason is added to the list in **Subscriptions** above, to
       `README.md`, and asserted by a test that names it on the delivery row

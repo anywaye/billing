@@ -101,7 +101,7 @@ class Webhooks::Charges::RecorderTest < ActiveSupport::TestCase
   # --- a payment this service cannot attribute records nothing -----------------
 
   # An `invoice.paid` for a customer created in the processor's dashboard has
-  # no cafaye customer. The customer is required, so proceeding would raise
+  # no anywaye customer. The customer is required, so proceeding would raise
   # over a payment that was perfectly real — the skip is the decision.
   test "a payment for an unknown customer records no charge" do
     assert_no_difference "Charge.count" do

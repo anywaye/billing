@@ -47,12 +47,12 @@ class CoreLocationTest < ActiveSupport::TestCase
 
       # A path that exists is not a core checkout. The tiebreaker is what is
       # inside it: the event schemas are the entire reason this tier reads core,
-      # and `cafaye.yml` alone is what a failed lookup lands on, because the
+      # and `anywaye.yml` alone is what a failed lookup lands on, because the
       # worktree has one too.
       assert File.directory?(core.join("schemas").to_s),
         "the resolved path has no schemas/ in it, so it is not core"
-      assert File.file?(core.join("cafaye.yml").to_s),
-        "the resolved path is not a cafaye checkout at all"
+      assert File.file?(core.join("anywaye.yml").to_s),
+        "the resolved path is not a anywaye checkout at all"
       assert File.file?(core.join("schemas", "event-envelope.schema.json").to_s),
         "the resolved path is core but has no envelope schema, which is what this tier reads first"
     end
@@ -63,7 +63,7 @@ class CoreLocationTest < ActiveSupport::TestCase
   #
   # `primary_worktree` returned `Pathname.new("")` when git named nothing.
   # `Pathname("").expand_path` is the process's working directory — a real
-  # directory, and in this repository one carrying a `cafaye.yml` — so the empty
+  # directory, and in this repository one carrying a `anywaye.yml` — so the empty
   # result validated as "found" and `checkout` answered *the worktree itself*.
   # The skip message then named a path that existed, which is worse than naming
   # a path that does not.

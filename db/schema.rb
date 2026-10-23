@@ -60,7 +60,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_092000) do
     t.timestamptz "paid_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["account_id"], name: "charges_cafaye_account_id_idx"
+    t.index ["account_id"], name: "charges_anywaye_account_id_idx"
     t.index ["customer_id"], name: "index_charges_on_customer_id"
     t.index ["processor_charge_id"], name: "index_charges_on_processor_charge_id", unique: true
     t.index ["subscription_id"], name: "index_charges_on_subscription_id"
@@ -159,7 +159,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_092000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["account_id", "plan_id"], name: "subscriptions_live_account_plan_idx", unique: true, where: "((status)::text <> 'canceled'::text)"
-    t.index ["account_id"], name: "subscriptions_cafaye_account_id_idx"
+    t.index ["account_id"], name: "subscriptions_anywaye_account_id_idx"
     t.index ["customer_id"], name: "index_subscriptions_on_customer_id"
     t.index ["plan_id"], name: "index_subscriptions_on_plan_id"
     t.index ["processor_subscription_id"], name: "index_subscriptions_on_processor_subscription_id", unique: true

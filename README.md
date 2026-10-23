@@ -1,10 +1,10 @@
 # billing
 
-**Current direction (2026-10-19):** Ship is the product. The cafaye stack is internal infrastructure; we are not selling or supporting it as a standalone product as of this date. We continue to develop and improve it, treating the founder as the primary customer and keeping "build once, run everywhere" true, with the expectation that it may be offered again later.
+**Current direction (2026-10-19):** Ship is the product. The anywaye stack is internal infrastructure; we are not selling or supporting it as a standalone product as of this date. We continue to develop and improve it, treating the founder as the primary customer and keeping "build once, run everywhere" true, with the expectation that it may be offered again later.
 
-`billing` is the cafaye service that owns money: plans, customers, subscriptions,
+`billing` is the anywaye service that owns money: plans, customers, subscriptions,
 prepaid credit, usage metering, and webhooks coming in from a payment processor.
-Every other cafaye service that charges someone — `parlor` at checkout, `muse`
+Every other anywaye service that charges someone — `parlor` at checkout, `muse`
 when it meters a completion — accounts through this one.
 
 **v0 is customers, plans, the subscription lifecycle and the Stripe webhook.** The
@@ -226,7 +226,7 @@ in one place (`app/lib/problem.rb`) so no controller can invent its own:
 
 ```json
 {
-  "type": "https://docs.cafaye.com/errors/validation_failed",
+  "type": "https://docs.anywaye.com/errors/validation_failed",
   "title": "Validation failed",
   "status": 422,
   "detail": "slug can't be blank; price must be an object with an integer amount_minor and a three-letter currency",
@@ -277,7 +277,7 @@ update.
 
 ### The subscription events do not map one-to-one
 
-**The three cafaye types are chosen from what a delivery did to the row**, not
+**The three anywaye types are chosen from what a delivery did to the row**, not
 from which processor event carried it. That is what makes out-of-order delivery
 safe, and it is worth spelling out because a reader looking for a mapping table
 will not find one:
@@ -400,7 +400,7 @@ or negative settlement records nothing, and the event is still published. The
 receipt is read back through `GET /v1/charges/:id`, scoped by the token's account.
 
 Nothing here is token-authenticated, and nothing here may become so — the sender
-is a processor, not a cafaye client. A `Bearer` on this path would be a second,
+is a processor, not a anywaye client. A `Bearer` on this path would be a second,
 weaker trust path to the same door.
 
 ## Known gaps
@@ -420,7 +420,7 @@ to make, not an oversight.
   plans are the fleet's catalogue and not an account's. `Principal#scope_set`
   parses the token's `scope` claim and nothing reads it yet. Closing this is a
   decision about what a plan write is for, not a missing line, and it is recorded
-  as a DECISION NEEDED in `cafaye.yml`.
+  as a DECISION NEEDED in `anywaye.yml`.
 - **Plans are not account-scoped, deliberately.** `GET /v1/plans` returns the whole
   catalogue to any authenticated caller. A plan is a price every account can
   subscribe to, so scoping the listing to one account's rows would return an empty
@@ -443,7 +443,7 @@ to make, not an oversight.
 - **No retention.** `IdempotencyKey#expired` and `OutboxEvent#unpublished` exist
   to be pruned on a schedule; nothing schedules them. core is explicit that an
   unpruned outbox is the largest table in the database.
-- **`billing.plan.updated` has no catalog row in core.** See `cafaye.yml`.
+- **`billing.plan.updated` has no catalog row in core.** See `anywaye.yml`.
 - **No payload schemas in core for six of the eight events.** core's outbox
   checklist asks for `data` to be validated against
   `schemas/events/<service>/<entity>/<action>.schema.json`; core ships two
@@ -457,7 +457,7 @@ to make, not an oversight.
   own rows or a page that names a position in them. Signing needs a secret this
   service does not have.
 - **Three problem codes are not in core's reserved list**: `bad_request`,
-  `cursor_invalid`, `cursor_expired`. See `cafaye.yml`.
+  `cursor_invalid`, `cursor_expired`. See `anywaye.yml`.
 - **The unique-index race is handled but untested.** A `RecordNotUnique` that
   slips past the validations is a `409`, which is right; proving it needs two
   concurrent writers, so no spec covers that line.
@@ -472,7 +472,7 @@ to make, not an oversight.
   so they describe the processor-normalised payload this build replaced. The
   difference is in `PENDING_PAYLOAD_ALIGNMENT` in
   `test/contract/outbox_envelope_contract_test.rb`, asserted in both directions,
-  and it is a DECISION NEEDED in `cafaye.yml`: core owns the second breaking
+  and it is a DECISION NEEDED in `anywaye.yml`: core owns the second breaking
   change its own D10 anticipates. Matching core from here would mean emitting a
   payload no consumer has agreed to, or dropping `plan_id` and `account_id` — the
   two fields that make a subscription event actionable.
@@ -494,7 +494,7 @@ to make, not an oversight.
   instead of an arbitrary one. The caller's own side is closed by the account scope
   on every query — a client can no longer reach the other row to claim its id.
 - **A subscription created directly in the processor's dashboard is not tracked.**
-  It carries no cafaye customer id, so the delivery is recorded as
+  It carries no anywaye customer id, so the delivery is recorded as
   `ignored:unknown_customer` and answered 200. Matching it to whoever happens to
   share an id would be a guess about whose money it is.
 - **A processor status this service does not model is parked, not coerced.**
@@ -576,7 +576,7 @@ asserted behaviourally, so "not in the gate's list" never quietly comes to mean
 `test/contract/` is the half of the suite that reads `core`: it checks the
 emitted envelopes against core's real `event-envelope.schema.json`, checks that
 the patterns this service validates with accept exactly the strings core's do,
-and checks that `cafaye.yml` and the code agree about which events exist. It
+and checks that `anywaye.yml` and the code agree about which events exist. It
 skips, loudly, when `core` is not on disk; set `CORE_PATH` to point it elsewhere.
 
 Beside it, `test/contract/http_surface_contract_test.rb` checks the *other* half
@@ -596,10 +596,10 @@ Measured on master, same commit, twice: with `core` readable the whole suite is
 1757 assertions, 20 skips** — the same run count, the same exit code, green
 either way, and 343 assertions of contract checking simply not done. A second
 test reads core too (`subscription_delivery_test.rb`, against the events courier
-needs) and skips the same way. CI checks `cafaye/core` out of the repository
+needs) and skips the same way. CI checks `anywaye/core` out of the repository
 itself and **fails the build on a single skipped test**.
 `.github/workflows/ci.yml` calls
-`cafaye/kit/.github/workflows/ci.reusable.yml@master` and then runs the half kit
+`anywaye/kit/.github/workflows/ci.reusable.yml@master` and then runs the half kit
 cannot own; `bin/prime` is the gate in both, and the suite is held at master's
 **763 runs / 2100 assertions** at `e63bb7a`.
 
@@ -627,7 +627,7 @@ openapi/v1.yaml                      the HTTP contract
 test/contract/                       the checks against core, and the HTTP one
 test/observability/                  the redaction boundary, and its proof
 kit.ref                              the pinned kit commit `bin/dev` fetches
-cafaye.yml                           the manifest
+anywaye.yml                           the manifest
 ```
 
 ## Running it
@@ -673,14 +673,14 @@ edited as a side effect, and nothing is copied out of `reference/`.
 ## License
 
 **Business Source License 1.1.** See [LICENSE](LICENSE) — the parameters are
-Licensor `Cafaye`, Licensed Work `billing`, Additional Use Grant `None`,
+Licensor `Anywaye`, Licensed Work `billing`, Additional Use Grant `None`,
 Change Date `2030-10-10`, Change License `Apache License, Version 2.0`.
 
 **It was MIT, and this is a deliberate move down, not a drift.** billing's
 `LICENSE` held a plain MIT grant until this packet. OPS-D2 splits the fleet:
 the framework (`core`, `cafe`, `kit`, `pantry`) stays permissive, the **services
 move to a Business Source Licence** — free to run, free to self-host, never to
-offer a competing service (`cafaye/notes/ops.md:181`, OPS-D2). billing is a service, so
+offer a competing service (`anywaye/notes/ops.md:181`, OPS-D2). billing is a service, so
 its grant moved with the policy rather than being left to contradict it.
 
 **Anyone who already holds a copy keeps the grant it was published under.** A
@@ -688,8 +688,8 @@ copy of this repository taken while `LICENSE` said MIT is still MIT, and this
 change takes nothing away from whoever holds it. What has changed is the grant a
 copy taken from today forward carries. OPS-D3's rule is that a published grant
 is superseded out loud rather than quietly, because a repo whose grant quietly
-contradicts the policy is worse than either licence (`cafaye/notes/ops.md:182`, OPS-D3,
-and the risk-8 entry at `cafaye/notes/ops.md:1081`).
+contradicts the policy is worse than either licence (`anywaye/notes/ops.md:182`, OPS-D3,
+and the risk-8 entry at `anywaye/notes/ops.md:1081`).
 
 What BSL means for a caller, stated plainly: **calling billing over HTTP changes
 nothing about your licence.** Nothing here is linked into a consumer's process

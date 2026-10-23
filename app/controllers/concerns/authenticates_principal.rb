@@ -3,7 +3,7 @@
 # ## Where this sits, and why it is not a middleware
 #
 # A middleware would put the check on paths, and the paths here are the thing that
-# must not be got wrong: `/v1/customers` is a cafaye client surface,
+# must not be got wrong: `/v1/customers` is a anywaye client surface,
 # `/v1/webhooks/stripe` is a *processor* surface authenticated by signature, and
 # `/healthz` is infrastructure. A path-prefixed check gets "all of /v1" wrong in the
 # direction that matters — it would put a token requirement on the webhook, which

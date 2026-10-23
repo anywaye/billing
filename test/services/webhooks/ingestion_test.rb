@@ -305,7 +305,7 @@ class Webhooks::IngestionTest < ActiveSupport::TestCase
   # subscriptions table in this build, so the only stable identifier we hold is a
   # Stripe one: a payment event is correlated on the Stripe subscription when the
   # payload carries one and on the customer otherwise. Recorded as a decision in
-  # cafaye.yml; flipping it is one line in the normalizer.
+  # anywaye.yml; flipping it is one line in the normalizer.
   test "the subject is the processor's subscription id when the payload has one" do
     ingest(INVOICE_PAID)
 

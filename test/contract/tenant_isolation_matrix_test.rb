@@ -199,7 +199,7 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
   # An empty table would exit 0 having checked nothing, which is a skipped test in
   # everything but name, and a route that arrived tomorrow would be classified by
   # nobody. So the webhook is named here, with the reason it is not a tenant
-  # operation: it authenticates the *processor* by signature, not a cafaye client,
+  # operation: it authenticates the *processor* by signature, not a anywaye client,
   # and it must never grow a token check — a `Bearer` on that path would be a
   # second, weaker trust path to the same door.
   #
@@ -210,7 +210,7 @@ class TenantIsolationMatrixTest < ActiveSupport::TestCase
   # asserts the boundary from the router's own table.
   NOT_ACCOUNT_SCOPED = {
     [ "POST", "/v1/webhooks/stripe" ] =>
-      "authenticates the processor by signature, not a cafaye client, and cannot grow a token check: `Webhooks::BaseController` does not inherit the concern"
+      "authenticates the processor by signature, not a anywaye client, and cannot grow a token check: `Webhooks::BaseController` does not inherit the concern"
   }.freeze
 
   # --- the two directions ----------------------------------------------------

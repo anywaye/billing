@@ -65,7 +65,7 @@ core_path="${CORE_PATH:-$repo_root/../core}"
 checker="$core_path/harness/bin/gate-check"
 if [ ! -x "$checker" ]; then
   echo "gate_declaration_self_test: $checker is missing or not executable." >&2
-  echo "  Point CORE_PATH at a cafaye/core checkout, or put core beside this" >&2
+  echo "  Point CORE_PATH at a anywaye/core checkout, or put core beside this" >&2
   echo "  worktree. This script does not vendor the checker: a second copy of it" >&2
   echo "  would be a second answer to the question the copy is being asked." >&2
   exit 2
@@ -237,7 +237,7 @@ rm -f "$repo_root/bin/prime"
 verdict "case4-missing-entrypoint" "gate.entrypoint-missing" static
 
 # --- 5: the wrong toolchain answers -------------------------------------------
-# cafaye-rb's case. Before this repository read `.ruby-version` and compared,
+# anywaye-rb's case. Before this repository read `.ruby-version` and compared,
 # a `ruby` on PATH answering anything but 4.0.1 produced
 # `Could not find 'bundler' (4.0.18) (Gem::GemNotFoundException)` and exit 1 —
 # red, but a red naming a gem four steps from the toolchain that is wrong.

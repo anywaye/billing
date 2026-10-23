@@ -38,7 +38,7 @@ class CreateProcessorWebhooks < ActiveRecord::Migration[8.1]
 
       # The processor's event type, e.g. `customer.subscription.updated`. Not
       # this service's `event_type`: this is what the processor said, and the
-      # mapping from it to a cafaye type lives in code, not in a column.
+      # mapping from it to a anywaye type lives in code, not in a column.
       #
       # The column is named `type` because that is the processor's field name,
       # and `ProcessorWebhook.inheritance_column = nil` is what stops Active

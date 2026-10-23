@@ -34,7 +34,7 @@ module IdempotentRequests
     #
     # This concern is on `ApplicationController`, so `Webhooks::BaseController`
     # inherits it — and the webhook has no principal, because its sender is a
-    # processor and not a cafaye client. It also never calls these two methods,
+    # processor and not a anywaye client. It also never calls these two methods,
     # since it takes no `Idempotency-Key`. So this raises rather than inventing an
     # `"anonymous"` caller: the alternative is a default that is correct today
     # because nothing reaches it, and wrong the day a webhook or an unauthenticated

@@ -11,7 +11,7 @@
 #                                             what makes a query carry its
 #                                             `where` clause. Proven by
 #                                             `test/tenant/**`.
-#   `cafaye.begin_account` (the GUC)          what the POLICIES read. Proven here.
+#   `anywaye.begin_account` (the GUC)          what the POLICIES read. Proven here.
 #
 # ## Why every helper runs under an explicit role
 #
@@ -50,16 +50,16 @@ module TestSupport
     # Run the block as another account IN THE DATABASE, and put the identity back
     # afterwards.
     #
-    # THE PUTTING-BACK IS MEASURED, NOT TIDINESS. `cafaye.begin_account/1` is
+    # THE PUTTING-BACK IS MEASURED, NOT TIDINESS. `anywaye.begin_account/1` is
     # `set_config(..., is_local => true)`, and in Postgres a GUC set inside a
     # SAVEPOINT that is RELEASED — which is what a nested `transaction do` is —
     # SURVIVES into the enclosing transaction; only the outermost COMMIT or
     # ROLLBACK reverts it. Measured on this cluster:
     #
-    #   begin; select cafaye.begin_account('…A…');
-    #   savepoint s; select cafaye.begin_account('…B…');
-    #   release savepoint s; select cafaye.current_account_id();  -> …B…   <-- the trap
-    #   commit;             select cafaye.current_account_id();   -> NULL
+    #   begin; select anywaye.begin_account('…A…');
+    #   savepoint s; select anywaye.begin_account('…B…');
+    #   release savepoint s; select anywaye.current_account_id();  -> …B…   <-- the trap
+    #   commit;             select anywaye.current_account_id();   -> NULL
     #
     # A request driven from a spec sets the identity inside its own transaction,
     # which is nested inside the test's — so without this restore, every assertion
@@ -100,7 +100,7 @@ module TestSupport
     # remembered in Ruby — the two are different layers and only one of them is
     # what a policy reads.
     def database_identity
-      ActiveRecord::Base.connection.select_value("select cafaye.current_account_id()")
+      ActiveRecord::Base.connection.select_value("select anywaye.current_account_id()")
     end
 
     # Act as the role that owns the tables. It is the arm no catalog proves:

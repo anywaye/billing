@@ -55,11 +55,11 @@ class Principal
   #
   # **`identity` does not issue a singular `account_id` on a user token.** It
   # issues `accounts`, an **array** of `{account_id, name, slug, role, personal}`,
-  # and its own `internal/oidc/profiles.go` says why: "a user of a cafaye product
+  # and its own `internal/oidc/profiles.go` says why: "a user of a anywaye product
   # is a member of a personal account and usually of several team accounts, and a
   # token carrying one of them would be wrong for all the others." Core's
   # conventions ask for `account_id`, singular. The two disagree, and the
-  # disagreement is a DECISION NEEDED in `cafaye.yml` rather than something to
+  # disagreement is a DECISION NEEDED in `anywaye.yml` rather than something to
   # paper over.
   #
   # **The tempting fix is the cross-tenant bug.** Taking `accounts[0]` — or the
@@ -77,7 +77,7 @@ class Principal
   # so a token without it has no account fact in it in either shape.
   NO_ACCOUNT = "token names no account: this service requires a singular " \
                "`account_id` claim, which identity does not issue on a user " \
-               "token (it sends `accounts`, an array). Recorded in cafaye.yml; " \
+               "token (it sends `accounts`, an array). Recorded in anywaye.yml; " \
                "the first entry of an array is not a tenancy key."
 
   # **A missing account is a refusal and never a default.** An absent `account_id`

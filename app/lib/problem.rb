@@ -14,7 +14,7 @@
 # * `errors[]` appears only on a 422, listing the per-field failures.
 class Problem
   MEDIA_TYPE = "application/problem+json"
-  TYPE_BASE = "https://docs.cafaye.com/errors"
+  TYPE_BASE = "https://docs.anywaye.com/errors"
 
   # core's envelope dialect, pinned on this service's own terms.
   SPEC_VERSION = "1.0"

@@ -208,7 +208,7 @@ module Processor
     # The processor's own id for this subscriber, derived rather than stored.
     #
     # The delivery path resolves a customer by billing's own id first
-    # (`cafaye_customer_id`, which is what a checkout path can always supply),
+    # (`anywaye_customer_id`, which is what a checkout path can always supply),
     # so this only needs to be deterministic and obviously fake — stable so a
     # second checkout of the same customer talks about the same processor
     # customer, `fake` so nobody mistakes one for a captured production value.

@@ -1,7 +1,7 @@
 require "test_helper"
 
 # The normalizer. It is the only place that knows what a Stripe object looks
-# like, and the only place a cafaye id would be substituted if billing lands one.
+# like, and the only place a anywaye id would be substituted if billing lands one.
 # What comes out is a processor-independent hash, so nothing downstream — and no
 # consumer of the emitted events — has to parse Stripe's shape again.
 class Webhooks::StripeEventsTest < ActiveSupport::TestCase
@@ -113,7 +113,7 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
   # The lookup is the one query the payment path makes that the normalizer does
   # not: one indexed read on `customers.processor_customer_id`, which is unique
   # (billing-13). It is asserted here as the builder's contract — the field is
-  # present exactly when a cafaye customer with an address on file is the one the
+  # present exactly when a anywaye customer with an address on file is the one the
   # payment is about — and the end-to-end path through `Ingestion` is the
   # contract test's business.
   test "a payment payload carries the billing email of the customer it is about" do
@@ -150,10 +150,10 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
   end
 
   # The FIRST payment of an account, which is the case the resolution order
-  # exists for: the cafaye customer row was created before Stripe was asked for
+  # exists for: the anywaye customer row was created before Stripe was asked for
   # a session, so it has an address but no `processor_customer_id` yet — Stripe
   # creates its customer at the hosted checkout and the id arrives on a later
-  # event — and the address has to be found through the cafaye id the
+  # event — and the address has to be found through the anywaye id the
   # subscription's metadata carries. The fixture is a real recorded first
   # checkout, so the metadata is where the processor actually puts it.
   test "a first payment carries the email even though the customer has no processor id yet" do
@@ -248,12 +248,12 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     assert_empty produced - OutboxEvent::TYPES
   end
 
-  # The processor's own ids are load-bearing until cafaye's land, so a shape
+  # The processor's own ids are load-bearing until anywaye's land, so a shape
   # change that drops one has to be a failing test, not a surprise in a
   # consumer's inbox.
   #
-  # Two keys were added in billing-04 and each is load-bearing. `cafaye_customer_id`
-  # is the link back to a cafaye customer, carried in the subscription's metadata
+  # Two keys were added in billing-04 and each is load-bearing. `anywaye_customer_id`
+  # is the link back to a anywaye customer, carried in the subscription's metadata
   # because a customer created through `/v1` has a null `processor_customer_id` until
   # its first subscription names one. `trial_ends_at` is the shape core's payload
   # schema asks for: a date-time, or null while trialing with no end date.
@@ -262,7 +262,7 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
   # computes it once and hands the same instant to the handler and to the outbox row,
   # so a second copy in the normalized hash would be a second reading of one field.
   SUBSCRIPTION_KEYS = %w[
-    kind processor processor_event_id subscription_id customer_id cafaye_customer_id status
+    kind processor processor_event_id subscription_id customer_id anywaye_customer_id status
     quantity price_id unit_amount current_period_start current_period_end cancel_at_period_end
     canceled_at trial trial_ends_at
   ]
@@ -272,11 +272,11 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     "customer.subscription.updated" => SUBSCRIPTION_KEYS,
     "customer.subscription.deleted" => SUBSCRIPTION_KEYS,
     "invoice.paid" => %w[
-      kind processor processor_event_id customer_id cafaye_customer_id subscription_id invoice_id
+      kind processor processor_event_id customer_id anywaye_customer_id subscription_id invoice_id
       payment_intent_id paid amount attempt_count next_payment_attempt
     ],
     "invoice.payment_failed" => %w[
-      kind processor processor_event_id customer_id cafaye_customer_id subscription_id invoice_id
+      kind processor processor_event_id customer_id anywaye_customer_id subscription_id invoice_id
       payment_intent_id paid amount attempt_count next_payment_attempt
     ],
     "checkout.session.completed.payment" => %w[

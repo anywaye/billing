@@ -8,8 +8,8 @@
 # ## What is here and what is deliberately not
 #
 # The claim (`select ... for update skip locked`), the envelope grammar and the
-# publish pass are **not** here: they are `Cafaye::Outbox`, the fleet's shared
-# gem, vendored at `vendor/cafaye` (see `VENDORED.md`). A second claim mechanism
+# publish pass are **not** here: they are `Anywaye::Outbox`, the fleet's shared
+# gem, vendored at `vendor/anywaye` (see `VENDORED.md`). A second claim mechanism
 # in billing would be a second answer to a question the whole fleet asks once.
 # What a service owes on top of the gem is exactly the three things the gem says
 # it does not own:
@@ -45,7 +45,7 @@
 # `billing.subscription.started` and nothing else — which is what the fleet's
 # `billing.>` stream filter matches. The envelope's *`subject` attribute* is a
 # different field: it is the entity the event is about (the row's `subject`
-# column, a cafaye uuid), and it goes in the envelope, not on the wire.
+# column, a anywaye uuid), and it goes in the envelope, not on the wire.
 module Outbox
   class Error < StandardError; end
 

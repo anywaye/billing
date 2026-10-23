@@ -22,8 +22,8 @@ class Outbox::NatsPublisherTest < ActiveSupport::TestCase
     customer = create_customer
     row = OutboxEvent.sole
 
-    publisher = Cafaye::Outbox.publisher(
-      connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+    publisher = Anywaye::Outbox.publisher(
+      connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
       clock: -> { Time.current },
       logger: nil,
       deliverer: ->(envelope) { Outbox::NatsPublisher.build(@broker.url).publish(envelope) }
@@ -69,8 +69,8 @@ class Outbox::NatsPublisherTest < ActiveSupport::TestCase
     create_customer
     row = OutboxEvent.sole
 
-    publisher = Cafaye::Outbox.publisher(
-      connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+    publisher = Anywaye::Outbox.publisher(
+      connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
       clock: -> { Time.current },
       logger: nil,
       deliverer: ->(envelope) { Outbox::NatsPublisher.build(silent_broker.url).publish(envelope) }
@@ -81,7 +81,7 @@ class Outbox::NatsPublisherTest < ActiveSupport::TestCase
     assert_equal 0, result.published
     assert_nil row.reload.published_at, "a refused publish is not a delivery"
     assert_equal 1, row.attempts, "an operator watching attempts climb is the alert"
-    assert_equal 1, Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base).claim_batch(
+    assert_equal 1, Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base).claim_batch(
       limit: 10, max_attempts: 10, max_backoff: 300, now: Time.current + 1.second
     ).size, "the row is still claimable, so the retry is real"
   ensure
@@ -97,8 +97,8 @@ class Outbox::NatsPublisherTest < ActiveSupport::TestCase
     row = OutboxEvent.sole
 
     transport = Outbox::NatsPublisher.build(quiet_broker.url, publish_timeout: 1)
-    publisher = Cafaye::Outbox.publisher(
-      connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+    publisher = Anywaye::Outbox.publisher(
+      connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
       clock: -> { Time.current },
       logger: nil,
       deliverer: ->(envelope) { transport.publish(envelope) }
@@ -144,8 +144,8 @@ class Outbox::NatsPublisherTest < ActiveSupport::TestCase
     create_customer
     row = OutboxEvent.sole
 
-    publisher = Cafaye::Outbox.publisher(
-      connection: Cafaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
+    publisher = Anywaye::Outbox.publisher(
+      connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
       clock: -> { Time.current },
       logger: nil,
       deliverer: ->(envelope) { transport.publish(envelope) }

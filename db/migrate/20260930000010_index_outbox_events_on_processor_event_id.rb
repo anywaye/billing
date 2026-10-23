@@ -3,7 +3,7 @@
 # ## The duplicate this index makes impossible
 #
 # `Webhooks::Ingestion#call` is a check followed by an act: it reads
-# `ProcessorWebhook#handled?` and, on `false`, writes the cafaye event and marks
+# `ProcessorWebhook#handled?` and, on `false`, writes the anywaye event and marks
 # the delivery finished. The unique index on `processor_webhooks.stripe_event_id`
 # makes two concurrent deliveries of one event id agree about *which row* they
 # are working on — and that is not the same as agreeing about the answer.

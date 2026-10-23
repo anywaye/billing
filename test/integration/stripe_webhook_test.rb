@@ -520,7 +520,7 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_predicate response.parsed_body["trace_id"].to_s, :present?
   end
 
-  # Fixture name to the cafaye event type it must produce. The fixture name is a
+  # Fixture name to the anywaye event type it must produce. The fixture name is a
   # label; the event's own `type` inside it is what the service routes on, and
   # `checkout.session.completed` appears twice because the mode in the payload
   # decides what the session means.
@@ -599,7 +599,7 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
   end
 
   test "every handled type lands in the manifest's events list" do
-    manifest_events = YAML.load_file(Rails.root.join("cafaye.yml")).dig("exposes", "events")
+    manifest_events = YAML.load_file(Rails.root.join("anywaye.yml")).dig("exposes", "events")
 
     assert_empty HANDLED_TYPES.values.uniq - manifest_events
   end
@@ -611,7 +611,7 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
   end
 
   test "the manifest points at the OpenAPI document that declares the endpoint" do
-    manifest = YAML.load_file(Rails.root.join("cafaye.yml"))
+    manifest = YAML.load_file(Rails.root.join("anywaye.yml"))
 
     assert_equal "openapi/v1.yaml", manifest.dig("exposes", "api")
   end
@@ -633,7 +633,7 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
       with_env("STRIPE_WEBHOOK_SECRETS" => secrets.join(",")) { yield }
     end
 
-    # The cafaye customer and plan a subscription fixture resolves to.
+    # The anywaye customer and plan a subscription fixture resolves to.
     #
     # A subscription event is acted on only when it can be attached to both — this
     # service does not bill a subscription it did not sell — so a spec that posts
@@ -650,8 +650,8 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     # account's pair, and nothing else changed.
     #
     # Both halves of the customer reference are rewritten, because
-    # `Lifecycle#customer` consults both and consults the cafaye one first: a body
-    # whose `customer` names account B while its `metadata.cafaye_customer_id` still
+    # `Lifecycle#customer` consults both and consults the anywaye one first: a body
+    # whose `customer` names account B while its `metadata.anywaye_customer_id` still
     # names account A's row would resolve to A and prove nothing.
     #
     # The delivery's own `id` is left where the fixture put it, and so is the id
@@ -663,7 +663,7 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
       record = customer_record || Customer.find_by!(processor_customer_id: processor_customer_id)
 
       object["customer"] = processor_customer_id
-      object["metadata"] = { "cafaye_customer_id" => record.id }
+      object["metadata"] = { "anywaye_customer_id" => record.id }
 
       JSON.generate(body)
     end

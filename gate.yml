@@ -1,7 +1,7 @@
 # gate.yml — how billing is gated, declared rather than guessed.
 #
-# WHY THIS FILE EXISTS. The cafaye standard for declaring a gate lives in
-# `cafaye/core`: `schemas/gate.schema.json` is the format, `harness/gate_check.py`
+# WHY THIS FILE EXISTS. The anywaye standard for declaring a gate lives in
+# `anywaye/core`: `schemas/gate.schema.json` is the format, `harness/gate_check.py`
 # is the checker, and `docs/gate.md` is the reasoning. billing is adopting it, not
 # inventing it. Seven of thirteen services declared a gate before this commit
 # and billing was not one of them, which meant a developer here could run
@@ -56,7 +56,7 @@
 # to drift. What CI adds AROUND that same command is the part worth recording,
 # because it is the part a developer running `bin/prime` alone does not get:
 #
-#   * `CORE_PATH` set on the job, from a checkout of `cafaye/core`. Without it
+#   * `CORE_PATH` set on the job, from a checkout of `anywaye/core`. Without it
 #     the contract tier SKIPS. See the `suite` proof — this is not a detail.
 #   * `CI=true`, which `config/environments/test.rb` reads to turn eager loading
 #     on, plus a step that fails if `eager_load` is false or if `eager_load!`
@@ -542,7 +542,7 @@ external:
         # a page that does not exist, which is the thing this field replaced.
         #
         # `bin/rails db:prepare` and NOT `bin/prime --fast`, which is the shape
-        # cafaye-rb uses for the same field. That was measured rather than
+        # anywaye-rb uses for the same field. That was measured rather than
         # copied: on this commit `bin/prime --fast` runs `bundle install` and
         # then EXITS 0 WITHOUT TOUCHING THE DATABASE, while its own `--help`
         # text says "bundle and the database only" and `mise.toml` describes
@@ -572,21 +572,21 @@ external:
       # entry is the remedy with a name on it.
       #
       # The default is `Rails.root.join("..", "core")`, which is what a developer
-      # with the cafaye repositories side by side gets. A standalone checkout —
+      # with the anywaye repositories side by side gets. A standalone checkout —
       # and a CI runner with one `actions/checkout` and no sibling — has no such
       # directory, which is why CI sets `CORE_PATH` on the job and checks core
       # out to `$RUNNER_TEMP/core` rather than beside the worktree.
       name: >-
-        a cafaye/core checkout at ../core beside this worktree, or CORE_PATH
+        a anywaye/core checkout at ../core beside this worktree, or CORE_PATH
         pointing at one. Without it the contract tier skips 20 tests and the
         gate is green having checked nothing.
       satisfy:
         # A bare `git` and a bare `clone` argument, so the checker treats this as
-        # a claim about this machine and does not verify a path. cafaye/core is
+        # a claim about this machine and does not verify a path. anywaye/core is
         # public, so no credential is involved; the URL is a public https remote
         # and carries nothing secret. `../core` is a clone destination, not a
         # path this declaration asserts the existence of.
-        command: [git, clone, https://github.com/cafaye/core.git, ../core]
+        command: [git, clone, https://github.com/anywaye/core.git, ../core]
         # Demonstrated, quoted from the run above. The `skip` count is the whole
         # symptom: 20 skips is 4 from the delivery test and 16 from the envelope
         # contract, and the summary line's exit status is 0.

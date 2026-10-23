@@ -1,7 +1,7 @@
 require "test_helper"
 
 # The error envelope and the trace id, which core's openapi-conventions.md
-# requires of every response on every cafaye service. Tested apart from the
+# requires of every response on every anywaye service. Tested apart from the
 # resource specs so that the rules hold for a route nobody thought to check.
 class V1ProblemEnvelopeTest < ActionDispatch::IntegrationTest
   TRACED = "0af7651916cd43dd8448eb211c80319c"
@@ -34,7 +34,7 @@ class V1ProblemEnvelopeTest < ActionDispatch::IntegrationTest
   test "the type is the machine-readable contract and the code is its last segment" do
     get "/v1/plans/enterprise-yearly"
 
-    assert_equal "https://docs.cafaye.com/errors/not_found", json_body.fetch("type")
+    assert_equal "https://docs.anywaye.com/errors/not_found", json_body.fetch("type")
     assert_equal "not_found", json_body.fetch("code")
   end
 

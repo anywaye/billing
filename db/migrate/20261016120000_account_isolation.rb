@@ -13,11 +13,11 @@ class AccountIsolation < ActiveRecord::Migration[8.1]
   # 42501 rather than written.
   #
   # THREE TABLES, NOT SEVEN. `subscriptions` and `charges` spell the key
-  # `account_id`, so `cafaye.protect_table` writes their whole boundary.
+  # `account_id`, so `anywaye.protect_table` writes their whole boundary.
   # `customers` spells the same key `owner_type`/`owner_id` and has no
   # `account_id` column, so `protect_table` refuses it — measured:
   #
-  #   ERROR:  cafaye.protect_table(customers, billing_app): the table has no
+  #   ERROR:  anywaye.protect_table(customers, billing_app): the table has no
   #           account_id column, so there is nothing to scope it by.
   #
   # — and its four policies are hand-written in `db/tenancy/account_isolation.sql`,
@@ -35,12 +35,12 @@ class AccountIsolation < ActiveRecord::Migration[8.1]
   # pin), kept as a standalone file so it stays comparable by hash to kit's. The
   # rest — the two `protect_table` calls and `customers`' five policies — is
   # `db/tenancy/account_isolation.sql`. Both are read here rather than inlined for
-  # one reason that is not tidiness: `cafaye/core/harness/bin/tenancy-check` reads
+  # one reason that is not tidiness: `anywaye/core/harness/bin/tenancy-check` reads
   # `.sql` DDL and cannot read a Ruby migration, so `tenancy.yml`'s
   # `databaseEnforced: true` is only checkable while the DDL is in files it can
   # open.
   #
-  # WHAT THIS MIGRATION DOES NOT DO: it does not call `cafaye.begin_account/1`.
+  # WHAT THIS MIGRATION DOES NOT DO: it does not call `anywaye.begin_account/1`.
   # That function is `set_config(..., is_local => true)` — transaction-local — so
   # a migration calling it outside a transaction sets an identity that is already
   # gone, and one calling it inside a migration transaction sets an identity that
@@ -78,7 +78,7 @@ class AccountIsolation < ActiveRecord::Migration[8.1]
     # silently did nothing, fails at the moment of the change rather than in a
     # test somebody is not running.
     unprotected = select_values(<<~SQL)
-      select table_name from cafaye.unprotected_tables()
+      select table_name from anywaye.unprotected_tables()
     SQL
     return if unprotected.empty?
 
@@ -88,7 +88,7 @@ class AccountIsolation < ActiveRecord::Migration[8.1]
   def down
     # Undo the boundary and nothing else. This migration created no table and
     # changed no column: what it owns is the policies, the two indexes
-    # `protect_table` created, the ENABLE/FORCE bits and the `cafaye` schema.
+    # `protect_table` created, the ENABLE/FORCE bits and the `anywaye` schema.
     PROTECTED.each do |table|
       policies =
         if table == "customers"
@@ -98,14 +98,14 @@ class AccountIsolation < ActiveRecord::Migration[8.1]
         end
 
       policies.each do |action|
-        execute "drop policy if exists #{table}_cafaye_#{action} on #{table}"
+        execute "drop policy if exists #{table}_anywaye_#{action} on #{table}"
       end
-      execute "drop index if exists #{table}_cafaye_account_id_idx"
+      execute "drop index if exists #{table}_anywaye_account_id_idx"
       execute "alter table #{table} no force row level security"
       execute "alter table #{table} disable row level security"
     end
 
-    execute "drop schema if exists cafaye cascade"
+    execute "drop schema if exists anywaye cascade"
   end
 
   private

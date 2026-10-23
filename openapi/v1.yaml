@@ -26,7 +26,7 @@
 #    safe thing to address a mutation by. **A plan is platform catalogue and
 #    carries no account**, so these four operations are authenticated but not
 #    account-scoped; see note 6.
-# 3. `/v1/webhooks/stripe` is the one path that is not a cafaye client surface.
+# 3. `/v1/webhooks/stripe` is the one path that is not a anywaye client surface.
 #    Its sender is a processor and it authenticates by signature over the raw
 #    body, so it declares `security: []`, takes no `Idempotency-Key` (the
 #    processor's own event id is the dedupe key, and it is enforced by a unique
@@ -157,7 +157,7 @@ info:
   version: 2.5.1
   description: >-
     Plans, customers, the subscription lifecycle, and one inbound
-    payment-processor webhook for cafaye. This document describes every client
+    payment-processor webhook for anywaye. This document describes every client
     operation this service serves, and a test holds it to that by method and
     path: see note 5 above.
 
@@ -175,9 +175,9 @@ info:
     gaps".
   contact:
     name: billing
-    email: billing@cafaye.com
+    email: billing@anywaye.com
 servers:
-  - url: https://api.cafaye.com
+  - url: https://api.anywaye.com
     description: Production
   - url: http://localhost:3000
     description: Local
@@ -217,7 +217,7 @@ tags:
   - name: webhooks
     description: >-
       Events coming in from a payment processor. Authenticated by signature
-      rather than by token, because the sender is not a cafaye client.
+      rather than by token, because the sender is not a anywaye client.
 
 paths:
   /v1/customers:
@@ -1347,7 +1347,7 @@ components:
         > the array rather than reading the first entry, the personal one, or any
         > other guess: a tenancy key nobody chose is a cross-tenant read, and it
         > would look like it works. **The disagreement is a DECISION NEEDED in
-        > `cafaye.yml`**, and the likeliest resolution is the gateway resolving the
+        > `anywaye.yml`**, and the likeliest resolution is the gateway resolving the
         > account and forwarding one. To an integrator: a `401` naming a tenancy
         > claim on a token that looks perfectly valid is this, and it is not a bug
         > in your token.
@@ -2157,7 +2157,7 @@ components:
 
     # A processor event. Only `id` and `type` are read for routing;
     # `data.object` is the processor-specific payload and its shape is the
-    # processor's, not cafaye's. The stored copy is the verified body verbatim,
+    # processor's, not anywaye's. The stored copy is the verified body verbatim,
     # because a normalized hash would be the wrong thing to replay: it is the
     # *processor's* bytes that the mapping is a claim about.
     StripeEvent:
@@ -2203,7 +2203,7 @@ components:
     # what `customer.subscription.created` says moments later and is ignored, so a
     # signup is not counted twice.
     #
-    # The three subscription types do not map one-to-one onto the three cafaye ones,
+    # The three subscription types do not map one-to-one onto the three anywaye ones,
     # and that is deliberate rather than an omission: the event is chosen from what
     # the delivery *did to the row*. A `customer.subscription.updated` that reports
     # `canceled` publishes `billing.subscription.canceled`; a
@@ -2243,7 +2243,7 @@ components:
       properties:
         type:
           type: string
-          description: 'Stable URI: `https://docs.cafaye.com/errors/<code>`.'
+          description: 'Stable URI: `https://docs.anywaye.com/errors/<code>`.'
           format: uri
         title:
           type: string
@@ -2301,7 +2301,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://docs.cafaye.com/errors/unauthorized
+            type: https://docs.anywaye.com/errors/unauthorized
             title: Unauthorized
             status: 401
             detail: This request needs a bearer token issued by this platform's identity service.
@@ -2329,7 +2329,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://docs.cafaye.com/errors/unavailable
+            type: https://docs.anywaye.com/errors/unavailable
             title: Service unavailable
             status: 503
             detail: This service cannot verify a caller right now.
@@ -2398,7 +2398,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://docs.cafaye.com/errors/unavailable
+            type: https://docs.anywaye.com/errors/unavailable
             title: Service unavailable
             status: 503
             detail: The payment processor is not configured.
@@ -2416,7 +2416,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://docs.cafaye.com/errors/bad_request
+            type: https://docs.anywaye.com/errors/bad_request
             title: Bad request
             status: 400
             detail: The Stripe-Signature header did not verify against the request body.
@@ -2434,7 +2434,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: https://docs.cafaye.com/errors/unavailable
+            type: https://docs.anywaye.com/errors/unavailable
             title: Service unavailable
             status: 503
             detail: Webhook signature verification is not configured.

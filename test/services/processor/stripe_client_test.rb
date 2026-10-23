@@ -101,8 +101,8 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_equal [ { price: "price_1PZQaBcDeFgHiJkLmNoPqR2", quantity: 1 } ], @api.requests.last.fetch(:line_items)
   end
 
-  # The reference is how a later webhook is tied back to a cafaye customer, and it
-  # is cafaye's own id rather than the processor's: `customers.processor_customer_id`
+  # The reference is how a later webhook is tied back to a anywaye customer, and it
+  # is anywaye's own id rather than the processor's: `customers.processor_customer_id`
   # is null for every customer in v0, so the processor has no id of ours to match on
   # at this point and the subscription's metadata is the only thing that can carry
   # the link. The resolution itself lives in Subscriptions::Lifecycle.
@@ -110,7 +110,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     client_for(@api).create_checkout_session(**checkout_params)
 
     metadata = @api.requests.last.fetch(:subscription_data).fetch(:metadata)
-    assert_equal "11111111-1111-4111-8111-111111111111", metadata.fetch(:cafaye_customer_id)
+    assert_equal "11111111-1111-4111-8111-111111111111", metadata.fetch(:anywaye_customer_id)
   end
 
   test "a checkout session also carries it as the reference the processor echoes back" do
@@ -122,7 +122,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a checkout session with no customer reference says it is empty, not that it is absent" do
     client_for(@api).create_checkout_session(**checkout_params(customer_reference: nil))
 
-    assert_nil @api.requests.last.fetch(:subscription_data).fetch(:metadata).fetch(:cafaye_customer_id)
+    assert_nil @api.requests.last.fetch(:subscription_data).fetch(:metadata).fetch(:anywaye_customer_id)
   end
 
   test "a checkout session tells the processor which customer to charge, when we know their processor id" do
@@ -383,7 +383,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
         # Required by Stripe on a hosted session — the omission was one of
         # the three defects the live recording caught — and it is the
         # caller's URL, because the page a buyer lands on is the app's.
-        success_url: "https://app.cafaye.com/billing",
+        success_url: "https://app.anywaye.com/billing",
         processor_customer_id: nil
       }.merge(overrides)
     end

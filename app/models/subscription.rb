@@ -3,7 +3,7 @@
 # The whole model turns on one fact about it: **this service never decides what a
 # subscription's status is.** The processor does, it says so on a signed webhook,
 # and this table is the record of what it said. Nothing here writes a status from
-# a cafaye request — cancelling and changing a plan both call the processor and
+# a anywaye request — cancelling and changing a plan both call the processor and
 # wait for the event that comes back. That is why there is no `after_create` or
 # `after_update` publishing an event: the only writer of this row is
 # `Subscriptions::Lifecycle`, and it is the only thing that emits a
@@ -41,7 +41,7 @@ class Subscription < ApplicationRecord
   # `incomplete` grants entitlements nobody has paid for, and the refusal is a
   # row somebody can find. The other direction is harmless — a status this
   # service does not model is not one it can have learned. Recorded as a
-  # decision in cafaye.yml.
+  # decision in anywaye.yml.
   STATUSES = %w[trialing active past_due canceled unpaid].freeze
 
   # Everything that is not over. `canceled` is the only terminal status, and that

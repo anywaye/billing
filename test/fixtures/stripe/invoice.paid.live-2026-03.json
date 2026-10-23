@@ -40,12 +40,12 @@
             "currency": "usd",
             "livemode": false,
             "metadata": {
-              "cafaye_customer_id": "drill"
+              "anywaye_customer_id": "drill"
             },
             "quantity": 1,
             "subtotal": 1900,
             "discounts": [],
-            "description": "1 × Cafaye Pro (live-test) (at $19.00 / month)",
+            "description": "1 × Anywaye Pro (live-test) (at $19.00 / month)",
             "discountable": true,
             "discount_amounts": [],
             "quantity_decimal": "1",
@@ -68,7 +68,7 @@
         "quote_details": null,
         "subscription_details": {
           "metadata": {
-            "cafaye_customer_id": "drill"
+            "anywaye_customer_id": "drill"
           },
           "subscription": "sub_1UQwqJCmN780pAiWtdwAw6yx"
         }
@@ -92,7 +92,7 @@
       "description": null,
       "invoice_pdf": "https://pay.stripe.com/invoice/acct_1TF2jdCmN780pAiW/test_YWNjdF8xVEYyamRDbU43ODBwQWlXLF9WUnFYdXRTZUdma1JtVm02QmZVN2k1MGxxTEtmZE55LDE4MjY0Mjk4Ng0200GijOON8e/pdf?s=ap",
       "total_taxes": [],
-      "account_name": "Cafaye",
+      "account_name": "Anywaye",
       "auto_advance": false,
       "effective_at": 1792102183,
       "from_invoice": null,
@@ -110,7 +110,7 @@
       "customer_name": null,
       "shipping_cost": null,
       "billing_reason": "subscription_create",
-      "customer_email": "billing-live-test@cafaye.com",
+      "customer_email": "billing-live-test@anywaye.com",
       "customer_phone": null,
       "default_source": null,
       "ending_balance": 0,

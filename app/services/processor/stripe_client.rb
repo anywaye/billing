@@ -108,7 +108,7 @@ module Processor
           # because the alternative is whatever Stripe's dashboard default is.
           cancel_url: cancel_url.presence || success_url,
           subscription_data: {
-            metadata: { cafaye_customer_id: customer_reference }
+            metadata: { anywaye_customer_id: customer_reference }
           }
         )
       end

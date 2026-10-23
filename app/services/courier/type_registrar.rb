@@ -17,10 +17,10 @@ module Courier
         "type" => "receipt",
         "kind" => "transactional",
         "required" => %w[email amount_display],
-        "subject" => "We received your caFaye payment",
+        "subject" => "We received your Anywaye payment",
         "html_template" => <<~EEX,
           <p><%= @greeting %></p>
-          <p>We received your payment of <strong><%= @amount_display %></strong> for your caFaye subscription. Thank you.</p>
+          <p>We received your payment of <strong><%= @amount_display %></strong> for your Anywaye subscription. Thank you.</p>
           <%= if @invoice_id do %>
           <p>Keep this for your records. Your invoice is <strong><%= @invoice_id %></strong>.</p>
           <% end %>
@@ -29,7 +29,7 @@ module Courier
         "text_template" => <<~EEX
           <%= @greeting %>
 
-          We received your payment of <%= @amount_display %> for your caFaye subscription. Thank you.
+          We received your payment of <%= @amount_display %> for your Anywaye subscription. Thank you.
           <%= if @invoice_id do %>
           Keep this for your records. Your invoice is <%= @invoice_id %>.
           <% end %>
@@ -40,10 +40,10 @@ module Courier
         "type" => "payment_failed",
         "kind" => "transactional",
         "required" => %w[email amount_display],
-        "subject" => "Your caFaye payment did not go through",
+        "subject" => "Your Anywaye payment did not go through",
         "html_template" => <<~EEX,
           <p><%= @greeting %></p>
-          <p>We could not process your payment of <strong><%= @amount_display %></strong> for your caFaye subscription. Nothing was charged.</p>
+          <p>We could not process your payment of <strong><%= @amount_display %></strong> for your Anywaye subscription. Nothing was charged.</p>
           <%= if @invoice_id do %>
           <p>The attempt was for invoice <strong><%= @invoice_id %></strong>.</p>
           <% end %>
@@ -57,7 +57,7 @@ module Courier
         "text_template" => <<~EEX
           <%= @greeting %>
 
-          We could not process your payment of <%= @amount_display %> for your caFaye subscription. Nothing was charged.
+          We could not process your payment of <%= @amount_display %> for your Anywaye subscription. Nothing was charged.
           <%= if @invoice_id do %>
           The attempt was for invoice <%= @invoice_id %>.
           <% end %>

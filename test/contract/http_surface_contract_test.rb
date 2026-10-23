@@ -24,7 +24,7 @@ require "test_helper"
 # runs, with or without `core` beside it.
 class HttpSurfaceContractTest < ActiveSupport::TestCase
   DOCUMENT = "openapi/v1.yaml"
-  MANIFEST = "cafaye.yml"
+  MANIFEST = "anywaye.yml"
 
   # --- what "served" means, and what is deliberately not served ----------------
 
@@ -42,7 +42,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
     EVERY_METHOD.to_h { |method| [ [ method, path ], reason ] }
   end
 
-  HEALTH_PROBE = "Infrastructure, not contract surface: not in `cafaye.yml`'s " \
+  HEALTH_PROBE = "Infrastructure, not contract surface: not in `anywaye.yml`'s " \
     "`exposes`, no query parameters, no auth, and an uptime monitor is the only " \
     "reader. `config/routes.rb` says so beside the declaration."
 
@@ -60,7 +60,7 @@ class HttpSurfaceContractTest < ActiveSupport::TestCase
 
   ENGINE_ROUTES = "Drawn by a Rails engine that is loaded into the bundle, not by " \
     "`config/routes.rb`. This service has no ActionMailbox and no Active Storage " \
-    "table in `db/schema.rb` and uses neither, so none of these is a cafaye " \
+    "table in `db/schema.rb` and uses neither, so none of these is a anywaye " \
     "operation and none is described here. They are listed rather than filtered by " \
     "prefix because a route that appears without somebody adding it and writing " \
     "down why is the failure this file exists to catch."

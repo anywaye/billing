@@ -11,7 +11,7 @@
 # The column list below is core's contract, not a local invention: `id`,
 # `event_type`, `source`, `subject`, `time`, `data`, `created_at`,
 # `published_at`, `attempts`. What this packet does not build is the publisher
-# loop that moves rows to NATS — cafaye has no broker wired up, and adding a
+# loop that moves rows to NATS — anywaye has no broker wired up, and adding a
 # queue is a dependency decision (AGENTS.md) that this packet does not get to
 # make. `published_at` and `attempts` are therefore always null and always zero,
 # which is a known gap and is written down in README.md rather than hidden by

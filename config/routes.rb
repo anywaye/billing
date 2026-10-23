@@ -1,6 +1,6 @@
 Rails.application.routes.draw do
   # Health probes used by Docker/Kamal, the load balancer and uptime monitors.
-  # Infrastructure, not contract surface: they are not in `cafaye.yml`'s
+  # Infrastructure, not contract surface: they are not in `anywaye.yml`'s
   # `exposes`, they take no query parameters, and no client parses them.
   get "healthz" => "health#show", as: :healthz
   get "readyz" => "health#ready", as: :readyz
@@ -85,7 +85,7 @@ Rails.application.routes.draw do
   #
   # Declared outside the `scope "/v1", module: :v1` above on purpose. The version
   # prefix is the same, but the controller is not part of the `V1` module and does
-  # not share its base: the `/v1` API is a cafaye client surface and this is a
+  # not share its base: the `/v1` API is a anywaye client surface and this is a
   # processor surface, authenticated by signature rather than by token, and the two
   # must not grow a shared superclass that assumes both.
   #

@@ -157,7 +157,7 @@ class SubscriptionDeliveryTest < ActiveSupport::TestCase
   end
 
   test "both events courier needs are declared in the manifest" do
-    manifest = YAML.load_file(Rails.root.join("cafaye.yml"))
+    manifest = YAML.load_file(Rails.root.join("anywaye.yml"))
 
     assert_empty COURIER_LISTENS_FOR - manifest.dig("exposes", "events")
   end
@@ -170,7 +170,7 @@ class SubscriptionDeliveryTest < ActiveSupport::TestCase
   # of the two because it did not say so.
   #
   # `core`'s catalog is read from a path derived from the checkout's own
-  # directory, so this test passed on a developer machine that has the cafaye
+  # directory, so this test passed on a developer machine that has the anywaye
   # repositories side by side and **errored on a CI runner**, which has one
   # checkout and no sibling:
   #
@@ -217,7 +217,7 @@ class SubscriptionDeliveryTest < ActiveSupport::TestCase
   # `consumes` entry would be a claim that this service listens to something, and
   # the only thing it would want to listen to is something identity emits.
   test "billing consumes no events, so it is not waiting on courier to do anything" do
-    manifest = YAML.load_file(Rails.root.join("cafaye.yml"))
+    manifest = YAML.load_file(Rails.root.join("anywaye.yml"))
 
     assert_equal [], manifest.fetch("consumes")
   end

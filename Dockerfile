@@ -40,12 +40,12 @@ RUN apt-get update -qq && \
 # The destination is spelled out, and it is not incidental. Docker copies the
 # CONTENTS of a source directory into the destination and drops the directory's
 # own name, so the glob that used to be here — `COPY vendor/* ./vendor/` —
-# matched `cafaye/` (a directory), flattened it into `vendor/`, and left
-# `/rails/vendor/cafaye` nonexistent. The Gemfile's `path: "vendor/cafaye"`
+# matched `anywaye/` (a directory), flattened it into `vendor/`, and left
+# `/rails/vendor/anywaye` nonexistent. The Gemfile's `path: "vendor/anywaye"`
 # dependency then failed at `bundle install` with exit code 13. Naming the
 # destination keeps the directory, which is what the path pin needs. Do not
 # "simplify" this back into a glob: that is the bug this line fixes.
-COPY vendor/cafaye/ ./vendor/cafaye/
+COPY vendor/anywaye/ ./vendor/anywaye/
 COPY vendor/.keep ./vendor/.keep
 COPY Gemfile Gemfile.lock ./
 

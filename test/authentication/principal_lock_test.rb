@@ -143,7 +143,7 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
       send_request(method, path)
 
       refute_includes [ 401, 503 ], response.status,
-        "#{method} #{path} answered #{response.status}. It is not a cafaye client surface: an " \
+        "#{method} #{path} answered #{response.status}. It is not a anywaye client surface: an " \
         "uptime monitor has no credential, and the webhook's sender is a processor " \
         "authenticated by signature. A probe that reports 401 or 503 is a probe that reports " \
         "the service as down, and an orchestrator restarts it."

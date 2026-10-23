@@ -295,7 +295,7 @@ class IdentityTokenVerifierTest < ActiveSupport::TestCase
     assert_match(/accounts/, error.message,
       "the refusal must name the disagreement, because the operator reading the log is " \
       "the only person who can act on it and `no account_id` reads as a malformed token " \
-      "rather than as a cross-repo claim mismatch. See cafaye.yml.")
+      "rather than as a cross-repo claim mismatch. See anywaye.yml.")
   end
 
   test "a single account out of an array is still not a tenancy key" do

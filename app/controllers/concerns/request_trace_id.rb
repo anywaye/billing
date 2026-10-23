@@ -2,7 +2,7 @@
 # caller's id when they send one, a fresh uuid when they do not.
 #
 # It is not the same thing as `ActionDispatch::RequestId`, which reads
-# `X-Request-Id`. cafaye's header is `X-Trace-Id`, so it is read and written
+# `X-Request-Id`. anywaye's header is `X-Trace-Id`, so it is read and written
 # here rather than borrowed — and it is written in an `after_action` so it is
 # on the 200s too, not only on the failures.
 module RequestTraceId

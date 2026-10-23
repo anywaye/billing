@@ -49,7 +49,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   # --- POST /v1/subscriptions -------------------------------------------------
 
   test "POST /v1/subscriptions creates a checkout session" do
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_response :created
     assert_equal 1, @api.requests.size
@@ -57,19 +57,19 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   end
 
   test "POST /v1/subscriptions returns the processor's own checkout url" do
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_equal "https://checkout.stripe.test/c/pay/cs_test_00000000000001", json_body.fetch("checkout_url")
   end
 
   test "POST /v1/subscriptions returns the processor's own session id" do
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_equal "cs_test_00000000000001", json_body.fetch("checkout_session_id")
   end
 
   test "POST /v1/subscriptions checks out the plan that was asked for" do
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @team.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @team.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_equal [ { price: @team.processor_price_id, quantity: 1 } ], @api.requests.last.fetch(:line_items)
   end
@@ -78,13 +78,13 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   # pointing at a subscription that does not exist until a webhook arrives would be
   # a link to a 404, and the brief's own reason for the 201 is the session.
   test "POST /v1/subscriptions writes no subscription yet" do
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_equal 1, Subscription.count, "a subscription must not exist until a webhook says one does"
   end
 
   test "POST /v1/subscriptions names no path, because there is no resource to point at" do
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_nil response.headers["Location"]
   end
@@ -93,8 +93,8 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     # Two requests with no key are two requests, per core: retrying without a key is
     # the client's call and this service does not second-guess it. What makes a retry
     # safe is the key, which is the case below.
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_equal 2, @api.requests.size
     assert_equal "cs_test_00000000000002", json_body.fetch("checkout_session_id")
@@ -126,7 +126,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   test "POST /v1/subscriptions is a 422 for a plan with no processor price" do
     @plan.update!(processor_price_id: nil)
 
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_response :unprocessable_entity
     assert_equal [ "plan_id" ], problem_codes
@@ -136,7 +136,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   test "POST /v1/subscriptions is a 422 for a plan that is not for sale" do
     @plan.update!(active: false)
 
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_response :unprocessable_entity
     assert_equal [ "plan_id" ], problem_codes
@@ -163,7 +163,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
 
   test "POST /v1/subscriptions is a 503 when the processor is not configured" do
     with_unconfigured_processor do
-      post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+      post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
     end
 
     assert_response :service_unavailable
@@ -173,7 +173,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   test "POST /v1/subscriptions reports a processor refusal as a 422, not a 500" do
     @plan.update!(processor_price_id: "price_gone")
 
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_response :unprocessable_entity
   end
@@ -181,7 +181,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   test "POST /v1/subscriptions never echoes a processor's internal message to the client" do
     @plan.update!(processor_price_id: "price_gone")
 
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
 
     refute_match(/No such price/, response.body)
   end
@@ -189,36 +189,36 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   # --- Idempotency-Key on POST /v1/subscriptions ------------------------------
 
   test "the same key twice creates one checkout session" do
-    2.times { post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }) }
+    2.times { post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }) }
 
     assert_equal 1, @api.requests.size
   end
 
   test "the same key twice returns the same bytes" do
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
     first = response.body
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
 
     assert_equal first, response.body
   end
 
   test "the same key twice says the second response was a replay" do
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
 
     assert_equal "true", response.headers["Idempotency-Replayed"]
   end
 
   test "the same key twice returns the same status" do
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
     first = response.status
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
 
     assert_equal first, response.status
   end
 
   test "the same key with a different body is a 409" do
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
     post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @team.id })
 
     assert_response :conflict
@@ -226,14 +226,14 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   end
 
   test "the same key with a different body makes no second request to the processor" do
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
     post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @team.id })
 
     assert_equal 1, @api.requests.size
   end
 
   test "the same key on a different endpoint is a different key" do
-    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" })
+    post_with_key(IDEMPOTENCY_KEY, { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" })
     post_with_key(IDEMPOTENCY_KEY, { at_period_end: true }, to: cancel_path)
 
     assert_response :ok
@@ -677,14 +677,14 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
   # card it stored would be a card it holds.
   test "POST /v1/subscriptions/:id/payment_method returns the processor's portal url" do
     post "/v1/subscriptions/#{@subscription.id}/payment_method",
-      params: { return_url: "https://app.cafaye.com/billing/subscriptions" }, as: :json
+      params: { return_url: "https://app.anywaye.com/billing/subscriptions" }, as: :json
 
     assert_response :ok
     assert_equal "https://billing.stripe.test/session/pcss_00000000000001", json_body.fetch("payment_method_url")
 
     request = @api.requests.last
     assert_equal @customer.processor_customer_id, request.fetch(:customer)
-    assert_equal "https://app.cafaye.com/billing/subscriptions", request.fetch(:return_url)
+    assert_equal "https://app.anywaye.com/billing/subscriptions", request.fetch(:return_url)
   end
 
   # The scoped resolution comes first, so another account's subscription is a 404
@@ -698,7 +698,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     )
 
     post "/v1/subscriptions/#{other_subscription.id}/payment_method",
-      params: { return_url: "https://app.cafaye.com/billing/subscriptions" }, as: :json
+      params: { return_url: "https://app.anywaye.com/billing/subscriptions" }, as: :json
 
     assert_response :not_found
     assert_empty @api.requests
@@ -740,7 +740,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     @subscription.customer.update!(processor_customer_id: nil)
 
     post "/v1/subscriptions/#{@subscription.id}/payment_method",
-      params: { return_url: "https://app.cafaye.com/billing" }, as: :json
+      params: { return_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_response :unprocessable_entity
     assert_includes json_body.fetch("errors").map { |error| error.fetch("field") }, "subscription_id"
@@ -752,7 +752,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     Processor::StripeClient.current = Processor::StripeClient.new(api_key: nil)
 
     post "/v1/subscriptions/#{@subscription.id}/payment_method",
-      params: { return_url: "https://app.cafaye.com/billing" }, as: :json
+      params: { return_url: "https://app.anywaye.com/billing" }, as: :json
 
     assert_response :service_unavailable
   end
@@ -764,7 +764,7 @@ class V1SubscriptionsTest < ActionDispatch::IntegrationTest
     assert_response :ok
     get "/v1/subscriptions/#{@subscription.id}"
     assert_response :ok
-    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.cafaye.com/billing" }, as: :json
+    post "/v1/subscriptions", params: { customer_id: @customer.id, plan_id: @plan.id, success_url: "https://app.anywaye.com/billing" }, as: :json
     assert_response :created
     post cancel_path, params: { at_period_end: true }, as: :json
     assert_response :ok

@@ -55,7 +55,7 @@
 -- WHAT IS DELIBERATELY NOT HERE, so the list is closed rather than merely short:
 --
 --   * `subscriptions` and `charges` need no grant from this file —
---     `cafaye.protect_table` writes theirs, in
+--     `anywaye.protect_table` writes theirs, in
 --     `db/tenancy/account_isolation.sql`, and the isolation suite asserts all four
 --     privileges on both.
 --   * `customers` needs one and gets it below, because `protect_table` refuses a
@@ -69,11 +69,11 @@
 --
 -- SCHEMA USAGE is in this file rather than beside each table because it is one
 -- fact: without USAGE on `public` the role cannot resolve a table name at all, and
--- without USAGE on `cafaye` it cannot call `cafaye.begin_account/1` — which is the
+-- without USAGE on `anywaye` it cannot call `anywaye.begin_account/1` — which is the
 -- first thing every request does, so its absence is a 42501 on every request that
 -- reads as a permission bug rather than as the missing grant it is.
 grant usage on schema public to billing_app;
-grant usage on schema cafaye to billing_app;
+grant usage on schema anywaye to billing_app;
 
 -- --- customers: the grant `protect_table` could not write ---------------------
 

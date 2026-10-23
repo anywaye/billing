@@ -11,12 +11,12 @@ require "test_helper"
 # repository — the test skips and says so rather than passing vacuously.
 class OutboxEnvelopeContractTest < ActiveSupport::TestCase
   ENVELOPE_SCHEMA = "schemas/event-envelope.schema.json"
-  MANIFEST = "cafaye.yml"
+  MANIFEST = "anywaye.yml"
 
   # Events this service publishes that core's catalog has no row for. The packet
   # asks for a plan-update event and core's catalog is a different repository,
   # so the row is an action item there, not something this worktree can land.
-  # See the DECISION NEEDED in cafaye.yml. This list is the mechanical half of
+  # See the DECISION NEEDED in anywaye.yml. This list is the mechanical half of
   # that obligation: core's own suite only checks core's example manifests, and
   # `caf contract lint` does not exist yet, so without this a new event type
   # published here with no catalog row would pass every suite in the system.
@@ -51,7 +51,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
   # a service worktree, and the two ways to make the test green without it — emit a
   # payload nobody has agreed to, or drop the ids a consumer needs — are both the
   # spec changing without a decision. So the difference is written down here and
-  # in `cafaye.yml`, and asked of the manager.
+  # in `anywaye.yml`, and asked of the manager.
   #
   # `entitlements` is the same shape of problem at smaller scale: core's plan
   # schema is missing a field this publisher has always sent. Removing it from the
@@ -99,19 +99,19 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
     },
     # Measured on this stack (2026-10-16): the first checkout's `invoice.paid`
     # arrives before `customer.subscription.created`, so the charge recorder
-    # needs the cafaye link the Checkout session put in the invoice's metadata —
+    # needs the anywaye link the Checkout session put in the invoice's metadata —
     # without it, a real payment recorded no receipt. The key is emitted because
     # a consumer needs it (the same argument the subscription payloads won), and
     # core's payment schema is closed and does not declare it: recorded here and
-    # in cafaye.yml as the gap it is, not worked around by narrowing the event.
+    # in anywaye.yml as the gap it is, not worked around by narrowing the event.
     "billing.payment.succeeded" => {
-      unexpected: %w[cafaye_customer_id]
+      unexpected: %w[anywaye_customer_id]
     },
     "billing.payment.failed" => {
-      unexpected: %w[cafaye_customer_id]
+      unexpected: %w[anywaye_customer_id]
     },
     # core's D10 shape: `kind`, `processor` and `processor_event_id` are required
-    # by core and absent here, and the four cafaye ids are rejected by a schema
+    # by core and absent here, and the four anywaye ids are rejected by a schema
     # closed with `additionalProperties: false`. `email` and `plan_name` were
     # here until core-w46 (`b8ae8fb`) declared them; see the note above.
     "billing.subscription.started" => {
@@ -319,7 +319,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
     # the whole of `billing`'s payload contract, and it reads every keyword core
     # declares rather than the `type` and nothing else.
     assert_equal PENDING_PAYLOAD_ALIGNMENT, payload_mismatches,
-      "the payloads that do not match core's schemas have changed: fix them, or record the new gap in PENDING_PAYLOAD_ALIGNMENT and in cafaye.yml"
+      "the payloads that do not match core's schemas have changed: fix them, or record the new gap in PENDING_PAYLOAD_ALIGNMENT and in anywaye.yml"
   end
 
   # The one thing that says what this file can and cannot read.
@@ -354,7 +354,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
 
   test "the payload validator refuses a keyword it does not understand, rather than skipping it" do
     assert_raises(RuntimeError) { violations({ "patternProperties" => {} }, {}, "slug") }
-    assert_raises(RuntimeError) { violations({ "format" => "hostname" }, "cafaye.com", "site") }
+    assert_raises(RuntimeError) { violations({ "format" => "hostname" }, "anywaye.com", "site") }
   end
 
   # The other half of the closed set, and the reason `$comment` may sit in it.
@@ -440,7 +440,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
   # forever after with nothing changed in between. `assert_same_grammar` below is
   # the same technique the envelope patterns use, for the same reason.
   #
-  # It held the cafaye-prefixed ids D10 removed, so it now holds the two
+  # It held the anywaye-prefixed ids D10 removed, so it now holds the two
   # constraints where core and this service each declare a pattern of their own and
   # both have to be right: a plan's slug and an amount's currency. A corpus is only
   # evidence about the strings in it, so the strings in it are the ones those two
@@ -532,7 +532,7 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
 
   test "the set of events with an id-pattern gap has changed" do
     assert_equal PENDING_ID_PATTERNS.keys.sort, id_pattern_gaps.keys.sort,
-      "the set of events checked for an id-format gap has changed: update PENDING_ID_PATTERNS and the reason in cafaye.yml"
+      "the set of events checked for an id-format gap has changed: update PENDING_ID_PATTERNS and the reason in anywaye.yml"
   end
 
   # core-03 shipped a payload schema for all eight types this build publishes, so
@@ -572,8 +572,8 @@ class OutboxEnvelopeContractTest < ActiveSupport::TestCase
     # webhook mapping. Both are produced here the way production produces them —
     # a record written, a signed fixture ingested — because an envelope assembled
     # by hand in a test is an envelope nothing has checked this service against.
-    # A subscription delivery is acted on only when it resolves to a cafaye customer
-    # and a cafaye plan, so the customer and the plan here carry the *processor's*
+    # A subscription delivery is acted on only when it resolves to a anywaye customer
+    # and a anywaye plan, so the customer and the plan here carry the *processor's*
     # ids the fixtures use. Without them the three subscription fixtures would be
     # refused and there would be no subscription envelope to check against core.
     def emit_one_event_of_every_type
