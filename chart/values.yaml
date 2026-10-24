@@ -86,8 +86,9 @@ ingress:
 # deployment, or at generation time with repeated -env flags:
 #
 #   cafe gen chart -env DATABASE_URL=... -env API_KEY=...
-env: {}
-
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy.observability:4318"
+  OTEL_SERVICE_NAME: "billing"
 # What the container is allowed to ask for and keep. Requests are what
 # the scheduler places the pod on the basis of; limits are what it is
 # killed at. These are starting points for a small service on a shared
