@@ -10,8 +10,8 @@ Sentry.init do |config|
   # misconfigured DSN can never ship an exception message or a request URL.
   # The relay is the second barrier and applies the same rules fleet-wide.
   config.before_send = lambda do |event, _hint|
-    if event.exception
-      event.exception.each do |exc|
+    if event.exception && event.exception.values
+      event.exception.values.each do |exc|
         exc.value = nil
       end
     end
