@@ -56,7 +56,6 @@ module Billing
     # never a constant name from the environment. See `Kit::Exporter`.
     config.x.telemetry.exporter = "otlp"
     config.middleware.insert_before(0, RequestTelemetry)
-    config.middleware.use Prometheus::Middleware::Collector
 
     # Configuration for the application, engines, and railties goes here.
     #
