@@ -44,6 +44,7 @@ module Kit
     # The OTLP endpoint, defaulted to the collector that ships with kit's stack.
     def endpoint(lookup)
       value = lookup.call(Kit::Telemetry::ENDPOINT_VARIABLE).to_s
+      value = lookup.call("OTEL_EXPORTER_OTLP_ENDPOINT").to_s if value.empty?
       value.empty? ? Kit::Telemetry::DEFAULT_ENDPOINT : value
     end
   end
