@@ -25,6 +25,10 @@ spec:
         app.kubernetes.io/name: billing
         app.kubernetes.io/instance: billing
         app.kubernetes.io/managed-by: cafe
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
     spec:
       imagePullSecrets:
         - name: {{ .Values.imagePullSecrets }}
