@@ -4,7 +4,6 @@ Rails.application.routes.draw do
   # `exposes`, they take no query parameters, and no client parses them.
   get "healthz" => "health#show", as: :healthz
   get "readyz" => "health#ready", as: :readyz
-  get "metrics" => "metrics#show", as: :metrics
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.
