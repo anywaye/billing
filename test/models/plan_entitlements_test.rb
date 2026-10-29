@@ -1,16 +1,5 @@
 require "test_helper"
 
-# A plan's entitlements: what buying it grants.
-#
-# The column is new in billing-04 and it is a *public* field — it comes back on
-# every plan and on `GET /v1/subscriptions/:id/entitlements`, which is what
-# `guard` and any other consumer will gate a feature on. A shape this loose would
-# let `features: "dashboards"` through, and `Array("dashboards")` renders it as
-# `["dashboards"]` — a string that happens to be the right one, on a field where
-# somebody will eventually write `features.first.end_with?`.
-#
-# So the shape is closed here, at the only place a plan is written, rather than
-# guessed at by each reader.
 class PlanEntitlementsTest < ActiveSupport::TestCase
   VALID_CASES = {
     "nothing at all" => {},
@@ -81,9 +70,6 @@ class PlanEntitlementsTest < ActiveSupport::TestCase
     assert_equal({}, plan.entitlements)
   end
 
-  # Written as SQL rather than as a model with validations skipped, because skipping
-  # them also skips the normalisation that would hide the very mistake this is
-  # checking for. The constraint is the wall; this is the test that it is one.
   CONSTRAINT_CASES = {
     "a scalar" => "'\"dashboards\"'::jsonb",
     "an array" => "'[\"dashboards\"]'::jsonb",

@@ -1,12 +1,5 @@
 require "test_helper"
 
-# The subscription's own row: what it holds, what it refuses, and the one
-# uniqueness rule that is about a *set* of statuses rather than a single value.
-#
-# The transitions a subscription may make are not tested here. They live in
-# `Subscriptions::StateMachine` and are tested as a table there, because a
-# state machine tested one method at a time is a set of conditionals with tests
-# attached.
 class SubscriptionTest < ActiveSupport::TestCase
   setup do
     travel_to(frozen_now)
@@ -62,9 +55,6 @@ class SubscriptionTest < ActiveSupport::TestCase
     assert_includes subscription.errors.attribute_names, :status
   end
 
-  # A Rails `enum` would raise ArgumentError on `incomplete` the moment it was
-  # assigned, which at an HTTP boundary is a 500 for something the client got
-  # wrong. The database still refuses it, so a validation is not the only wall.
   test "the database refuses a status outside the set" do
     build_subscription
     rogue = build_subscription(status: "incomplete", processor_subscription_id: "sub_rogue")
@@ -74,11 +64,6 @@ class SubscriptionTest < ActiveSupport::TestCase
     end
   end
 
-  # `account_id` is identity's uuid, and the column is `uuid`, so Active Record
-  # casts "acc_…" to nil before a validation sees it. There is deliberately no
-  # shape validation here: it would be unreachable code that read as if it were
-  # doing something. What has to hold is that a subscription cannot exist without
-  # an account, and the column agrees.
   test "a subscription requires an account" do
     subscription = build_subscription(account_id: nil)
 
@@ -95,11 +80,6 @@ class SubscriptionTest < ActiveSupport::TestCase
     end
   end
 
-  # The migration inlines the statuses rather than reading them from the model, so
-  # that it still means what it meant the day it ran. The cost of inlining is that a
-  # status added to the model and not to the constraint is invisible, so it is
-  # checked here: the constraint is read out of the database and compared with the
-  # model's set.
   test "the database accepts every status the model stores" do
     definition = check_constraint_definition("subscriptions_status_known")
 
@@ -116,10 +96,6 @@ class SubscriptionTest < ActiveSupport::TestCase
       "the CHECK constraint names a status the model does not, so the model would refuse a row the database allows"
   end
 
-  # The live-uniqueness index, read out of the database, against the model's own
-  # statement about what "live" is. `catalog.pg_constraint` rather than the
-  # migration's source, because the migration is a comment about the past and this
-  # is the database.
   test "the live index excludes exactly the terminal statuses" do
     predicate = index_predicate("subscriptions_live_account_plan_idx")
 
@@ -135,9 +111,6 @@ class SubscriptionTest < ActiveSupport::TestCase
     assert_includes subscription.errors[:account_id], "is not this customer's account"
   end
 
-  # Which account a user belongs to is identity's fact, and no event carrying it
-  # is in this build's `consumes`. So a user-owned customer cannot be billed, and
-  # the refusal says so rather than inventing an account.
   test "a customer owned by a user cannot hold a subscription" do
     user_owned = Customer.create!(owner_type: "User", owner_id: SecureRandom.uuid, processor: "stripe")
     subscription = build_subscription(customer: user_owned, account_id: user_owned.owner_id)
@@ -190,11 +163,6 @@ class SubscriptionTest < ActiveSupport::TestCase
     refute_includes subscription.as_json.keys, "last_processor_event_at"
   end
 
-  # The index that says "one live subscription per (account, plan)" is a
-  # statement about a set of statuses, so the way to test it is behaviourally:
-  # insert two rows with the same pair and see whether the database objects.
-  # Comparing the index's predicate to a string in the model would prove the two
-  # texts agree, which is not the same fact.
   UNIQUENESS_CASES = {
     "two active subscriptions" => { first: "active", second: "active", collides: true },
     "an active one and a trialing one" => { first: "active", second: "trialing", collides: true },
@@ -255,9 +223,6 @@ class SubscriptionTest < ActiveSupport::TestCase
     assert_equal Subscription.sole, Subscription.find_by(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1")
   end
 
-  # One account holds one *live* subscription per plan, so each live status gets
-  # its own plan: the point here is the predicate, not the index, which the
-  # uniqueness cases above already cover.
   test "it grants entitlements while it is live" do
     Subscription::LIVE_STATUSES.each do |status|
       subscription = create_subscription(
@@ -274,10 +239,6 @@ class SubscriptionTest < ActiveSupport::TestCase
     assert_not create_subscription(status: "canceled").grants_entitlements?
   end
 
-  # A subscription is never a place an event is written from. Its status is the
-  # processor's statement and nothing else, so there is no `after_create` or
-  # `after_update` here that could emit one. The lifecycle is the only writer,
-  # and it emits.
   test "writing a subscription emits no event" do
     customer
     plan
@@ -342,13 +303,6 @@ class SubscriptionTest < ActiveSupport::TestCase
       @customer ||= create_customer
     end
 
-    # A **distinct** `cus_` per customer, and not because these two helpers
-    # wanted variety: `customers_processor_customer_id_idx` is unique, so the two
-    # of them sharing one id was an F2 collision this file was accidentally
-    # arranging. `test "a second account may hold the same plan at the same time"`
-    # builds two customers, and the second was refused for holding an id the first
-    # already had. `build_customer` never saves, so it needs no counter and takes
-    # the same first id for a row that is only going to be validated.
     def create_customer(account_id: nil)
       @customer_count = @customer_count.to_i + 1
 

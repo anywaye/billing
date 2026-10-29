@@ -1,11 +1,6 @@
 require "test_helper"
 
-# The money primitive. Every amount in this service is an integer number of
-# minor units (PLAN §3) — there is no Float anywhere in this file, and no code
-# path silently rounds.
 class MoneyTest < ActiveSupport::TestCase
-  # --- construction -----------------------------------------------------------
-
   CONSTRUCTION_CASES = {
     "zero dollars" => { minor: 0, currency: "USD", exponent: 2 },
     "one dollar" => { minor: 100, currency: "USD", exponent: 2 },
@@ -93,7 +88,6 @@ class MoneyTest < ActiveSupport::TestCase
     assert_equal 4, Billing::Money.new(1, "CLF").exponent
   end
 
-  # --- building from major units ---------------------------------------------
 
   FROM_MAJOR_CASES = {
     "a decimal string" => { major: "10.50", currency: "USD", minor: 1050 },
@@ -156,20 +150,8 @@ class MoneyTest < ActiveSupport::TestCase
     assert_raises(Billing::Money::InvalidCurrencyError) { Billing::Money.from_major("10.00", "nope") }
   end
 
-  # --- the rounding a Float would get wrong ---------------------------------
-  #
-  # The suite above proves the rules. These prove the *reason* for them, by
-  # pinning the two arithmetic identities a Float breaks and this service cannot.
-  # A test that used only round numbers would pass against a Float
-  # implementation and is therefore not evidence of anything; these use the
-  # amounts where a Float is actually wrong.
-  #
-  # A monetary value is an integer count of minor units, and the conversions in
-  # both directions are exact for a `BigDecimal` divisor that is a power of ten —
-  # which is precisely what a currency's exponent makes it.
 
   test "a repeated addition of a tenth is exact where a Float is not" do
-    # 0.1 + 0.2 != 0.3 in binary floating point. In minor units it is 10 + 20.
     ten_cents = Billing::Money.new(10, "USD")
     twenty_cents = Billing::Money.new(20, "USD")
 
@@ -178,19 +160,12 @@ class MoneyTest < ActiveSupport::TestCase
   end
 
   test "an amount a Float cannot represent round-trips through major units exactly" do
-    # 0.1 has no exact binary representation; 0.10 major units has exactly one
-    # correct answer in minor units, and BigDecimal scaling finds it every time.
     money = Billing::Money.from_major("0.10", "USD")
 
     assert_equal 10, money.minor_units
     assert_equal "0.1", money.to_major.to_s("F")
   end
 
-  # The case the packet names: a percentage applied to an amount with three
-  # decimal places. 1.175 KWD at 15% is 0.17625 KWD, which is *not* a whole number
-  # of minor units — so the correct answer is to refuse, not to round to 176 or
-  # 177. A Float would produce 0.17625000000000002 here and round to whichever
-  # side it happened to land on.
   test "a three-decimal amount is exact where a Float would drift" do
     one_kenyan = Billing::Money.from_major("1.175", "KWD")
 
@@ -200,17 +175,11 @@ class MoneyTest < ActiveSupport::TestCase
   end
 
   test "an amount smaller than one minor unit of a three-decimal currency is refused, not rounded" do
-    # 0.0005 KWD is half of one fils. Rounding it to 0 or to 1 is a bug that shows
-    # up in somebody's invoice, which is the worst place to find one.
     error = assert_raises(Billing::Money::InvalidAmountError) { Billing::Money.from_major("0.0005", "KWD") }
 
     assert_includes error.message, "would be rounded"
   end
 
-  # A Float cannot represent 0.10 either, so the same guard has to catch an amount
-  # that *arrived* as a Float rather than as a string. This is the shape a JSON
-  # body produces when a client sends `19.00`: the client has already decided a
-  # Float may carry money.
   test "a Float amount is refused rather than rounded to the nearest minor unit" do
     error = assert_raises(Billing::Money::InvalidAmountError) { Billing::Money.new(10.0, "USD") }
 
@@ -222,10 +191,6 @@ class MoneyTest < ActiveSupport::TestCase
     assert_raises(Billing::Money::InvalidAmountError) { Billing::Money.from_major(19.99, "USD") }
   end
 
-  # The stored representation itself, asserted rather than assumed: the integer
-  # count, the class it is, and the one wire shape an amount crosses a boundary in.
-  # A Billing::Money that held a Float would pass every arithmetic assertion above on round
-  # numbers and fail this one.
   REPRESENTATION_CASES = {
     "a whole amount" => { minor: 2900, currency: "USD" },
     "a zero-decimal currency" => { minor: 500, currency: "JPY" },
@@ -249,7 +214,6 @@ class MoneyTest < ActiveSupport::TestCase
     end
   end
 
-  # --- arithmetic -------------------------------------------------------------
 
   ADDITION_CASES = {
     "two amounts" => { left: 1050, right: 250, total: 1300 },
@@ -324,8 +288,6 @@ class MoneyTest < ActiveSupport::TestCase
   end
 
   test "refuses a quantity on the left of the operator rather than guessing" do
-    # Billing::Money is not Numeric and does not implement coerce, so Ruby refuses the
-    # reversed operand itself. Write `price * 3`, never `3 * price`.
     assert_raises(TypeError) { 3 * Billing::Money.new(1050, "USD") }
   end
 
@@ -338,7 +300,6 @@ class MoneyTest < ActiveSupport::TestCase
     assert_equal Billing::Money.new(1050, "USD"), Billing::Money.new(1050, "USD").abs
   end
 
-  # --- predicates -------------------------------------------------------------
 
   PREDICATE_CASES = {
     "zero dollars" => { minor: 0, zero: true, positive: false, negative: false },
@@ -372,7 +333,6 @@ class MoneyTest < ActiveSupport::TestCase
     assert_raises(Billing::Money::InvalidCurrencyError) { Billing::Money.new(0, "USD").zero?("nope") }
   end
 
-  # --- comparison -------------------------------------------------------------
 
   test "orders amounts of the same currency" do
     cheap = Billing::Money.new(100, "USD")
@@ -414,7 +374,6 @@ class MoneyTest < ActiveSupport::TestCase
     assert_equal 1, [ Billing::Money.new(100, "USD"), Billing::Money.new(100, "USD") ].uniq.size
   end
 
-  # --- rendering --------------------------------------------------------------
 
   FORMATTING_CASES = {
     "dollars" => { minor: 1050, currency: "USD", string: "10.50 USD" },

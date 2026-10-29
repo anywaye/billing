@@ -27,8 +27,6 @@ class HealthController < ApplicationController
       ActiveRecord::Base.lease_connection.exec_query("SELECT 1")
       true
     rescue ActiveRecord::ActiveRecordError, PG::Error => e
-      # Log the cause, never return it: the body is read by anyone who can reach
-      # the endpoint and connection strings/hosts do not belong in it.
       Rails.logger.warn("readiness check failed: #{e.class}: #{e.message}")
       false
     end

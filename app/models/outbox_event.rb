@@ -11,23 +11,8 @@
 # the dedupe key. A re-emission is a new row and therefore a new id, so a
 # consumer that has seen an event can always tell it from the next one.
 class OutboxEvent < ApplicationRecord
-  # The service name. Also `name` in anywaye.yml, which also the envelope's
-  # `source` has to equal — core's manifest conventions, rule 1.
   SERVICE = "billing"
 
-  # The types this service publishes. Closed on purpose: `test/contract` asserts
-  # this list and `anywaye.yml`'s `exposes.events` are the same list, so the
-  # manifest cannot advertise an event nothing emits — and, in the other
-  # direction, a type that is not on this list cannot be written at all. That
-  # second half is what stops a webhook mapping from parking every delivery as a
-  # failure: a type that fell off the end of this list is refused at the write,
-  # from inside a processor request, and answered 200.
-  #
-  # Three come from model callbacks and five from the Stripe webhook mapping
-  # (`Webhooks::StripeEvents::EVENT_TYPES` and the Checkout session, which
-  # becomes `billing.payment.succeeded`). `test/contract` asserts the two sets are
-  # the same, so a mapping added without a row here fails rather than failing in
-  # production.
   TYPES = %w[
     billing.customer.created
     billing.payment.failed
@@ -39,19 +24,10 @@ class OutboxEvent < ApplicationRecord
     billing.subscription.updated
   ].freeze
 
-  # core's event-envelope.schema.json, `eventType` pattern, as of spec v0.2:
-  # three segments, always prefixed, with the service segment kebab-case (a
-  # service name may contain a dash — `email-sender.email.queued` — and never an
-  # underscore). Copied rather than invented, and the contract test fails if
-  # core's ever differs.
   TYPE_PATTERN = /\A[a-z][a-z0-9]*(-[a-z0-9]+)*\.[a-z][a-z0-9]*(_[a-z0-9]+)*\.[a-z][a-z0-9]*(_[a-z0-9]+)*\z/
 
-  # core's `subject` pattern. The value is an entity id, never a sentence and
-  # never a transport header.
   SUBJECT_PATTERN = /\A[A-Za-z0-9][A-Za-z0-9._:@\/-]*\z/
 
-  # The row's primary key is this service's only uuid, and it is the envelope's
-  # `id`. A subject is one of them, so it has to fit core's pattern too.
   UUID_PATTERN = Identifiers::UUID
 
   TYPE_LENGTH = (5..120).freeze
@@ -67,21 +43,6 @@ class OutboxEvent < ApplicationRecord
   scope :unpublished, -> { where(published_at: nil) }
   scope :oldest_first, -> { order(:created_at, :id) }
 
-  # The rows written for one processor event id — the key
-  # `outbox_events_processor_event_id_idx` is unique on, and the expression here
-  # is the same one that migration builds the index over.
-  #
-  # It exists because "at most once per processor event id" is a question the
-  # ingestion layer has to be able to *ask* rather than infer from a count. A
-  # scope that had drifted from the index would report a duplicate as a fresh
-  # emission, which is the failure this whole mechanism exists to prevent — so
-  # `test/models/outbox_event_test.rb` asks the scope and the index in the same
-  # breath rather than trusting the two to be the same expression.
-  #
-  # Returns a relation, not a boolean, so a caller can use it as a relation and
-  # `exists?` on it. The three model-callback emissions have no
-  # `processor_event_id` and are not matched, exactly as the index's `WHERE`
-  # clause does not cover them.
   scope :for_processor_event, ->(processor_event_id) {
     where("data ->> 'processor_event_id' = ?", processor_event_id)
   }

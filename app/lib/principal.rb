@@ -51,42 +51,11 @@ class Principal
     )
   end
 
-  # Why this service is talking, and not the operator who set it up.
-  #
-  # **`identity` does not issue a singular `account_id` on a user token.** It
-  # issues `accounts`, an **array** of `{account_id, name, slug, role, personal}`,
-  # and its own `internal/oidc/profiles.go` says why: "a user of a anywaye product
-  # is a member of a personal account and usually of several team accounts, and a
-  # token carrying one of them would be wrong for all the others." Core's
-  # conventions ask for `account_id`, singular. The two disagree, and the
-  # disagreement is a DECISION NEEDED in `anywaye.yml` rather than something to
-  # paper over.
-  #
-  # **The tempting fix is the cross-tenant bug.** Taking `accounts[0]` — or the
-  # personal one, or "whichever sorts first" — produces a tenancy key nobody
-  # chose, and a user in a personal account and four team accounts would have
-  # every request answered against whichever entry happened to be first. That is
-  # a silent cross-tenant read, and it is worse than refusing: it is a lockout
-  # that *looks* like it works. So the array is not accepted here, and the
-  # consequence is stated rather than hidden: **until the two repos agree on one
-  # tenancy claim, a token identity actually issues to a user is refused, and
-  # `/v1` answers 401.** Fail-closed is the right direction for a disagreement
-  # nobody has ruled on; a guess is not.
-  #
-  # A user token would also need the `accounts` scope to carry the array at all,
-  # so a token without it has no account fact in it in either shape.
   NO_ACCOUNT = "token names no account: this service requires a singular " \
                "`account_id` claim, which identity does not issue on a user " \
                "token (it sends `accounts`, an array). Recorded in anywaye.yml; " \
                "the first entry of an array is not a tenancy key."
 
-  # **A missing account is a refusal and never a default.** An absent `account_id`
-  # must not read as "the caller's own account" or as "no account, allow it", and
-  # it must not fall back to `sub` — `sub` is a *user*, and keying tenancy on it
-  # turns a bug in one service into a cross-tenant read, which is exactly what
-  # identity's own README says about guard's `limitKey` fallback and refuses to
-  # do. "No account" and "an account I could not read" must not both be answers
-  # to the same request.
 
   # The space-separated `scope` string RFC 9068 registers. An absent claim is an
   # empty set, **never** everything: a claim this service cannot read must not read

@@ -17,17 +17,10 @@
 # The database still refuses any value outside the set, so bypassing the model
 # does not get a row that the model would not have written.
 class Customer < ApplicationRecord
-  # identity's entities that can be billed. Adding one is a change to what
-  # billing believes the platform is made of, which is why it is a constant here
-  # rather than a free-form string.
   OWNER_TYPES = %w[User Account].freeze
 
-  # The processors this service can talk to. v0 stores the name only: this
-  # packet makes no Stripe call, so `processor_customer_id` stays null.
   PROCESSORS = %w[stripe].freeze
 
-  # `allow_nil` on the inclusions for the same reason as Plan: a missing value
-  # is a blank, which is one problem with one fix, not two.
   validates :owner_type, presence: true
   validates :owner_type, inclusion: { in: OWNER_TYPES }, allow_nil: true
   validates :owner_id, presence: true
@@ -38,43 +31,10 @@ class Customer < ApplicationRecord
   validate :email_is_deliverable
   validate :metadata_is_an_object
 
-  # `:taken` is what makes a duplicate a 409 rather than a 422: the request was
-  # well-formed, it just collides with something that already exists.
   validates :processor, uniqueness: { scope: %i[owner_type owner_id] }
 
-  # **A second row may not claim one `cus_`.** The database says so
-  # (`customers_processor_customer_id_idx`, billing-13); this is what turns the
-  # collision into a *named* answer for a client.
-  #
-  # `Subscriptions::Lifecycle#customer` resolves a delivery by this column with
-  # `find_by`, so two rows claiming one id is a question with two answers and a
-  # delivery about one account's subscription billed to whichever row the planner
-  # reached first. With the index alone the answer is a 409 whose body says "That
-  # record already exists." and names no field; with this the 409 names
-  # `processor_customer_id`, which is the one column of this resource a client can
-  # move onto somebody else's.
-  #
-  # `allow_nil` because the column is nullable on purpose: a customer created
-  # through `/v1` has no `cus_` until its first subscription tells this service
-  # what the processor calls it, and many rows are legitimately in that state at
-  # once. So the rule is "a value here is unique", not "this column is unique" —
-  # the same reading the index's partial predicate states, and the reason that
-  # index is partial rather than a bare `unique`.
   validates :processor_customer_id, uniqueness: true, allow_nil: true
 
-  # **This account's customers, and nobody else's.**
-  #
-  # The tenancy key on a customer is `owner_type`/`owner_id`, and a customer is
-  # only in scope when that pair names an `Account` this caller is acting for.
-  # `owner_type: "User"` rows are deliberately **excluded** rather than matched on
-  # `owner_id` alone: which account a user belongs to is identity's fact and no
-  # event carrying it is in this build's `consumes`, so a user-owned customer has
-  # no account to scope by and must not be handed to a caller who guessed the uuid.
-  #
-  # The scope and not a `where` at each call site, because the shape that scoping
-  # arrives in is `scope :for_account, ->(id) { … }` and there are three customer
-  # reads on `/v1` that must all agree; a hand-written `where` at each is three
-  # chances to write one of them down differently.
   scope :for_account, ->(account_id) {
     where(owner_type: "Account", owner_id: account_id)
   }
@@ -107,11 +67,6 @@ class Customer < ApplicationRecord
       )
     end
 
-    # There is deliberately no `billing.customer.updated`. The event catalog in
-    # core has no row for it, and core's suite fails a manifest that declares a
-    # type the catalog does not list. The API can still change a customer's
-    # email; nothing downstream is told. That gap belongs to whoever owns the
-    # catalog, not to a worker inventing a row.
 
     # jsonb is shape-checked by the column, so a scalar that reached the
     # attribute has to be refused here rather than stored and discovered later.

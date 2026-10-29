@@ -9,8 +9,6 @@
 module ProblemResponses
   extend ActiveSupport::Concern
 
-  # One thing that went wrong, in a form both the human `detail` and the
-  # machine `errors[]` can be built from.
   Failure = Data.define(:field, :code, :message) do
     # core's `errors[]` entry: a field and a code, and nothing else.
     def as_error
@@ -18,12 +16,6 @@ module ProblemResponses
     end
   end
 
-  # Active Model's error types, translated to core's codes. Anything unmapped
-  # falls back to "invalid", which is honest about saying nothing specific.
-  #
-  # `:invalid_format` is this service's own type: the models add it explicitly
-  # where a `validates format:` would have reported the generic `:invalid` and
-  # told a client nothing about the shape it wanted.
   CODES = {
     blank: "blank",
     taken: "taken",
@@ -40,9 +32,6 @@ module ProblemResponses
     less_than_or_equal_to: "out_of_range"
   }.freeze
 
-  # The text for the validators that come from Active Model's own vocabulary.
-  # A model that wants to say something more specific adds its own message, and
-  # that message is used instead of this table — see `humanize`.
   MESSAGES = {
     blank: "is required",
     taken: "is already in use",
@@ -58,25 +47,16 @@ module ProblemResponses
     less_than_or_equal_to: "must be less than or equal to"
   }.freeze
 
-  # The error types a model chose deliberately, and which therefore carry a
-  # message worth repeating. Everything else comes from Active Model's own
-  # vocabulary, whose default wording ("can't be blank") is terser than this
-  # service speaks, so the table above supplies the sentence instead.
   MODEL_AUTHORED_TYPES = %i[invalid_format].freeze
 
   DEFAULT_CODE = "invalid"
   DEFAULT_MESSAGE = "is not valid"
 
   included do
-    # A body that is not JSON is a 400: malformed syntax the client could not
-    # have known about. A body that is JSON but wrong is a 422, below.
     rescue_from ActionDispatch::Http::Parameters::ParseError, with: :render_bad_request
     rescue_from ActionController::ParameterMissing, with: :render_bad_request
     rescue_from ParameterError, with: :render_parameter_error
     rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
-    # A unique index that the validations did not catch, because a validation is
-    # not a lock. 409 is the honest answer: the request collides with something
-    # that already exists.
     rescue_from ActiveRecord::RecordNotUnique, with: :render_conflict
   end
 

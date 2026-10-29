@@ -1,19 +1,5 @@
 require "test_helper"
 
-# The HTTP edge. What a processor sees is the whole contract, and the rules it
-# has to hold to are narrow:
-#
-#   * a valid signature is 200 — including a replay, an unknown type, a type we
-#     deliberately ignore, and an event whose processing failed. Anything else
-#     teaches the processor to retry something that will never succeed.
-#   * a bad signature is 400 and stores nothing at all, because an unverified
-#     body is not an event.
-#   * a missing signing secret is our misconfiguration, not the sender's fault,
-#     and must never be mistaken for a bad signature.
-#
-# The error bodies are the same `application/problem+json` every other non-2xx in
-# this service is, from the same one place — asserted with the shared
-# `assert_problem` helper rather than field by field.
 class StripeWebhookTest < ActionDispatch::IntegrationTest
   setup do
     travel_to(frozen_now)
@@ -73,9 +59,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal 0, ProcessorWebhook.count
   end
 
-  # Stripe's tolerance window exists so a captured request cannot be replayed
-  # tomorrow. Past the window the signature is refused even though the HMAC is
-  # correct.
   test "a signature older than the tolerance window is rejected" do
     payload = stripe_fixture("invoice.paid")
 
@@ -94,8 +77,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal 1, ProcessorWebhook.count
   end
 
-  # Rotating an endpoint signing secret has a window where Stripe still signs
-  # with the old one. Rather than a second variable, both are accepted here.
   test "a signature that verifies under either configured secret is accepted" do
     payload = stripe_fixture("invoice.paid")
 
@@ -136,9 +117,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_response :ok
   end
 
-  # This is the failure mode the whole endpoint exists to prevent. 503, not 400:
-  # the sender did nothing wrong, and telling them their signature is bad would
-  # send them looking in the wrong place forever.
   test "an unconfigured signing secret is a server error, not a bad request" do
     with_env("STRIPE_WEBHOOK_SECRET" => nil) do
       post_stripe_webhook(stripe_fixture("invoice.paid"))
@@ -212,14 +190,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal first_status, response.status
   end
 
-  # Stripe does not promise ordering, and a webhook endpoint that assumed it would
-  # reject a legitimate delivery. What changed in billing-04 is not the acceptance
-  # — it is what a deletion arriving first now *does*.
-  #
-  # billing-03b normalized each event independently and published both, which left
-  # an active subscription row for something the processor said was gone. An active
-  # row grants entitlements. billing-04 keeps the deletion, as a canceled row that
-  # grants nothing, and refuses the creation that follows it.
   test "a deletion arriving before its creation is accepted" do
     with_resolvable_subscription do
       post_stripe_webhook(stripe_fixture("customer.subscription.deleted"))
@@ -268,18 +238,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal "ignored:no_subscription_to_update", ProcessorWebhook.find_by(type: "customer.subscription.updated").error
   end
 
-  # The seventh refusal, `account_mismatch`, over the HTTP edge and with the
-  # signature path in play — this is the half of F1 the tenant specs cannot reach,
-  # because they call `Webhooks::Ingestion` directly.
-  #
-  # **The 200 is half the claim.** A refused delivery is a *decision*, not an
-  # error: this service understood the event and deliberately did not apply it,
-  # and answering anything but 200 would tell the processor to redeliver a
-  # delivery that reaches the identical conclusion every time. The row carries the
-  # reason, and a human reads it there.
-  #
-  # The accounts are the same `1111…`/`2222…` pair the tenant specs use, so the two
-  # files compare the same two accounts rather than two sets that look alike.
   test "a delivery naming another account is refused, and the endpoint still answers 200" do
     create_stripe_customer(account_id: TwoAccounts::ACCOUNT_A, processor_customer_id: TwoAccounts::CUSTOMER_A)
     other = create_stripe_customer(account_id: TwoAccounts::ACCOUNT_B, processor_customer_id: TwoAccounts::CUSTOMER_B)
@@ -290,9 +248,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     row = Subscription.sole
     assert_equal TwoAccounts::ACCOUNT_A, row.account_id
 
-    # The same subscription id, now naming the other account's customer. The
-    # fixture's `updated` event is a week later than the `created` one, so
-    # `stale_delivery` cannot be what refuses this — the account comparison is.
     post_stripe_webhook(
       subscription_delivery_named("customer.subscription.updated", TwoAccounts::CUSTOMER_B, customer_record: other)
     )
@@ -310,8 +265,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
       "from the customer on every apply, so the two move together or not at all."
   end
 
-  # core: the event's `time` is when the state change happened, not when this
-  # service read about it.
   test "each delivery keeps the time the processor reported" do
     with_resolvable_subscription do
       post_stripe_webhook(stripe_fixture("customer.subscription.created"))
@@ -351,10 +304,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal 0, OutboxEvent.count
   end
 
-  # Stripe tells us about a subscription twice: once when the Checkout session
-  # completes, once when the subscription itself is created. Emitting from both
-  # would state one fact twice under two envelope ids, and a consumer counting
-  # `billing.subscription.started` would count every Checkout signup twice.
   test "a subscription-mode checkout session is accepted and emits nothing" do
     post_stripe_webhook(stripe_fixture("checkout.session.completed"))
 
@@ -377,11 +326,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal [ "billing.subscription.started" ], subscription_event_types
   end
 
-  # A signed body that is not an event cannot be stored: a row with no event id
-  # could never be deduplicated and a row with no type could never be routed. It
-  # is a 400 because that is the one case where the sender could not have known
-  # — the signature is valid, so the bytes came from the holder of the secret, and
-  # the bytes are still not an event.
   test "a signed body that is not JSON is rejected" do
     post_stripe_webhook("this is not json, but it is signed")
 
@@ -389,20 +333,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal 0, ProcessorWebhook.count
   end
 
-  # A body that parses as JSON but is **not an object** — an array, a bare number,
-  # a string, a boolean, or `null`. Every one of those is valid JSON over a valid
-  # signature, and every one of them is not an event.
-  #
-  # The endpoint's own contract says a body that is not an event is a 400 and a
-  # 5xx is never an answer: "a 5xx teaches a processor to retry a decision this
-  # service has already made, and would hide a parked row behind a timeout." The
-  # verification call raises `TypeError`/`NoMethodError` on these rather than the
-  # gem's `SignatureVerificationError`, and the `rescue` clause in `create` names
-  # only the latter — so the answer was a 500, which is exactly the retry loop the
-  # status table exists to prevent. It is also the one input on this endpoint that
-  # an integration test could not see as a 500, because the suite sets
-  # `show_exceptions = :rescuable` and raises instead; the assertion below is the
-  # one that would catch it either way.
   SIGNED_NON_OBJECTS = {
     "an array" => "[1,2,3]",
     "an empty array" => "[]",
@@ -422,10 +352,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # The distinguishing claim, stated on its own: every one of those answers the
-  # same 400 as a body that is not JSON at all, rather than a mix of 400 and 500.
-  # A test that asserted only the status would pass if one of them were still a
-  # 500 rendered as a problem body, so the body is checked too.
   test "every signed body that is not an object answers with this service's problem body" do
     SIGNED_NON_OBJECTS.each_value do |body|
       post_stripe_webhook(body)
@@ -434,10 +360,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # The detail has to distinguish this from a signature failure, because "your
-  # signature is bad" and "those bytes are not an event" send an operator to two
-  # entirely different places and the response is the only thing they have. The
-  # signature over this body *did* verify, which is the whole point.
   test "a signed body that is not an object does not claim the signature was invalid" do
     post_stripe_webhook("[1,2,3]")
 
@@ -459,9 +381,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal 0, ProcessorWebhook.count
   end
 
-  # The other half of the rule: a *well-formed* event whose mapping fails is
-  # recorded and answered 200. It can be stored, it can never be fixed by a
-  # retry, and a 5xx would only hide the parked row behind a timeout.
   test "an event whose mapping fails is answered 200, so the processor stops retrying" do
     post_stripe_webhook({ "id" => "evt_bare", "type" => "invoice.paid" }.to_json)
 
@@ -520,10 +439,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_predicate response.parsed_body["trace_id"].to_s, :present?
   end
 
-  # Fixture name to the anywaye event type it must produce. The fixture name is a
-  # label; the event's own `type` inside it is what the service routes on, and
-  # `checkout.session.completed` appears twice because the mode in the payload
-  # decides what the session means.
   HANDLED_TYPES = {
     "invoice.paid" => "billing.payment.succeeded",
     "invoice.payment_failed" => "billing.payment.failed",
@@ -539,10 +454,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # A subscription delivery has to resolve to a customer and a plan before it is
-  # acted on, so it is asserted on its own rather than in the table above: those
-  # specs assert on `OutboxEvent.sole`, and the two records this one needs publish
-  # events of their own.
   test "customer.subscription.created emits billing.subscription.started" do
     with_resolvable_subscription do
       post_stripe_webhook(stripe_fixture("customer.subscription.created"))
@@ -552,10 +463,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     assert_equal [ "billing.subscription.started" ], subscription_event_types
   end
 
-  # The three subscription types, each following from the state the delivery put the
-  # row into. Asserted as one sequence because the point is that the *state* decides
-  # the type: a delivery is an update or a cancellation depending on what the row
-  # was, and a start or a cancellation depending on whether the row existed.
   test "a subscription is started, updated and then canceled, in that order" do
     with_resolvable_subscription do
       post_stripe_webhook(stripe_fixture("customer.subscription.created"))
@@ -591,9 +498,6 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
     OutboxEvent.where(event_type: SUBSCRIPTION_EVENTS).order(:created_at, :id).pluck(:event_type)
   end
 
-  # An event type the outbox's closed list does not hold would park every
-  # delivery as a failure and still answer 200 — a silent outage, discovered by
-  # Stripe's dashboard rather than here.
   test "every type this endpoint can emit is one the outbox has declared" do
     assert_empty HANDLED_TYPES.values.uniq - OutboxEvent::TYPES
   end
@@ -633,30 +537,12 @@ class StripeWebhookTest < ActionDispatch::IntegrationTest
       with_env("STRIPE_WEBHOOK_SECRETS" => secrets.join(",")) { yield }
     end
 
-    # The anywaye customer and plan a subscription fixture resolves to.
-    #
-    # A subscription event is acted on only when it can be attached to both — this
-    # service does not bill a subscription it did not sell — so a spec that posts
-    # one has to arrange them. Called from the spec rather than from `setup`
-    # because creating a customer and a plan publishes two events of their own,
-    # and the specs about payments assert on `OutboxEvent.sole`.
     def with_resolvable_subscription
       create_stripe_customer
       create_stripe_plan
       yield
     end
 
-    # A committed subscription fixture with its **customer** moved onto another
-    # account's pair, and nothing else changed.
-    #
-    # Both halves of the customer reference are rewritten, because
-    # `Lifecycle#customer` consults both and consults the anywaye one first: a body
-    # whose `customer` names account B while its `metadata.anywaye_customer_id` still
-    # names account A's row would resolve to A and prove nothing.
-    #
-    # The delivery's own `id` is left where the fixture put it, and so is the id
-    # inside the body — they are one value in production, and moving one without the
-    # other is a state Stripe never sends.
     def subscription_delivery_named(fixture, processor_customer_id, customer_record: nil)
       body = JSON.parse(stripe_fixture(fixture))
       object = body.dig("data", "object")

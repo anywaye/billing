@@ -1,8 +1,5 @@
 require "test_helper"
 
-# The error envelope and the trace id, which core's openapi-conventions.md
-# requires of every response on every anywaye service. Tested apart from the
-# resource specs so that the rules hold for a route nobody thought to check.
 class V1ProblemEnvelopeTest < ActionDispatch::IntegrationTest
   TRACED = "0af7651916cd43dd8448eb211c80319c"
 

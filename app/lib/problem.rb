@@ -16,26 +16,10 @@ class Problem
   MEDIA_TYPE = "application/problem+json"
   TYPE_BASE = "https://docs.anywaye.com/errors"
 
-  # core's envelope dialect, pinned on this service's own terms.
   SPEC_VERSION = "1.0"
 
   INTERNAL_DETAIL = "The request could not be completed. The cause is in the server log, keyed by this trace id."
 
-  # The codes this service can answer with, and the status each one means.
-  #
-  # `bad_request`, `cursor_invalid` and `cursor_expired` are the three that core
-  # does not name: its reserved list starts at 401, and it names
-  # `cursor_expired` in the pagination section without listing it. They are
-  # recorded as a decision for the manager in CHANGELOG.md rather than invented
-  # quietly.
-  #
-  # **`unauthorized` (401) is core's own reserved code and is here for `/v1`'s
-  # token check.** It is the *only* new status this service answers for
-  # authentication, and the table still has **no 403** — deliberately, and the
-  # property is asserted in `test/tenant/cross_account_web_test.rb`. A caller whose
-  # token is good but who named another account's row gets the same 404 a caller
-  # naming a row that does not exist gets, because a 403 would say "this exists,
-  # you may not have it", which is an enumeration oracle. Absence, never refusal.
   CATALOG = {
     bad_request: { title: "Bad request", status: :bad_request },
     cursor_invalid: { title: "Invalid cursor", status: :bad_request },
@@ -77,7 +61,6 @@ class Problem
       "code" => code.to_s,
       "trace_id" => trace_id
     }
-    # core: `errors[]` appears only for 422.
     body["errors"] = errors if errors
     body
   end

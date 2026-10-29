@@ -14,38 +14,16 @@
 class Plan < ApplicationRecord
   INTERVALS = %w[month year one_time].freeze
 
-  # kebab-case, so a slug is always one URL segment with nothing to escape.
   SLUG_PATTERN = /\A[a-z0-9]+(-[a-z0-9]+)*\z/
 
-  # What a plan grants. An object with at most these two members, so a reader never
-  # has to ask whether a key it does not know is one it should honour: `features` is
-  # a list of things switched on, `limits` is a number for each of them.
   ENTITLEMENT_KEYS = %w[features limits].freeze
 
   validates :name, presence: true
   validates :slug, presence: true, uniqueness: true
 
-  # **A second plan may not claim one `price_`.** The database says so
-  # (`plans_processor_price_id_idx`, billing-13); this is what turns the collision
-  # into a *named* answer for a client.
-  #
-  # `Subscriptions::Lifecycle#plan` resolves a delivery by this column with
-  # `find_by`, so a subscription is billed against whichever plan claimed the id.
-  # Two plans on one `price_` and one of them is billed at an amount this service
-  # never agreed to with the customer, and `billing.subscription.started` carries
-  # that plan's currency and says nothing about the one that was intended — so the
-  # wrong amount is not only charged but published. With the index alone that is a
-  # 409 naming no field; with this it names `processor_price_id`.
-  #
-  # `allow_nil` because a plan is written through `/v1` before it is ever put on
-  # sale at the processor, and many plans are legitimately unsold at once. The rule
-  # is "a value here is unique", not "this column is unique" — the same reading the
-  # index's partial predicate states.
   validates :processor_price_id, uniqueness: true, allow_nil: true
 
   validates :interval, presence: true
-  # `allow_nil` so that a missing interval is reported once, as a blank, rather
-  # than twice — once as a blank and once as "not one of the allowed values".
   validates :interval, inclusion: { in: INTERVALS }, allow_nil: true
   validates :amount_cents, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validates :trial_days, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
@@ -63,28 +41,6 @@ class Plan < ApplicationRecord
     Billing::Money.new(amount_cents, currency)
   end
 
-  # A plan is **platform catalogue and not tenant data**, and that is the reason
-  # `V1::PlansController` resolves a plan by slug or uuid with no account filter —
-  # while every customer and subscription query on `/v1` carries one.
-  #
-  # It is worth being explicit about why the two are different, because the matrix
-  # in `test/contract/tenant_isolation_matrix_test.rb` calls a plan tenant data
-  # ("a plan is the catalogue of what an account may buy") and this comment is where
-  # that is resolved. A plan has **no `account_id` column**: a plan is what an
-  # account may buy, not what an account owns, so every account reads the same rows.
-  # `test/support/two_accounts.rb` deliberately builds ONE plan shared by both
-  # accounts, and `subscriptions_live_account_plan_idx` is keyed on
-  # `(account_id, plan_id)` precisely because the plan is shared and the account is
-  # not — a fixture that gave each account its own plan could not tell a correct
-  # index from a missing `account_id`.
-  #
-  # **What this does NOT settle is who may write the catalogue.** `POST /v1/plans`
-  # and `PATCH /v1/plans/{id}` change what *every* account is offered and at what
-  # price, so they are a capability question and core's answer is `scopes`, not
-  # `account_id`. No client in this build holds a billing scope, so no scope check
-  # is enforced and any authenticated caller can currently write the catalogue.
-  # That is a recorded gap (`README.md`, "Known gaps") rather than a decision, and
-  # `Principal#scopes` is the place it is closed.
 
   # The write side. Refuses anything that is not a `Billing::Money`, because the whole
   # point of the type is that a bare integer has no currency and a Float has no

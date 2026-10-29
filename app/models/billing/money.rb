@@ -49,21 +49,15 @@ class Money
   # The amount does not fit in a PostgreSQL bigint.
   class OverflowError < Error; end
 
-  # Most currencies have two minor units per major unit.
   DEFAULT_EXPONENT = 2
 
-  # PostgreSQL bigint bounds. Amounts outside this range cannot be persisted, so
-  # they are rejected at the edge instead of failing at the database.
   MAX_MINOR_UNITS = (2**63) - 1
   MIN_MINOR_UNITS = -(2**63)
   MINOR_UNITS_RANGE = (MIN_MINOR_UNITS..MAX_MINOR_UNITS).freeze
 
   CURRENCY_FORMAT = /\A[A-Z]{3}\z/
 
-  # ISO 4217 currencies whose minor unit is not 10^-2. Everything not listed
-  # here has DEFAULT_EXPONENT minor units per major unit.
   EXPONENTS = {
-    # Zero decimal places: the minor unit *is* the major unit (JPY, KRW, VND...).
     "BIF" => 0,
     "CLP" => 0,
     "DJF" => 0,
@@ -81,7 +75,6 @@ class Money
     "XAF" => 0,
     "XOF" => 0,
     "XPF" => 0,
-    # Three decimal places (KWD, BHD, OMR and the other Gulf dinars).
     "BHD" => 3,
     "IQD" => 3,
     "JOD" => 3,
@@ -89,7 +82,6 @@ class Money
     "LYD" => 3,
     "OMR" => 3,
     "TND" => 3,
-    # Four decimal places.
     "CLF" => 4,
     "UYW" => 4
   }.freeze
@@ -171,10 +163,8 @@ class Money
     freeze
   end
 
-  # The amount in minor units. This is the value to store, to sum, to compare.
   attr_reader :minor_units
 
-  # The normalised ISO 4217 code.
   attr_reader :currency
 
   # Number of minor units per major unit for this currency.

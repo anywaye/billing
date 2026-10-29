@@ -1,9 +1,5 @@
 require "test_helper"
 
-# The normalizer. It is the only place that knows what a Stripe object looks
-# like, and the only place a anywaye id would be substituted if billing lands one.
-# What comes out is a processor-independent hash, so nothing downstream — and no
-# consumer of the emitted events — has to parse Stripe's shape again.
 class Webhooks::StripeEventsTest < ActiveSupport::TestCase
   test "a subscription creation normalizes to the subscription's own fields" do
     data = normalize("customer.subscription.created")
@@ -103,19 +99,6 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     assert_equal "acc_01J9Z8RR7B2QK3M4N5P6Q7R8S9T", data.fetch("client_reference_id")
   end
 
-  # The recipient fact. A consumer of these events — courier, for a receipt or a
-  # payment-failure warning — has no billing client and no billing tables, so the
-  # address has to be on the envelope. The field is named `email` because that is
-  # what identity's events call it (`identity.session.revoked`,
-  # `identity.user.created`): one fleet, one field name for the address a
-  # consumer cannot look up.
-  #
-  # The lookup is the one query the payment path makes that the normalizer does
-  # not: one indexed read on `customers.processor_customer_id`, which is unique
-  # (billing-13). It is asserted here as the builder's contract — the field is
-  # present exactly when a anywaye customer with an address on file is the one the
-  # payment is about — and the end-to-end path through `Ingestion` is the
-  # contract test's business.
   test "a payment payload carries the billing email of the customer it is about" do
     Customer.create!(
       owner_type: "Account",
@@ -149,13 +132,6 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     refute_includes data.keys, "email"
   end
 
-  # The FIRST payment of an account, which is the case the resolution order
-  # exists for: the anywaye customer row was created before Stripe was asked for
-  # a session, so it has an address but no `processor_customer_id` yet — Stripe
-  # creates its customer at the hosted checkout and the id arrives on a later
-  # event — and the address has to be found through the anywaye id the
-  # subscription's metadata carries. The fixture is a real recorded first
-  # checkout, so the metadata is where the processor actually puts it.
   test "a first payment carries the email even though the customer has no processor id yet" do
     Customer.create!(
       id: "df15dff4-b274-460d-84e5-1ee8ba4532e7",
@@ -170,9 +146,6 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     assert_equal "billing@example.com", data.fetch("email")
   end
 
-  # The failed-payment path resolves the customer the same way the settled one
-  # does: a warning about a decline is mailed to the same address a receipt is,
-  # and the two events are built by the same builder.
   test "a failed payment's payload carries the same customer's email" do
     Customer.create!(
       owner_type: "Account",
@@ -187,9 +160,6 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     assert_equal "billing@example.com", data.fetch("email")
   end
 
-  # Stripe sends both of these for one signup: the Checkout session, then the
-  # subscription's own lifecycle events. Emitting from both would state one fact
-  # twice, under two different envelope ids.
   test "a subscription checkout session is deliberately ignored, not emitted" do
     error = assert_raises(Webhooks::Ignored) { normalize("checkout.session.completed") }
 
@@ -202,10 +172,6 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     assert_includes error.reason, "subscription"
   end
 
-  # Every event type this build can emit is a member of the closed list the
-  # outbox validates against. A mapping added without a matching row there would
-  # park every delivery as a failure at runtime, so the two are asserted to be
-  # the same set here rather than discovered by Stripe.
   MAPPED_TO = {
     "customer.subscription.created" => "billing.subscription.started",
     "customer.subscription.updated" => "billing.subscription.updated",
@@ -220,9 +186,6 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
       payload = JSON.parse(stripe_fixture(fixture))
       data = Webhooks::StripeEvents.normalize(payload)
 
-      # The processor's own `type` from the body, not the fixture's name: the two
-      # Checkout fixtures share one `type` and differ only in the mode inside
-      # them, and it is the body's type that `Ingestion` routes on.
       assert_equal event_type, Webhooks::StripeEvents.event_type_for(payload.fetch("type"), data)
       assert_includes OutboxEvent::TYPES, event_type
     end
@@ -235,9 +198,6 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     )
   end
 
-  # A mapping for a type the outbox does not list would park every delivery as a
-  # `failed:` row and answer 200, which is a silent outage discovered by Stripe's
-  # dashboard rather than by this service's tests.
   test "every type the mapping can produce is one this service has declared" do
     produced = Webhooks::StripeEvents::NORMALIZERS.keys.filter_map do |type|
       next if type == Webhooks::StripeEvents::CHECKOUT_TYPE
@@ -248,19 +208,6 @@ class Webhooks::StripeEventsTest < ActiveSupport::TestCase
     assert_empty produced - OutboxEvent::TYPES
   end
 
-  # The processor's own ids are load-bearing until anywaye's land, so a shape
-  # change that drops one has to be a failing test, not a surprise in a
-  # consumer's inbox.
-  #
-  # Two keys were added in billing-04 and each is load-bearing. `anywaye_customer_id`
-  # is the link back to a anywaye customer, carried in the subscription's metadata
-  # because a customer created through `/v1` has a null `processor_customer_id` until
-  # its first subscription names one. `trial_ends_at` is the shape core's payload
-  # schema asks for: a date-time, or null while trialing with no end date.
-  #
-  # The processor's own `created` is deliberately *not* here. `Webhooks::Ingestion`
-  # computes it once and hands the same instant to the handler and to the outbox row,
-  # so a second copy in the normalized hash would be a second reading of one field.
   SUBSCRIPTION_KEYS = %w[
     kind processor processor_event_id subscription_id customer_id anywaye_customer_id status
     quantity price_id unit_amount current_period_start current_period_end cancel_at_period_end

@@ -1,35 +1,11 @@
 require "test_helper"
 
-# The only place this service talks *to* Stripe.
-#
-# Two things this seam is for, and they are different:
-#
-#   * **It is the whole of the outbound surface.** Every Stripe call in this
-#     repository is one of these four methods. That is what makes "this service
-#     only receives from Stripe" a claim about the code rather than an intention:
-#     there is no `Stripe::` call anywhere else to find. The fourth — the
-#     upcoming invoice — is the first one that *receives* rather than sends, and
-#     it is held to the same shape: two of the processor's own ids go out, and
-#     every figure that comes back is the processor's.
-#   * **It is the seam the specs replace.** A checkout URL and a subscription's
-#     existence both come from Stripe, so a test cannot invent them and assert
-#     the invention. The specs record what was *asked* of Stripe and assert on the
-#     request; the response is a fixture of the processor's, not of this service's
-#     design.
-#
-# What the client deliberately does **not** do is compute anything about money.
-# `apply_plan_change` sends a `proration_behavior`; the amount that behaviour
-# produces is Stripe's. `create_checkout_session` sends a price id.
-# `cancel_subscription` sends an id and a boolean. A figure calculated in Ruby and
-# sent to Stripe would be a figure that eventually disagreed with the processor's
-# ledger, and the disagreement would surface in a customer's invoice.
 class Processor::StripeClientTest < ActiveSupport::TestCase
   setup do
     travel_to(frozen_now)
     @api = FakeStripeAPI.new
   end
 
-  # --- configuration ----------------------------------------------------------
 
   test "a client with no api key refuses to send a request" do
     client = Processor::StripeClient.new(api_key: nil)
@@ -43,8 +19,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_raises(Processor::StripeClient::Unconfigured) { client.create_checkout_session(**checkout_params) }
   end
 
-  # The variable, not the value. An operator who reads this knows what to set; an
-  # operator given the value already has it.
   test "the refusal names the variable, so an operator knows what to set" do
     client = Processor::StripeClient.new(api_key: nil)
 
@@ -87,7 +61,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_raises(Processor::StripeClient::Unconfigured) { client.cancel_subscription(processor_subscription_id: "sub_1", at_period_end: true) }
   end
 
-  # --- checkout sessions ------------------------------------------------------
 
   test "a checkout session is created in subscription mode, because that is what a plan is" do
     client_for(@api).create_checkout_session(**checkout_params)
@@ -101,11 +74,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_equal [ { price: "price_1PZQaBcDeFgHiJkLmNoPqR2", quantity: 1 } ], @api.requests.last.fetch(:line_items)
   end
 
-  # The reference is how a later webhook is tied back to a anywaye customer, and it
-  # is anywaye's own id rather than the processor's: `customers.processor_customer_id`
-  # is null for every customer in v0, so the processor has no id of ours to match on
-  # at this point and the subscription's metadata is the only thing that can carry
-  # the link. The resolution itself lives in Subscriptions::Lifecycle.
   test "a checkout session carries this service's own customer id in the subscription's metadata" do
     client_for(@api).create_checkout_session(**checkout_params)
 
@@ -131,10 +99,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_equal "cus_R1pQKz9xLp2mN4vB6yH8jL0", @api.requests.last.fetch(:customer)
   end
 
-  # A customer whose processor id we do not have is normal in v0, not an error:
-  # every customer created through /v1 has a null `processor_customer_id`. Sending
-  # nil lets the processor create the customer and tell us about it in the
-  # subscription that comes back.
   test "a checkout session for a customer with no processor id asks the processor to create one" do
     client_for(@api).create_checkout_session(**checkout_params(processor_customer_id: nil))
 
@@ -166,7 +130,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_empty @api.requests
   end
 
-  # --- plan changes -----------------------------------------------------------
 
   test "a plan change is applied to the processor's own subscription" do
     client_for(@api).apply_plan_change(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", price_id: "price_new")
@@ -177,16 +140,10 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
   test "a plan change moves the subscription onto the new processor price" do
     client_for(@api).apply_plan_change(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", price_id: "price_new")
 
-    # The item being moved is named by the PROCESSOR's own item id, read in
-    # the retrieve immediately before — the live recording measured that a
-    # price-only item list APPENDS a second item instead of replacing one, so
-    # the id is what makes this a move rather than a double-billing.
     update = @api.requests.last
     assert_equal [ { id: "si_FAKE1PZQaBcDeFgHiJkLmNoPqR1", price: "price_new" } ], update.fetch(:items)
   end
 
-  # The whole point of the seam: a behaviour goes out, never a figure. These three
-  # absences are the assertion that no proration arithmetic has crept in here.
   test "a plan change tells the processor how to treat the difference, and never says what it is" do
     client_for(@api).apply_plan_change(
       processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1",
@@ -201,9 +158,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     refute request.key?(:refund)
   end
 
-  # The key is absent rather than nil. `proration_behavior: nil` is a value the
-  # processor would have to interpret, and an absent key is the one thing whose
-  # meaning is already agreed.
   test "a plan change with no proration behaviour sends no key at all" do
     client_for(@api).apply_plan_change(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", price_id: "price_new")
 
@@ -225,7 +179,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_empty @api.requests
   end
 
-  # --- cancellation -----------------------------------------------------------
 
   test "a cancellation names the processor's own subscription" do
     client_for(@api).cancel_subscription(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", at_period_end: true)
@@ -245,10 +198,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_equal false, @api.requests.last.fetch(:cancel_at_period_end)
   end
 
-  # A cancellation is the one place a service is most tempted to compute a refund
-  # — "they paid for three weeks we are taking away". Not here. The processor owns
-  # that number, and a refund this service invented would be a number it did not
-  # keep.
   test "a cancellation asks for no refund and no proration, because this service computes neither" do
     client_for(@api).cancel_subscription(processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1", at_period_end: false)
 
@@ -264,11 +213,7 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", result.id
   end
 
-  # --- the upcoming invoice ---------------------------------------------------
 
-  # The projection: what the customer will be charged at the renewal, before it
-  # is paid. Two of the processor's own ids go out — the subscription and the
-  # customer it is billed to — and the request is recorded like every other.
   test "an upcoming invoice names the subscription and the customer it belongs to" do
     client_for(@api).upcoming_invoice(
       processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1",
@@ -280,9 +225,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_equal "cus_R1pQKz9xLp2mN4vB6yH8jL0", request.fetch(:customer)
   end
 
-  # No amount is computed here and none is sent: the projection is a *read*.
-  # This is the assertion that a future edit which "helpfully" adds a computed
-  # figure to the request fails by name.
   test "an upcoming invoice asks for no amount, because it is a read" do
     client_for(@api).upcoming_invoice(
       processor_subscription_id: "sub_1PZQaBcDeFgHiJkLmNoPqR1",
@@ -307,16 +249,11 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
     assert_equal 1, invoice.lines.size
     line = invoice.lines.first
     assert_equal "Pro monthly", line.description
-    # The unit amount at the shape Stripe's 2025 API actually sends it in —
-    # `pricing.unit_amount_decimal`, a decimal the gem hands back as a
-    # BigDecimal — not the `price.unit_amount` the live recording proved no
-    # longer exists.
     assert_equal 1900, BigDecimal(line.pricing.unit_amount_decimal.to_s).to_i
     assert_equal 1900, line.amount
     assert_equal 1, line.quantity
   end
 
-  # --- what a processor can refuse --------------------------------------------
 
   test "a processor refusal is this service's own class, so a caller need not rescue the gem's" do
     client = client_for(@api)
@@ -380,9 +317,6 @@ class Processor::StripeClientTest < ActiveSupport::TestCase
       {
         plan_price_id: "price_1PZQaBcDeFgHiJkLmNoPqR2",
         customer_reference: "11111111-1111-4111-8111-111111111111",
-        # Required by Stripe on a hosted session — the omission was one of
-        # the three defects the live recording caught — and it is the
-        # caller's URL, because the page a buyer lands on is the app's.
         success_url: "https://app.anywaye.com/billing",
         processor_customer_id: nil
       }.merge(overrides)

@@ -27,11 +27,6 @@ module Kit
       when OTLP
         OpenTelemetry::Exporter::OTLP::Exporter.new(endpoint: endpoint(lookup))
       when TEST
-        # Required BY PATH, and it has to be: `test/test_helper.rb` auto-requires
-        # `test/support/**` and it does so AFTER the environment is built, so at
-        # the moment this runs the constant does not exist yet. An
-        # `autoload`-able path would be the other answer, and it would put a test
-        # class on the eager-load list of an application that ships without it.
         require Rails.root.join("test/support/test_span_exporter").to_s
         TestSupport::TestSpanExporter.instance
       else

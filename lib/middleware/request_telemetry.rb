@@ -44,22 +44,10 @@ require_relative "../kit/telemetry"
 # `error.type` from a closed vocabulary — the failure is fully visible, and nothing
 # about it is free text.
 class RequestTelemetry
-  # `env` keys, named rather than spelled inline, because a mistyped Rack key is a
-  # nil that reads as "no route" and passes a test asserting nothing is there.
   PATH_PARAMETERS = "action_dispatch.request.path_parameters"
 
-  # The carrier the W3C propagator reads the `traceparent` out of.
-  #
-  # From `opentelemetry-common`, not from `opentelemetry-api`: the API's own
-  # `RackEnvGetter` is marked deprecated in favour of this one, and a deprecated
-  # class in a redaction boundary is a class that will be removed and take the
-  # propagation with it.
   RACK_ENV_GETTER = OpenTelemetry::Common::Propagation.rack_env_getter
 
-  # The status description for a failed request. A CONSTANT, and it is a constant
-  # for the same reason `Problem::INTERNAL_DETAIL` is one: a failure message never
-  # leaves this service in free text, and the operator's route to the cause is the
-  # log line keyed by the trace id, not a span attribute.
   FAILURE_DESCRIPTION = "the request could not be completed"
 
   def initialize(app, tracer: nil, lookup: nil)

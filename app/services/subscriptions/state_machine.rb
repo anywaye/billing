@@ -44,11 +44,6 @@ module Subscriptions
   # instead of writing a row that says a subscription is `active` when the
   # processor says it is `incomplete`.
   class StateMachine
-    # from => to => true when the transition is legal. `nil` is the key for "no
-    # subscription exists yet".
-    #
-    # Read down the `canceled` row and it is the only status nothing can leave.
-    # Read anywhere else and the answer is yes, because the processor said so.
     LEGAL = {
       nil => { "active" => true, "trialing" => true, "past_due" => true, "unpaid" => true, "canceled" => true },
       "trialing" => { "active" => true, "trialing" => true, "past_due" => true, "unpaid" => true, "canceled" => true },
@@ -58,10 +53,6 @@ module Subscriptions
       "canceled" => { "active" => false, "trialing" => false, "past_due" => false, "unpaid" => false, "canceled" => false }
     }.freeze
 
-    # The only reason this service ever refuses a status. A string and not a
-    # sentence because it is recorded on `processor_webhooks.error`, where the next
-    # person to read it is a human at 3am with a subscription id and no other
-    # context.
     TERMINAL_REASON = "canceled_is_terminal".freeze
 
     attr_reader :from, :to
@@ -70,10 +61,6 @@ module Subscriptions
       @from = from
       @to = to
 
-      # Refused here rather than defaulted. A caller holding `incomplete` has
-      # something this service cannot represent, and the right answer is for the
-      # delivery to be parked with a reason — not for a row to be written saying
-      # something else.
       raise ArgumentError, "unknown target status #{to.inspect}" unless Subscription::STATUSES.include?(to)
       raise ArgumentError, "unknown from status #{from.inspect}" unless from.nil? || Subscription::STATUSES.include?(from)
     end

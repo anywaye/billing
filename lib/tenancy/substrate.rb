@@ -44,14 +44,8 @@
 # sweep looks exactly like a clean database.
 module Tenancy
   module Substrate
-    # The tables the boundary covers, in the order the DDL protects them. Named
-    # here as well as in the migration so a table added to one and not the other is
-    # visible in both places; the sweep below is what actually fails.
     PROTECTED = %w[subscriptions charges customers].freeze
 
-    # The two roles. `billing` owns the tables and ran the migration; `billing_app`
-    # owns nothing and holds DML only, so the role a request logs in as cannot
-    # alter a table's policies off.
     OWNER_ROLE = "billing".freeze
     APP_ROLE = "billing_app".freeze
 
@@ -62,24 +56,15 @@ module Tenancy
       prepare_ownership!(connection)
 
       connection.transaction do
-        # `set local role`, so the role switch dies with this transaction and the
-        # connection is left as it was — a session-level `set role` here would
-        # change what every later statement on this pooled connection runs as.
         connection.execute("set local role #{OWNER_ROLE}")
         connection.execute(read("substrate.sql"))
         connection.execute(read("account_isolation.sql"))
-        # And the app role's door: the DML grants that let the role the application
-        # logs in as reach the tables at all — including the four the account
-        # boundary deliberately does not cover. A policy says which rows a role may
-        # see; a grant is what lets it through the door, and a missing one is
-        # refused with the same 42501 a policy raises. See `db/tenancy/app_role.sql`.
         connection.execute(read("app_role.sql"))
 
         unprotected = connection.select_rows("select table_schema, table_name, why from anywaye.unprotected_tables()")
         next if unprotected.empty?
 
         raise "these account-scoped tables are not protected: " \
-              "#{unprotected.map { |schema, table, why| "#{schema}.#{table} (#{why})" }.join('; ')}"
       end
     end
 
@@ -90,16 +75,12 @@ module Tenancy
     def require_roles!(connection)
       missing = [ OWNER_ROLE, APP_ROLE ].reject do |role|
         connection.select_value(<<~SQL)
-          select 1 from pg_roles where rolname = #{connection.quote(role)} and rolcanlogin
         SQL
       end
       return if missing.empty?
 
       raise <<~MESSAGE
-        the account boundary needs the LOGIN roles #{missing.join(' and ')}, and this cluster does not have #{missing.size == 1 ? 'it' : 'them'}.
 
-        Every policy on subscriptions, charges and customers names them: #{OWNER_ROLE}
-        owns the tables, #{APP_ROLE} owns nothing and holds DML only. They come from
         kit's cluster init script on a compose cluster (`KIT_POSTGRES_DATABASES=billing`)
         and from these statements on a host cluster:
 
@@ -154,7 +135,6 @@ module Tenancy
     def prepare_ownership!(connection)
       connection.execute("grant usage, create on schema public to #{OWNER_ROLE}")
       connection.execute(<<~SQL)
-        grant connect, create on database #{connection.quote_table_name(connection.select_value('select current_database()'))} to #{OWNER_ROLE}
       SQL
 
       connection.select_rows(<<~SQL).each do |kind, name|
@@ -162,7 +142,6 @@ module Tenancy
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind in ('r', 'p', 'S')
-          and pg_get_userbyid(c.relowner) <> #{connection.quote(OWNER_ROLE)}
           and not (c.relkind = 'S' and exists (
             select 1 from pg_depend d
             where d.objid = c.oid and d.deptype = 'a'))
@@ -175,7 +154,6 @@ module Tenancy
         select count(*)
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'anywaye' and pg_get_userbyid(p.proowner) <> #{connection.quote(OWNER_ROLE)}
       SQL
       return if anywaye_owner.nil? || (anywaye_owner == OWNER_ROLE && foreign_functions.zero?)
 

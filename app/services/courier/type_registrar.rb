@@ -84,7 +84,6 @@ module Courier
       type = type_def.fetch("type")
       uri = URI("#{url}/v1/notification_types/#{type}")
 
-      # Try update first; if 404, create.
       req = Net::HTTP::Patch.new(uri)
       req["Authorization"] = "Bearer #{token}"
       req["Content-Type"] = "application/json"

@@ -36,22 +36,10 @@ module Kit
   # `lib/middleware/request_telemetry.rb` is hand-rolled so that what billing
   # records is only what `ALLOWED_SPAN_ATTRIBUTES` permits.
   module Telemetry
-    # The prefix of every span name this service emits, and the `service.name`
-    # resource. Core's span-naming grammar is `<service>.<area>.<action>`; the
-    # service segment is `billing`, which is also this service's event prefix, so
-    # a span and an event about the same thing read alike.
     SPAN_NAME_PREFIX = "billing"
 
-    # The one request span. `.http.request` rather than `.web.request` because
-    # this service has no HTML.
     REQUEST_SPAN_NAME = "#{SPAN_NAME_PREFIX}.http.request"
 
-    # `<SERVICE>_OTEL_ENDPOINT` is the ONLY contract between a service and an
-    # observability backend (core D16). Unset, it is the collector that ships
-    # with kit's stack — which is why observability is ON BY DEFAULT rather than
-    # something a deployer has to assemble. Point it at anything speaking OTLP
-    # and billing goes there instead; bring-your-own is a supported deployment,
-    # not a degraded mode.
     ENDPOINT_VARIABLE = "BILLING_OTEL_ENDPOINT"
 
     # The address that endpoint variable defaults to. Written here as well as in
@@ -70,42 +58,8 @@ module Kit
     # this one.
     DEFAULT_ENDPOINT = "http://otel-collector:4318/v1/traces"
 
-    # `tenant_id` is a RESOURCE attribute and never a span attribute — see
-    # `resource/1` and the cardinality note on `ALLOWED_SPAN_ATTRIBUTES`.
     TENANT_VARIABLE = "BILLING_TENANT_ID"
 
-    # THE ALLOWLIST. Every name here is a core semantic-convention key or a
-    # closed vocabulary this service defines, and every name that is NOT here is
-    # dropped by `record/2`.
-    #
-    # The four, and why each is bounded rather than merely allowed:
-    #
-    #   * `http.request.method` — eight values in HTTP/1.1 and nine in HTTP/2.
-    #   * `http.response.status_code` — an integer. Bounded by the protocol.
-    #   * `http.route` — ONE VALUE PER ENDPOINT, because it is the route TEMPLATE
-    #     (`/v1/customers/:id`) and never the concrete path. This is the
-    #     cardinality guarantee: a template has as many values as there are
-    #     endpoints, and a concrete path has one per request, so a path here would
-    #     mint a metric series per request in kit's collector's `spanmetrics`
-    #     connector and would be a content leak at the same time.
-    #   * `error.type` — a CLOSED vocabulary of this service's own, below. It is
-    #     an enum rather than an exception class name because a class name is
-    #     whatever the standard library happened to call it and would grow a new
-    #     label the first time a dependency renamed an error.
-    #
-    # What is deliberately ABSENT, and each absence is a decision rather than an
-    # oversight:
-    #
-    #   * `url.path` / `url.query` / `url.full` / `http.target` — the path is
-    #     caller-controlled text and the query string carries an email.
-    #   * `http.request.header.*` — a bearer token, a session cookie or an
-    #     `Idempotency-Key` in an attribute is a credential in a searchable,
-    #     retained, widely-readable store.
-    #   * `enduser.id` / `customer.id` / `account_id` — a tenant is the resource,
-    #     not a measurement. On a span, `account_id` is unbounded cardinality by
-    #     another name.
-    #   * `stripe.*` / `messaging.*` — the processor's own vocabulary, and this
-    #     service's payload is core's contract, not telemetry's.
     ALLOWED_SPAN_ATTRIBUTES = %w[
       http.request.method
       http.response.status_code
@@ -113,10 +67,6 @@ module Kit
       error.type
   ].freeze
 
-    # The closed vocabulary of `error.type`, and it is CLOSED: a status this
-    # service has not declared is not recorded rather than recorded as whatever
-    # class the runtime raised. A closed list is what makes `error.type` safe as
-    # a metric label.
     ERROR_TYPES = %w[
       unhandled_exception
       routing_error
@@ -203,11 +153,6 @@ module Kit
       tenant = lookup.call(TENANT_VARIABLE).to_s
       attributes["tenant_id"] = tenant unless tenant.empty?
 
-      # `.create` and NOT `.new`: `Resource.new` is private in this SDK and takes
-      # an already-frozen attribute list. `create/1` is the public constructor, it
-      # freezes and sorts, and it MERGES with the SDK's own default resource — so a
-      # process still reports `telemetry.sdk.language` and a `process.pid` even if
-      # every one of the keys below is absent.
       OpenTelemetry::SDK::Resources::Resource.create(attributes)
     end
 
@@ -270,12 +215,6 @@ module Kit
           next if controller.nil? || action.nil?
 
           key = [ route.verb.to_s, controller.to_s, action.to_s ]
-          # FIRST WINS, and it is the first because the router is declared in
-          # order and the first declaration of a (verb, controller, action) is the
-          # one a request reaches. `POST /v1/subscriptions/:id/cancel` and
-          # `POST /v1/subscriptions/:id/change_plan` differ by action, so they
-          # cannot collide; a genuine collision would be two templates for one
-          # endpoint, and one of them would be wrong.
           table[key] ||= normalise_template(route.path.spec.to_s)
         end
         table.freeze

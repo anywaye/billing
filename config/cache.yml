@@ -1,7 +1,5 @@
 default: &default
   store_options:
-    # Cap age of oldest cache entry to fulfill retention policies
-    # max_age: <%= 60.days.to_i %>
     max_size: <%= 256.megabytes %>
     namespace: <%= Rails.env %>
 
@@ -12,11 +10,5 @@ test:
   <<: *default
 
 production:
-  # The PRIMARY connection, not a database of its own: the substrate
-  # provisions one database per service, and this build does not use
-  # the component (cache_store is :memory_store, the job adapter is
-  # :async) — the config must merely RESOLVE, and resolving to a
-  # database that does not exist is a boot error (measured on the
-  # box, 2026-10-16: "The `cache` database is not configured").
   database: primary
   <<: *default

@@ -114,9 +114,6 @@ module Tenancy
 
   def execute_function(name, argument)
     connection = ApplicationRecord.connection
-    # `quote` renders nil as NULL, which is what clears: the substrate's
-    # `begin_account(NULL)` and `begin_credential(NULL)` both write the empty
-    # string, and an empty GUC reads as "no identity" rather than as a value.
     connection.execute("select #{name}(#{connection.quote(argument)})")
   end
 end

@@ -1,181 +1,18 @@
-# tenancy.yml — what billing declares about its own account boundary.
-#
-# Checked by anywaye/core's contract harness:
-#
-#     bash /Users/kaka/Code/any/anywaye/core/harness/bin/tenancy-check .
-#
-# It must report 0 failures. This file is TG-A4's deliverable, and the report
-# that goes with it names what was deliberately NOT declared.
-#
-# # The boundary, in one paragraph
-#
-# billing owns customers, subscriptions, plans, charges and prepaid credit **per
-# account**. The tenancy key is `account_id`, and it reaches it two ways:
-# `subscriptions.account_id` and `charges.account_id` are real columns
-# denormalised from the customer at write time; `customers` carries the key as
-# `owner_type: "Account"` + `owner_id` instead, because a customer's owner is
-# whichever entity identity can bill — and only an `Account` has an account to
-# scope by. There is exactly one mechanism, `scope :for_account`, on each of the
-# three tenant models, and **every** `/v1` read reaches its row through it. A
-# uuid naming another account's row therefore resolves to `nil` and the action
-# answers 404 — the identical seven-key document a uuid naming nothing gets
-# (D33: cross-tenant access is indistinguishable from nonexistence; this service
-# cannot render a 403 at all, because `Problem::CATALOG` is a frozen table with
-# no entry at that status).
-#
-# # And Postgres holds the same boundary, as of the database-isolation packet
-#
-# The application layer above is unchanged and is still what decides a status code.
-# What the packet added is the second half: `db/tenancy/substrate.sql` (kit's
-# template) plus `db/tenancy/account_isolation.sql` (this service's three tables),
-# installed by `db/migrate/20261016120000_account_isolation.rb`, with every request
-# running inside a transaction that calls `anywaye.begin_account/1`. A forgotten
-# `for_account` — or one `find_by_sql` — now reads zero rows rather than another
-# account's, and a write into somebody else's account is refused with SQLSTATE
-# 42501. `rls:` below declares it table by table, and
-# `test/tenancy/database_isolation_test.rb` proves it in raw SQL, as `billing` and
-# as `billing_app`.
-#
-# # What is NOT account-scoped, and is therefore NOT declared here
-#
-# Declared, never inferred — which cuts both ways: a declaration that claims a
-# boundary the code does not have is a lie that goes green. Five surfaces are
-# excluded on purpose, and the reasons are the ones a successor must not have to
-# rediscover:
-#
-#   1. **`plans`.** The platform catalogue. A plan has no `account_id` column —
-#       it is what an account may *buy*, not what an account owns — so the four
-#       plan routes are authenticated and deliberately not account-scoped.
-#   2. **`POST /v1/webhooks/stripe`.** Scoped by the *processor's* id
-#       (`stripe_event_id`, `processor_subscription_id`, `processor_customer_id`,
-#       `processor_charge_id`), and authenticated by signature rather than by
-#       token. A processor's event is not a tenant's request.
-#
-#       **AND IT IS THE ONE PLACE THE DATABASE HALF NEEDED AN EXEMPTION.** A
-#       signature-authenticated request has no claim to hand
-#       `anywaye.begin_account/1`, and the query that would tell it which account an
-#       event belongs to is a read of `customers` — so with the boundary in place
-#       every delivery would be recorded `unknown_customer` and answered 200, which
-#       is a money service silently billing nobody. The answer is kit's MD24
-#       mechanism rather than a hole: `customers_anywaye_resolve`
-#       (`rls.tables[customers]`, fifth policy) widens a SELECT to exactly the row
-#       whose value the caller PRESENTS, and `Webhooks::AccountResolution` presents
-#       the ids the payload carried. The event still is not an entry point — it
-#       carries no account and this declaration does not pretend otherwise — but
-#       the read it makes is declared, and `test/tenancy/database_isolation_test.rb`
-#       measures both directions: the same signed webhook writes its charge with
-#       the policy and writes nothing without it.
-#   3. **The lifecycle's own resolution of a processor id to a row**
-#       (`Subscriptions::Lifecycle#customer`). It answers "which row does this
-#       delivery belong to", and the id it looks up is the processor's. What
-#       keeps it inside the boundary is F2/F3 from billing-12: those columns are
-#       UNIQUE, so the question has one answer.
-#   4. **`Account`-scoped writes that *stamp* rather than *filter*:**
-#       `Lifecycle#apply` and `Webhooks::Charges::Recorder` both write
-#       `account_id:` from a customer they have already resolved. That is the
-#       denormalisation the scopes read, not a second entry point.
-#   5. **`delete`.** This service serves no delete route on `/v1` — cancelling is
-#       a POST, and the state machine owns status. There is no cross-tenant
-#       deletion to declare, and an entry point with nothing behind it would be
-#       the omission wearing a declaration.
-#
-# # What the checker can and cannot see here
-#
-# billing is Rails. The entry-point scanner reads SQL statements and
-# account-key predicates, so it classifies **zero** sites in this tree — which
-# `docs/tenancy.md` measures as the fleet-wide rule for the eight
-# language-neutral services and reports honestly as
-# `tenancy.enumeration-partial` (a WARNING, exit code unchanged). The
-# declaration therefore leans on the two things this checker *can* verify:
-# every `enforced.line` really carries the key, and every one of the three denial
-# arms really is on the line and in the file it names.
 version: 1
 service: billing
 
 accountScoped: true
 
 scope:
-  # The tenancy key this service scopes by. `subscriptions.account_id` and
-  # `charges.account_id` are columns; `customers` spells the same key
-  # `owner_type`/`owner_id`, and `Customer.for_account` is where the mapping is
-  # written. Declared as `account_id` because that is the spelling every scope,
-  # every index and every event payload in this tree uses.
   key: account_id
-  # The whole application tree, NOT just the three model files holding the
-  # scopes. A narrower list would read less and report less: the checker's
-  # `enumeration-partial` warning then names every line under `app/` that
-  # carries the key and that a SQL scanner cannot attribute to a statement,
-  # which is the honest residue rather than a clean bill of health over files
-  # nobody read. Those lines are four kinds, and each is declared here as what
-  # it is:
-  #
-  #   * the three `for_account` scopes (the boundary itself);
-  #   * `app/lib/principal.rb` and `app/controllers/concerns/
-  #     authenticates_principal.rb`, where the account is a **verified token
-  #     claim** read off the caller and never off a row;
-  #   * `app/services/subscriptions/lifecycle.rb` and
-  #     `app/services/webhooks/charges/recorder.rb`, where `account_id:` is a
-  #     **denormalised stamp** written from a customer already resolved — the
-  #     value the scopes read, not a predicate;
-  #   * `charge.rb`'s `as_json`, where the key is an output field name.
-  #
-  # `db/` is not in this list on purpose: it holds `schema.rb` and the
-  # migrations, which name the column rather than reach a row, and the DDL half
-  # of this file reads them through `rls.sources` instead.
   sources:
     - app
 
 rls:
-  # **Postgres holds this boundary too, as of the database-isolation packet.**
-  # Until then this block said `false` and it was the truth: scoping was a property
-  # of the query — `scope :for_account` — and every migration under `db/migrate/`
-  # was an ordinary `create_table`. Now `db/tenancy/account_isolation.sql` calls
-  # `anywaye.protect_table` for the two tables whose key is a column and writes the
-  # five policies of the one whose key is not, `db/tenancy/substrate.sql` is kit's
-  # template installed beside it, and every request runs inside a transaction whose
-  # `anywaye.begin_account/1` the policies read.
-  #
-  # WHAT CHANGED, in the direction that matters: a forgotten `for_account` — or one
-  # `find_by_sql` — now reads zero rows rather than another account's, and a write
-  # into somebody else's account is refused with SQLSTATE 42501. What did NOT
-  # change: the application's own scoping, which is what decides a status code and
-  # is what `entryPoints` below still declares. RLS is defence in depth, not a
-  # licence to delete a predicate.
   databaseEnforced: true
-  # The substrate's own function, and the one every policy below reads.
-  # `protect_table` writes `account_id = (select anywaye.current_account_id())` and
-  # the hand-written policies write the same call; naming anything else here would
-  # make `tenancy.rls-permissive` correct.
-  #
-  # It is the WRAPPED spelling that matters and this field cannot express the
-  # wrapper, because the schema's pattern requires the bare name ending in `()`.
-  # The wrap is `(select …)`, and it is why a policy is evaluated once per
-  # statement rather than once per row: measured on this cluster, two rows,
-  # identity unset —
-  #
-  #   using (account_id = (select probe_id()))   ->  1 call
-  #   using (account_id = probe_id())            ->  2 calls
   identity: anywaye.current_account_id()
-  # The DDL tree. `db/migrate` is deliberately NOT in this list: the migration reads
-  # the two `.sql` files and executes them, so the policies are written in the files
-  # below and nowhere else. `db/tenancy/substrate.sql` is kit's template at ref
-  # `46d08f2` (sha256 `eaab2893…` — billing's own `kit.ref` predates the template's
-  # existence, so the copy names the ref it came from rather than the pin), and
-  # `db/tenancy/account_isolation.sql` is this service's half.
   sources:
     - db/tenancy
-  # THREE TABLES. Each carries the four account policies — one per command, so a
-  # later grant can only widen a command it names — and `customers` carries a fifth,
-  # which is the one exemption in this file and is reasoned out at the bottom.
-  #
-  # `roles` names `billing` and `billing_app` and neither is `PUBLIC`. The two
-  # generated policies bind `to current_user, billing_app` — the login role is
-  # named in the call rather than derived from the session, for the reason
-  # `db/tenancy/account_isolation.sql` records (CI's `db:prepare` runs as the
-  # `postgres` superuser, whose derived `_app` role does not exist) — and the
-  # hand-written policies write the same two names literally. Neither role carries
-  # BYPASSRLS and neither is a superuser, which
-  # `test/tenancy/database_isolation_test.rb` asserts by name.
   tables:
     - table: subscriptions
       forced: true
@@ -239,23 +76,6 @@ rls:
           constrained:
             file: db/tenancy/substrate.sql
             line: 900
-    # THE ONE TABLE WHOSE POLICIES ARE HAND-WRITTEN, because its tenancy key is not
-    # a column: `anywaye.protect_table` REFUSES it, measured —
-    #
-    #   ERROR:  anywaye.protect_table(customers, billing_app): the table has no
-    #           account_id column, so there is nothing to scope it by.
-    #
-    # — and the four policies below are the predicate `Customer.for_account` uses,
-    # spelled the way this table spells it. The mismatch between the key's name and
-    # the column's is the one place in this boundary a mistake is possible, which is
-    # why `test/tenancy/database_isolation_test.rb` has more cases for this table
-    # than for the other two.
-    #
-    # `owner_type = 'Account'` is in the `with check` as well as in the `using`, and
-    # the isolation suite asserts the difference: without it a row could be written
-    # with `owner_type = 'User'` and an `owner_id` equal to the caller's account id —
-    # a row the read policies then hide from every account, including the one that
-    # wrote it, while it holds the unique `(owner_type, owner_id, processor)` key.
     - table: customers
       forced: true
       policies:
@@ -287,31 +107,6 @@ rls:
           constrained:
             file: db/tenancy/account_isolation.sql
             line: 128
-        # THE FIFTH POLICY, AND THE ONLY EXEMPTION IN THIS DECLARATION. It is
-        # `for select` and its qualifier is the value a caller PRESENTS rather than
-        # an account:
-        #
-        #   using (id::text = (select anywaye.current_credential_digest())
-        #          or processor_customer_id = (select anywaye.current_credential_digest()))
-        #
-        # WHY IT EXISTS: `POST /v1/webhooks/stripe` is authenticated by signature,
-        # so it has no token claim to hand `anywaye.begin_account/1` — and the query
-        # that would tell it which account an event belongs to is a read of
-        # `customers` (`Subscriptions::Lifecycle#customer`, `Charges::Recorder`).
-        # Without this policy every delivery would be recorded `unknown_customer`
-        # and answered 200: a money service silently billing nobody, which
-        # `test/tenancy/database_isolation_test.rb` measures in both directions —
-        # the same signed webhook writes its charge with the policy and writes
-        # nothing without it.
-        #
-        # WHAT IT CANNOT DO: it cannot write (`for select`, so every write policy
-        # still demands an account identity); it cannot open another table
-        # (`subscriptions`, `charges` and `plans` are untouched by it); and it is
-        # not a table-wide read — the policy carries the same predicate the caller's
-        # lookup carries, so a resolution session reads exactly the one row whose
-        # value it presented, which the isolation suite asserts by row count. The
-        # `id::text` cast is measured rather than stylistic: `uuid = text` is not an
-        # operator, so the bare comparison is `operator does not exist: uuid = text`.
         - name: customers_anywaye_resolve
           command: select
           clause: using
@@ -321,13 +116,6 @@ rls:
             line: 132
 
 entryPoints:
-  # --- customers ------------------------------------------------------------
-  #
-  # A customer's tenancy key is `owner_type: "Account"` + `owner_id`, so the
-  # predicate on the declared line is `owner_id: account_id` and not
-  # `account_id: account_id`. That is the same key, spelled the way the table
-  # spells it, and it is why the line still carries the tenancy key the checker
-  # searches for.
 
   - id: customer-read
     operation: select
@@ -341,28 +129,16 @@ entryPoints:
       cases:
         - id: no-identity
           asserts: absent
-          # On this surface "nothing is acting" is answered at the door: the
-          # principal lock refuses an unauthenticated caller with a 401 before
-          # any query runs, so no row is read at all. That is the strongest form
-          # of the zero-rows this arm asks for, and the line is the lock's own
-          # router-derived table — the assertion inside the test that names
-          # "reading any customer by its uuid".
           expects: unauthorized
           file: test/authentication/principal_lock_test.rb
           line: 133
         - id: other-account
           asserts: absent
-          # A **valid** credential for a different account. The 404 is then
-          # compared byte for byte against a uuid that names nothing, which is
-          # what makes it absence rather than a refusal.
           expects: not_found
           file: test/tenant/cross_account_web_test.rb
           line: 284
         - id: own-account
           asserts: present
-          # The control. The caller's own customer is in its own listing; without
-          # it, "the other account's row is absent" would also pass against a
-          # listing that returns nothing to anybody.
           expects: id
           file: test/tenant/cross_account_web_test.rb
           line: 400
@@ -371,11 +147,6 @@ entryPoints:
     operation: update
     subject: customers
     enforced:
-      # The same scope, at the same line, because the write is refused by the
-      # same resolution: `PATCH /v1/customers/:id` looks the row up through
-      # `Customer.for_account(current_account_id).find`, so a uuid naming another
-      # account's row never reaches `assign_attributes`. The account is a token
-      # claim and never a body field, so there is no second way in.
       mechanism: query-filter
       file: app/models/customer.rb
       line: 79
@@ -389,25 +160,15 @@ entryPoints:
           line: 133
         - id: other-account
           asserts: absent
-          # A denied write is never proved by the write alone, and this
-          # declaration does not pretend otherwise: the arm's token is the name
-          # of the assertion that reads the victim's row back. `drifted_ids`
-          # fingerprints account B's customer before the PATCH and again after
-          # it, so "the write matched zero rows" is separated from "the write
-          # found nothing to do" — the difference `tenancy.denial-unpaired`
-          # exists for. An empty result here would be a lie about a row that
-          # exists.
           expects: drifted_ids
           file: test/tenant/cross_account_web_test.rb
           line: 333
         - id: own-account
           asserts: present
-          # The caller's own row, and the caller's own value read back off it.
           expects: email
           file: test/requests/v1/customers_test.rb
           line: 293
 
-  # --- subscriptions --------------------------------------------------------
 
   - id: subscription-read
     operation: select
@@ -421,10 +182,6 @@ entryPoints:
       cases:
         - id: no-identity
           asserts: absent
-          # The lock again. The same line covers "reading any subscription",
-          # "paging every subscription" and — through the entitlements route —
-          # the entitlements read, because `entitlements` resolves its row
-          # through the same `subscription_record` helper `show` does.
           expects: unauthorized
           file: test/authentication/principal_lock_test.rb
           line: 133
@@ -435,7 +192,6 @@ entryPoints:
           line: 300
         - id: own-account
           asserts: present
-          # The row's own `status`, read off the caller's own subscription.
           expects: status
           file: test/requests/v1/subscriptions_test.rb
           line: 269
@@ -444,11 +200,6 @@ entryPoints:
     operation: update
     subject: subscriptions
     enforced:
-      # Two routes, one resolution: `POST /v1/subscriptions/:id/cancel` and
-      # `POST /v1/subscriptions/:id/change_plan` both reach the row through
-      # `Subscription.for_account(current_account_id).find`. Both are asserted
-      # in `cross_account_web_test.rb` — the cancel arm also asserts the
-      # processor was never asked, which is the half that would have moved money.
       mechanism: query-filter
       file: app/models/subscription.rb
       line: 94
@@ -462,20 +213,15 @@ entryPoints:
           line: 133
         - id: other-account
           asserts: absent
-          # The paired read, the same shape `customer-write` uses: the victim's
-          # subscription is fingerprinted either side of the cancelled attempt.
           expects: drifted_ids
           file: test/tenant/cross_account_web_test.rb
           line: 356
         - id: own-account
           asserts: present
-          # The caller's own row's own value after a successful cancel: the row
-          # is left as it was, because taking effect is the webhook's business.
           expects: status
           file: test/requests/v1/subscriptions_test.rb
           line: 342
 
-  # --- charges --------------------------------------------------------------
 
   - id: charge-read
     operation: select
@@ -489,9 +235,6 @@ entryPoints:
       cases:
         - id: no-identity
           asserts: absent
-          # A receipt has its own 401 test rather than sharing the lock's table,
-          # because it is the one `/v1` success response that is not JSON and the
-          # one whose cross-tenant arm needed its own file.
           expects: unauthorized
           file: test/requests/v1/charges_test.rb
           line: 193
@@ -502,10 +245,6 @@ entryPoints:
           line: 158
         - id: own-account
           asserts: present
-          # The row's own `processor_charge_id`, read off the account's own
-          # receipt. It is the processor's id for the payment, which is the one
-          # field of this row a caller cannot guess and therefore the sharpest
-          # proof that the row that came back is the caller's own.
           expects: ch_FAKEchargesrequestAAAAAAAAA
           file: test/requests/v1/charges_test.rb
           line: 140

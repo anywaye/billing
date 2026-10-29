@@ -3,33 +3,7 @@
 require "json"
 require "socket"
 
-# An in-process NATS broker double, speaking enough of the wire protocol for
-# the real `nats-pure` client to connect, request and be acknowledged.
-#
-# ## Why a double and not a mock
-#
-# The behaviour under test IS the wire: the subject a row is published on, the
-# envelope bytes that arrive, and the row's columns after the broker acks. A
-# mocked transport would prove the loop calls something; this proves what a
-# consumer on the fleet's bus receives, against the real client and a real
-# socket — only the broker is a double, because Ruby has no embedded
-# nats-server (identity's Go tests use `nats-server/v2/server` in-process; the
-# Ruby client ships no server, and the fleet's broker is a container).
-#
-# What it speaks: INFO on connect, PONG for PING, SUB/UNSUB bookkeeping, and PUB
-# with a reply subject answered the way JetStream answers it — a plain
-# `MSG ... +ACK {...}` for a subject a stream covers, and an `HMSG ... 503` for
-# one that no stream covers (`NoRespondersError`, which the client's
-# `JetStream#publish` turns into `NoStreamResponse`). A third mode, silent,
-# answers nothing, which is what makes a publish *time out*.
-#
-# It is deliberately small: it is a broker, not a fleet.
 class FakeNatsBroker
-  # The acks it answers with. Shaped like a JetStream PubAck because that is the
-  # contract the transport's caller relies on: the stream that accepted it, and
-  # the sequence number it was stored under. Bare JSON and not core NATS'
-  # `+ACK` preface: `JetStream#publish` parses the reply payload as JSON, and a
-  # preface is a parse error at every consumer.
   ACK = '{"stream":"ANYWAYE","seq":%d,"duplicate":false}'
 
   INFO = {
@@ -47,14 +21,6 @@ class FakeNatsBroker
     proto: 1
   }.to_json
 
-  # @param stream_subjects [Array<String>] the subjects a stream covers. Supports
-  #   the `>` wildcard, so `["billing.>"]` is the fleet filter and not a special
-  #   case. A publish to a subject no stream covers is refused with a 503, the
-  #   way the real broker refuses it — which is the production failure the
-  #   stack's missing stream would produce.
-  # @param mode [:ack, :silent] how a covered subject is answered. `:silent` is
-  #   the broker that neither acks nor refuses — a half-configured stream — and
-  #   it is what makes a publish time out.
   def initialize(stream_subjects: [], mode: :ack)
     @stream_subjects = stream_subjects
     @mode = mode
@@ -86,8 +52,6 @@ class FakeNatsBroker
     self
   end
 
-  # Every publish the broker received, in arrival order: `{subject:, payload:}`.
-  # The payload is the exact bytes a consumer would read.
   def delivered
     @mutex.synchronize { @delivered.dup }
   end
@@ -140,11 +104,6 @@ class FakeNatsBroker
       socket.close rescue nil
     end
 
-    # The answer JetStream would give. A covered subject is acked; a subject no
-    # stream covers is refused with the 503 no-responders status, which is the
-    # direction a misconfigured stack must fail in — the row stays claimable
-    # with attempts climbing, and the event leaves the table only once a stream
-    # exists that covers its subject.
     def answer(socket, reply_to, subscriptions, subject)
       return if reply_to.nil? || reply_to.empty?
       return unless (sid = sid_for(subscriptions, reply_to))
@@ -159,10 +118,6 @@ class FakeNatsBroker
       reply(socket, "MSG #{reply_to} #{sid} #{ack.bytesize}\r\n#{ack}\r\n")
     end
 
-    # The sid subscribed to `subject`, or nil. Wildcards are matched rather than
-    # compared: the JetStream client requests on an ephemeral inbox it
-    # subscribed to with a `*`, and a broker that only answered exact matches
-    # would ack nothing.
     def sid_for(subscriptions, subject)
       subscriptions.each do |sid, filter|
         return sid if subject_matches?(filter, subject)
@@ -170,8 +125,6 @@ class FakeNatsBroker
       nil
     end
 
-    # Enough of NATS' subject language for the two wildcards this double needs:
-    # `*` for one token, `>` for the rest.
     def subject_matches?(filter, subject)
       return true if filter == subject
 
@@ -214,9 +167,6 @@ class FakeNatsBroker
       buffer.slice!(0, size).tap { read_line(socket, buffer) }
     end
 
-    # The fleet filter: `billing.>` matches `billing.<anything>`, and a subject
-    # with no wildcard matches itself. Enough of NATS' subject language for a
-    # stream that filters one service's events.
     def covers?(subject)
       @stream_subjects.any? do |filter|
         if filter.end_with?(">")

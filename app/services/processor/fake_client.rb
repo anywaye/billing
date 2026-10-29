@@ -34,10 +34,6 @@ module Processor
   # client answers from Stripe, and a pretend Stripe would eventually be invoked
   # by a spec that believes it.
   class FakeClient
-    # The name this processor answers to, and the value the checkout path puts
-    # in a delivery's `processor` field. It was `Checkout::Session::PROCESSOR`
-    # while the processor lived in the `pay` gem; it is here now because the
-    # name and the client are one fact again.
     PROCESSOR = "fake_processor".freeze
 
     # A processor refused. One class for every refusal, whatever the call — the
@@ -46,18 +42,6 @@ module Processor
     # unrelated bug.
     class Error < ::Processor::Error; end
 
-    # The prefix of every subscription id this processor mints, and the one
-    # way a caller can tell whose a subscription is without a column for it.
-    #
-    # The symlink is real rather than clever: the fleet's test support already
-    # spells this prefix out as "the marker" (`test/support/two_accounts.rb`:
-    # "`FAKE` is in the prefix of every processor id"), and a caller that needs
-    # to know which processor owns a row needs the same marker the specs have
-    # been reading for a year. `owns?` is that question, asked once.
-    #
-    # There is no `processor` column on `subscriptions`: what the fake writes
-    # is its own id, and a column would be a second place for the two to
-    # disagree about which processor holds a row.
     SUBSCRIPTION_PREFIX = "sub_FAKE"
 
     # Whether the subscription under this processor's own id is one it minted.
@@ -65,33 +49,6 @@ module Processor
       processor_subscription_id.to_s.start_with?(SUBSCRIPTION_PREFIX)
     end
 
-    # What `subscribe` answers. A frozen value object rather than an Active
-    # Record row: the old `Pay::Subscription` was a database row, and a row is
-    # a second writer of state this service does not own.
-    #
-    # The name is the point and not decoration. It is `ProcessorSubscription`
-    # and not `Subscription` for two reasons. It **is** the processor's
-    # subscription — the fake's answer about what the processor said, which is
-    # a different fact from billing's own `Subscription` row and travels beside
-    # it in the `Outcome`. And a class named `Subscription` in this namespace
-    # would shadow the model for every reader of this file, which is the exact
-    # confusion this service's `Charge`-versus-processor's-charge distinction
-    # exists to prevent. The fields are the ones `Checkout::Session#delivery`
-    # reads and nothing else:
-    #
-    #   * `processor_id` — the processor's own id for this subscription, unique
-    #     per subscribe, and the join key the delivery path uses.
-    #   * `processor_plan` — the price the subscription was started on, echoed
-    #     back unsullied: the checkout asked for a price id, not an amount.
-    #   * `quantity` — seats, an integer, never multiplied into anything here.
-    #   * `status` — `trialing` while a trial is running, `active` after.
-    #   * `trial_ends_at` — when a trial ends, or nil when there is no trial.
-    #   * `created_at` — the instant the processor said yes, taken once here
-    #     rather than read twice, so the event's `time` and the payload's
-    #     `trial_ends_at` cannot drift apart.
-    #   * `price` and `interval` — the fake's price book for THIS subscription,
-    #     passed by the checkout and read back only by `upcoming_invoice`. A
-    #     subscription the fake started without them projects nothing.
     ProcessorSubscription = Data.define(
       :processor_id, :processor_plan, :quantity, :status, :trial_ends_at, :created_at,
       :price, :interval
@@ -106,13 +63,6 @@ module Processor
       end
     end
 
-    # The projection's shape, and the reason each field is here is the same
-    # reason `ProcessorSubscription` is a value and not a row: these are the
-    # accessors `V1::SubscriptionsController#upcoming_invoice_response` reads,
-    # and a processor — real or fake — answers through them or the controller
-    # grows a branch. `tax` is deliberately absent: it is the one figure the
-    # *caller* derives from `total - total_excluding_tax`, for display, and the
-    # processor stating an invented zero would be this fake having an opinion.
     InvoicePreview = Data.define(
       :period_end, :currency, :lines, :subtotal, :total_excluding_tax, :total
     )
@@ -121,17 +71,8 @@ module Processor
       :description, :period, :quantity, :pricing, :amount, :currency
     )
 
-    # A period answers `.start` and `.end` because that is what a processor's own
-    # line-item period answers, and the controller's builder reads it the same way
-    # whichever processor is behind the call.
     PreviewPeriod = Data.define(:start, :end)
 
-    # **The pricing shape is Stripe's 2025 shape, and that is deliberate.**
-    # The controller's builder reads `line.pricing.unit_amount_decimal` — a
-    # decimal string — because the real API stopped exposing a `price` object
-    # on a line item, and a fake that answered the old shape would be a
-    # second vocabulary for one field: the dev door and CI would exercise a
-    # builder that cannot read what production sends.
     PreviewPricing = Data.define(:unit_amount_decimal)
 
     # The ledger, and it exists for one assertion.

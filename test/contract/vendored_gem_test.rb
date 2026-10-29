@@ -4,23 +4,6 @@ require "digest"
 require "pathname"
 require "test_helper"
 
-# The pinned copy of the fleet's shared gem, held to its pin.
-#
-# `vendor/anywaye` exists because the gem is not on rubygems and github is not
-# reachable from this environment — see `vendor/anywaye/VENDORED.md`. A pinned
-# copy is honest only while it stays pinned, and a pin nothing can check is a
-# pin in name only, so `DIGESTS` records a sha256 for every file the gem's
-# gemspec ships and this test re-reads them on every run. There is no skip in
-# this file: a check that passes by not running is the thing the copy exists to
-# prevent.
-#
-# What the manifest can and cannot say. It can say the copy is byte-stable —
-# an edit to a vendored file, or a re-copy, changes a digest and fails here.
-# It cannot say the upstream has not moved, because nothing in CI can reach
-# the private repository. That half is a developer workflow, documented in
-# VENDORED.md: with the fleet checked out beside this worktree, `diff -r` the
-# two trees and re-copy deliberately, rewriting the manifest and the pinned
-# commit in the same commit.
 class VendoredGemTest < ActiveSupport::TestCase
   VENDOR = Pathname.new(File.expand_path("../../vendor/anywaye", __dir__))
 
@@ -52,11 +35,6 @@ class VendoredGemTest < ActiveSupport::TestCase
   end
 
   test "billing publishes with the shared gem's claim, not a second mechanism" do
-    # The claim is the second thing this gem exists to own, and the publisher
-    # the relay builds is the gem's publisher over the gem's connection
-    # adapter. This is the assertion that stops a second `for update skip
-    # locked` being written in this repository: the SQL billing drains with is
-    # the vendored gem's constant.
     assert_includes Anywaye::Outbox::PgConnection::CLAIM_SQL, "for update skip locked"
     assert_includes Anywaye::Outbox::PgConnection::CLAIM_SQL, "published_at is null"
     assert_includes Anywaye::Outbox::PgConnection::CLAIM_SQL, "order by created_at, id"
@@ -76,9 +54,6 @@ class VendoredGemTest < ActiveSupport::TestCase
     assert_equal [ "created_at" ], unpublished.columns
   end
 
-  # The manifest, read once. A recorded-debt table may never become the thing
-  # being iterated: this file IS the iterated table, and every entry in it is
-  # asserted against a file that exists.
   DIGESTS = begin
     VENDOR.join("DIGESTS").read.lines.each_with_object({}) do |line, into|
       path, digest = line.strip.split(/\s+/, 2)

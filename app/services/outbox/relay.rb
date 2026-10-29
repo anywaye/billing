@@ -32,16 +32,8 @@ module Outbox
   # in the same transaction as the publish, and an unmarked row is a row the
   # next pass picks up again with the same envelope id.
   class Relay
-    # Identity's `DefaultPollInterval`, matched. Pinned rather than derived
-    # because a schedule nobody can read is a schedule nobody can tune, and a
-    # test asserts this constant is what the loop actually waits.
     POLL_INTERVAL = 1.0
 
-    # How long `stop` waits for the loop to finish its pass before giving up on
-    # the join. A publish is bounded by `NatsPublisher::PUBLISH_TIMEOUT`, so a
-    # full batch against a silent broker can legitimately take longer than this
-    # — the join gives up, the thread finishes or dies with the process, and the
-    # rows stay unpublished either way.
     JOIN_TIMEOUT = 5
 
     # Starts the loop against the broker at `url`.
@@ -102,9 +94,6 @@ module Outbox
     end
 
     def running?
-      # The thread reference is read without the mutex: a single ivar read is
-      # atomic, and `start` calls this while already holding the lock — a
-      # reentrant lock is a deadlock in Ruby.
       thread = @thread
       !thread.nil? && thread.alive? && !stopping?
     end
@@ -136,19 +125,11 @@ module Outbox
       def loop_body
         until stopping?
           pass = run_once
-          # A full batch may mean there is more waiting, so a pass that moved
-          # something does not wait out the interval — the same rule identity's
-          # `Run` states as `continue` on a non-zero count.
           next if pass && pass.published.to_i.positive?
 
           break if wait_for_interval
         end
       rescue StandardError => error
-        # The pass itself failed — the claim, the connection, the transaction.
-        # Nothing was marked, because the marks are inside the pass's
-        # transaction, so every row is still claimable and the next pass starts
-        # from the same place. Logged with the class and nothing else: the
-        # payload is the one part of an envelope that can carry a value.
         @logger&.warn("outbox: the publish pass failed; retrying (#{error.class})")
         retry unless stopping?
       end

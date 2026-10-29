@@ -6,9 +6,6 @@ Sentry.init do |config|
   config.environment = ENV["DEPLOYMENT_ENVIRONMENT"].presence || "production"
   config.send_default_pii = false
 
-  # First barrier: runs in this process, before the envelope exists, so a
-  # misconfigured DSN can never ship an exception message or a request URL.
-  # The relay is the second barrier and applies the same rules fleet-wide.
   config.before_send = lambda do |event, _hint|
     if event.exception && event.exception.values
       event.exception.values.each do |exc|

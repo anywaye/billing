@@ -1,23 +1,8 @@
-# Async adapter only works within the same process, so for manually triggering cable updates from a console,
-# and seeing results in the browser, you must do so from the web console (running inside the dev process),
-# not a terminal started via bin/rails console! Add "console" to any action or any ERB template view
-# to make the web console appear.
 development:
   adapter: async
 
 test:
   adapter: test
 
-# THE CACHE, QUEUE AND CABLE TRIO ARE IN-PROCESS HERE, and the reason is the
-# same for all three: this build uses none of them, and the stock SOLID block
-# points each at a database of its own — the four-database shape the
-# substrate does not provision. Measured on the box (2026-10-16): pods now
-# boot but die with "The `cable` database is not configured for the
-# `production` environment", raised while resolving the reader connection
-# for a stream this API-only build never opens.
-#
-# Async is correct rather than merely convenient at one replica and zero
-# streams. The first real broadcast brings its own decision — and, with it,
-# its own table and grant.
 production:
   adapter: async

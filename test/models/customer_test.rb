@@ -5,10 +5,6 @@ class CustomerTest < ActiveSupport::TestCase
   OTHER_OWNER_ID = "22222222-2222-4222-8222-222222222222"
 
   setup do
-    # The clock is injected, not read: every timestamp this class asserts is
-    # derived from the same frozen instant. ActiveSupport reverts the travel
-    # after the test, and the suite keeps its parallelism for the tests that
-    # never look at a clock.
     travel_to(frozen_now)
 
     @customer = Customer.new(
@@ -23,13 +19,6 @@ class CustomerTest < ActiveSupport::TestCase
     assert @customer.valid?, @customer.errors.full_messages.to_sentence
   end
 
-  # --- one `cus_`, one customer ----------------------------------------------
-  #
-  # The validation behind `customers_processor_customer_id_idx`, and the reason the
-  # index is not enough on its own: a validation is not a lock, so the index has to
-  # be there too — but with only the index, a `PATCH` is answered with a 409 whose
-  # body names no field. `:taken` is what `ProblemResponses` turns into a named
-  # 409, and this is the error it reads.
   test "a second customer may not claim a processor customer id that is taken" do
     Customer.create!(owner_type: "Account", owner_id: OTHER_OWNER_ID, processor: "stripe",
       processor_customer_id: "cus_FAKEnotmineBBBBBBBBBBBBB")
@@ -48,11 +37,6 @@ class CustomerTest < ActiveSupport::TestCase
     assert_predicate @customer, :valid?
   end
 
-  # `allow_nil`, and the reason is that many rows are legitimately in this state:
-  # a customer created through `POST /v1/customers` has no `cus_` until its first
-  # subscription tells this service what the processor calls it. The rule is "a
-  # value here is unique", not "this column is unique" — which is the same reading
-  # the index's partial predicate states.
   test "many customers may hold no processor customer id at all" do
     Customer.create!(owner_type: "Account", owner_id: OWNER_ID, processor: "stripe")
     other = Customer.new(owner_type: "Account", owner_id: OTHER_OWNER_ID, processor: "stripe")

@@ -13,16 +13,6 @@
 class IdempotencyKey < ApplicationRecord
   RETENTION = 24.hours
 
-  # **The principal is the token's `sub`, and it is passed in rather than
-  # resolved here.** core defines the scope as `(endpoint, principal, key)`, and a
-  # key scoped to nobody is a key any caller can replay another's answer under: two
-  # tenants choosing the same uuid would have shared one namespace, and a replay
-  # under a key the *other* tenant used would have returned that tenant's stored
-  # 201 to whoever guessed the uuid. The `principal` column is already in the unique
-  # index, so this is a value and not a migration.
-  #
-  # The `sub` claim and not `account_id`: two users in one account are two callers,
-  # and a replay under one user's key must not answer for the other's.
   validates :endpoint, :principal, :key, :request_digest, :response_body, presence: true
 
   # The stored response for this exact request, or nil if the key is new.
@@ -48,7 +38,5 @@ class IdempotencyKey < ApplicationRecord
     )
   end
 
-  # Older than core's retention window. The index on `created_at` exists for
-  # exactly this scan; scheduling it is a later packet (see README).
   scope :expired, -> { where("created_at < ?", Time.current - RETENTION) }
 end

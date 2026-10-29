@@ -2,7 +2,6 @@ require "test_helper"
 
 class PlanTest < ActiveSupport::TestCase
   setup do
-    # The clock is injected, not read — see the note in CustomerTest.
     travel_to(frozen_now)
 
     @plan = Plan.new(
@@ -17,14 +16,6 @@ class PlanTest < ActiveSupport::TestCase
     assert @plan.valid?, @plan.errors.full_messages.to_sentence
   end
 
-  # --- one `price_`, one plan -------------------------------------------------
-  #
-  # The validation behind `plans_processor_price_id_idx`, and the reason the index
-  # is not enough on its own: a validation is not a lock, so the index has to be
-  # there too — but with only the index a `POST` is answered with a 409 naming no
-  # field, and `price` and `processor_price_id` are two different fields a client
-  # would then have to guess between. `:taken` is what `ProblemResponses` turns
-  # into a named 409, and this is the error it reads.
   test "a second plan may not claim a processor price id that is taken" do
     Plan.create!(name: "Theirs", slug: "theirs", price: Billing::Money.new(4_900, "USD"), interval: "month",
       processor_price_id: "price_FAKEtheirsBBBBBBBBBB")
@@ -43,10 +34,6 @@ class PlanTest < ActiveSupport::TestCase
     assert_predicate @plan, :valid?
   end
 
-  # `allow_nil`, and the reason is that a plan is written through `POST /v1/plans`
-  # before it is ever put on sale: many plans are legitimately unsold at once. The
-  # rule is "a value here is unique", not "this column is unique" — the same
-  # reading the index's partial predicate states.
   test "many plans may carry no processor price id at all" do
     Plan.create!(name: "Draft", slug: "draft", price: Billing::Money.new(900, "USD"), interval: "month")
     unsold = Plan.new(name: "Also a draft", slug: "also-a-draft", price: Billing::Money.new(1_500, "USD"), interval: "month")

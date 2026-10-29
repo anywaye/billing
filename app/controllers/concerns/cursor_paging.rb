@@ -20,12 +20,8 @@ module CursorPaging
   DEFAULT_LIMIT = 25
   MAX_LIMIT = 100
 
-  # core: cursors expire after 24 hours, and an expired one is a 400 rather than
-  # a silent restart at page one — a silent restart looks like data loss to
-  # whoever is paging.
   CURSOR_TTL = 24.hours
 
-  # `data` plus `page`, which is the collection shape core defines.
   Page = Data.define(:records, :next_cursor, :has_more)
 
   private
@@ -36,7 +32,6 @@ module CursorPaging
       scope = scope.order(created_at: direction, id: direction)
       scope = apply_cursor(scope, decode_cursor(params[:cursor]), direction) if params[:cursor].present?
 
-      # One extra row is how `has_more` is answered without a COUNT.
       records = scope.limit(limit + 1).to_a
       has_more = records.size > limit
       records = records.first(limit)
@@ -65,8 +60,6 @@ module CursorPaging
         )
       end
 
-      # "capped at 100" means clamped, not refused: a client asking for more
-      # gets the maximum, and asks again with the cursor.
       [ limit, MAX_LIMIT ].min
     end
 
@@ -102,8 +95,6 @@ module CursorPaging
 
       { at: issued_at, id: payload["id"] }
     rescue ArgumentError, JSON::ParserError
-      # A cursor is client-supplied, so "unreadable" is an expected answer, not
-      # a bug. The message names the field and does not repeat the input.
       raise unreadable_cursor
     end
 

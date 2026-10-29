@@ -51,36 +51,19 @@ module TestSupport
     @mutex = Mutex.new
 
     class << self
-      # One exporter per PROCESS. `rails test` runs minitest over DRb with one
-      # process per worker and a per-worker database, so a process-wide array is
-      # already the right unit of isolation: two workers cannot see each other's
-      # spans, and a worker that finishes cannot be read by another.
       def instance
         @instance ||= new
       end
 
-      # Every span finished so far, frozen, so a caller cannot edit another test's
-      # evidence.
       def finished_spans
         @mutex.synchronize { @spans.dup.freeze }
       end
 
-      # Forget everything. Safe from a `setup` in a test that runs in a worker
-      # whose other tests are not running at the same time — which is every
-      # minitest test in a DRb worker, because a worker runs its tests one at a
-      # time. The observability tests also filter by span NAME, so a test cannot be
-      # satisfied by an earlier test's span even when the filter is what matters.
       def clear!
         @mutex.synchronize { @spans.clear }
       end
 
       def record(span_datas)
-        # `concat`, and not `<<`. `export/2` receives the whole batch — the
-        # processor hands over an Array even when it holds one element — and
-        # appending it as one value puts an Array of SpanData in `@spans`, where
-        # every reader then asks it for a `name` and gets NoMethodError. That is
-        # a loud failure rather than a silent one, which is the only reason it was
-        # worth writing the naive version first.
         @mutex.synchronize { @spans.concat(span_datas.to_a) }
       end
     end

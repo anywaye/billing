@@ -77,9 +77,6 @@ module IdempotentRequests
     def render_replayed_response(replayed)
       status, body = replayed
 
-      # On the response, not as a `render` option: `render` has no `headers:`
-      # key and passing one would be silently dropped, which is exactly the kind
-      # of bug where the replay works and the client is never told it was one.
       response.headers[REPLAYED_HEADER] = "true"
 
       render json: JSON.parse(body), status: status

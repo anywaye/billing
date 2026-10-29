@@ -28,20 +28,12 @@ module MoneyParams
     minor_units = price[:amount_minor]
     currency = price[:currency]
 
-    # `is_a?(Integer)` is the money rule at the edge of the service. It also
-    # refuses a String, so "19.00" and "1900" both fail: this API has one
-    # representation for an amount and it is not a string.
     return [ nil, MESSAGE ] unless minor_units.is_a?(Integer) && currency.is_a?(String)
 
     [ Billing::Money.new(minor_units, currency), nil ]
   rescue Billing::Money::Error
-    # A bad currency shape, or an amount outside the bigint range. Billing::Money has
-    # already decided both are errors, and the client gets the same sentence
-    # either way rather than a list of the ways to be wrong.
     [ nil, MESSAGE ]
   rescue TypeError, NoMethodError
-    # The object answered to `[]` and then refused the key. Same answer: not the
-    # shape we asked for.
     [ nil, MESSAGE ]
   end
 end

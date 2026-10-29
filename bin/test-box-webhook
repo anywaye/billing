@@ -1,20 +1,4 @@
 #!/usr/bin/env bash
-# test-box-webhook: end-to-end Stripe webhook walk on an instabox test box.
-#
-# Run this ON the test box (it needs kubectl + stripe CLI + cluster access):
-#   instabox exec anywaye-test --stdin < /path/to/billing/bin/test-box-webhook
-# or copy it into the box and run directly.
-#
-# What it does:
-#   1. Ensures a test-mode Stripe API key is available (from billing-secrets).
-#   2. Starts `stripe listen` forwarding to billing's in-cluster service.
-#   3. Captures the session's whsec_... and patches it into billing-secrets.
-#   4. Rolls out billing so it picks up the new secret.
-#   5. Triggers a checkout.session.completed test event.
-#   6. Verifies billing answered 200 and records the delivery.
-#   7. Leaves stripe listen running (kill it yourself when done).
-#
-# Exit codes: 0 = walk green, 1 = a step failed.
 set -euo pipefail
 
 NS=billing
@@ -26,11 +10,9 @@ WHSEC=""
 say() { echo "[test-box-webhook] $*"; }
 fail() { echo "[test-box-webhook] FAIL: $*" >&2; exit 1; }
 
-# 0. prereqs
 command -v stripe >/dev/null 2>&1 || fail "stripe CLI not installed"
 command -v kubectl >/dev/null 2>&1 || fail "kubectl not installed"
 
-# 1. test API key from the billing secret
 say "extracting test Stripe API key from billing-secrets"
 sudo kubectl get secret billing-secrets -n "$NS" -o json \
   | python3 -c "import sys,json,base64; d=json.load(sys.stdin); print(base64.b64decode(d['data']['STRIPE_API_KEY']).decode(), end='')" \
@@ -39,12 +21,10 @@ chmod 600 "$KEY_FILE"
 [ -s "$KEY_FILE" ] || fail "could not extract STRIPE_API_KEY"
 say "key length: $(wc -c < "$KEY_FILE")"
 
-# resolve billing service ClusterIP
 SVC_IP=$(sudo kubectl get svc billing -n "$NS" -o jsonpath='{.spec.clusterIP}')
 [ -n "$SVC_IP" ] || fail "could not resolve billing service ClusterIP"
 say "billing service ClusterIP: $SVC_IP"
 
-# 2. stop any previous listener, start a fresh one
 pkill -f "stripe listen" 2>/dev/null || true
 sleep 1
 : > "$LISTEN_LOG"
@@ -52,7 +32,6 @@ nohup sh -c "stripe listen --api-key \"\$(cat $KEY_FILE)\" --all-snapshot --forw
 LISTEN_PID=$!
 say "started stripe listen (pid $LISTEN_PID); waiting for Ready..."
 
-# 3. wait for the Ready line and capture whsec
 for i in $(seq 1 30); do
   if grep -q "Your webhook signing secret is" "$LISTEN_LOG" 2>/dev/null; then
     break
@@ -63,24 +42,20 @@ WHSEC=$(grep -o "whsec_[A-Za-z0-9]*" "$LISTEN_LOG" | head -1)
 [ -n "$WHSEC" ] || { cat "$LISTEN_LOG"; fail "stripe listen did not become ready"; }
 say "captured webhook secret: ${WHSEC:0:12}..."
 
-# 4. patch the secret
 say "patching billing-secrets STRIPE_WEBHOOK_SECRET"
 VAL=$(printf '%s' "$WHSEC" | base64 -w0)
 sudo kubectl patch secret billing-secrets -n "$NS" --type=merge \
   -p "{\"data\":{\"STRIPE_WEBHOOK_SECRET\":\"$VAL\"}}" >/dev/null
 say "secret patched"
 
-# 5. rollout
 say "rolling out billing"
 sudo kubectl rollout restart deployment/"$DEPLOY" -n "$NS"
 sudo kubectl rollout status deployment/"$DEPLOY" -n "$NS" --timeout=180s
 
-# 6. trigger a test event
 say "triggering checkout.session.completed"
 stripe trigger checkout.session.completed --api-key "$(cat "$KEY_FILE")" >/tmp/stripe_trigger.log 2>&1 || { cat /tmp/stripe_trigger.log; fail "stripe trigger failed"; }
 say "trigger succeeded"
 
-# 7. verify delivery + 200
 sleep 4
 if grep -q "POST http://$SVC_IP/v1/webhooks/stripe" "$LISTEN_LOG" && \
    ! grep -q "Failed to POST" "$LISTEN_LOG"; then
@@ -90,7 +65,6 @@ else
   fail "webhook delivery failed (see log above)"
 fi
 
-# 8. verify billing recorded the delivery
 COUNT=$(sudo kubectl exec -n "$NS" deployment/"$DEPLOY" -- sh -c "cd /rails && bin/rails runner 'puts ProcessorWebhook.count'" 2>/dev/null | grep -E '^[0-9]+$' | tail -1)
 say "processor_webhooks in DB: $COUNT"
 
