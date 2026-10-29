@@ -19,8 +19,8 @@ gem "image_processing", "~> 1.2"
 
 
 gem "stripe", "~> 19.6"
-gem "sentry-ruby", "~> 5.24"
-gem "sentry-rails", "~> 5.24"
+gem "sentry-ruby", "~> 7.1"
+gem "sentry-rails", "~> 7.1"
 
 
 gem "anywaye", path: "vendor/anywaye"
