@@ -49,8 +49,6 @@ module V1
   # it always did: which account a user belongs to is identity's fact, and no event
   # carrying it is in this build's `consumes`.
   class SubscriptionsController < BaseController
-    # One thing wrong with the request. `code` is core's problem code, `field` is the
-    # name the client sent it under, and the message is the sentence.
     Refusal = Data.define(:code, :field, :message) do
       def as_error
         { "field" => field, "code" => "invalid" }
@@ -85,9 +83,6 @@ module V1
       guard_invoicable!(subscription)
       return render_refusals if refused?
 
-      # The field and message are this endpoint's, not the plan change's: the
-      # client sent no plan, and the refusal is about the subscription's state
-      # at the processor, so the field names the one thing the client did send.
       invoice = ask_processor(field: "subscription_id", message: "has no upcoming invoice at the payment processor") do
         processor_for(subscription).upcoming_invoice(
           processor_subscription_id: subscription.processor_subscription_id,
@@ -198,9 +193,6 @@ module V1
       return if performed?
 
       change = Subscriptions::PlanChange.new(from: subscription.plan, to: target)
-      # The timing decision is the whole answer, and the proration *behaviour* is all
-      # that goes to the processor: the amount it bills is the processor's, and there
-      # is no code path here that could compute one.
       ask_processor do
         processor.apply_plan_change(
           processor_subscription_id: subscription.processor_subscription_id,
@@ -221,9 +213,6 @@ module V1
 
       def initialize(...)
         super
-        # Read once per request rather than constructed per call, so a key that
-        # rotates mid-request cannot make two calls in one request disagree about
-        # which account they are talking to.
         @processor = Processor::StripeClient.current
         @refusals = []
       end

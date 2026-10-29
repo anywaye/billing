@@ -24,18 +24,11 @@ class CreatePlans < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    # The slug is the public handle, and it is what GET /v1/plans/:slug looks
-    # up, so it has to be unique as well as well-shaped.
     add_index :plans, :slug, unique: true
 
     add_check_constraint :plans, "amount_cents >= 0", name: "plans_amount_cents_not_negative"
     add_check_constraint :plans, "trial_days >= 0", name: "plans_trial_days_not_negative"
 
-    # The database refuses an interval this service does not know, so a row
-    # written by something that skips the model is still a row the model would
-    # have accepted. The list is written out here rather than read from
-    # `Plan::INTERVALS`: a migration has to keep meaning what it meant the day
-    # it ran, even after the model moves on.
     add_check_constraint :plans, "interval IN ('month', 'year', 'one_time')", name: "plans_interval_known"
   end
 end

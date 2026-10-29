@@ -1,11 +1,5 @@
 require "test_helper"
 
-# The loop and the boot condition.
-#
-# Two of these are the packet's "done" conditions, and they are the direction
-# that matters: a row leaves when a broker is configured, and nothing leaves —
-# and nothing starts — when one is not. The rest hold the schedule and the
-# shutdown to identity's documented decisions.
 class Outbox::RelayTest < ActiveSupport::TestCase
   setup do
     travel_to(frozen_now)
@@ -20,8 +14,6 @@ class Outbox::RelayTest < ActiveSupport::TestCase
   test "an unpublished row reaches the stream under a billing subject, and the row is marked" do
     create_customer
 
-    # One synchronous pass, not the thread: the claim, the publish and the mark
-    # are the pass's, and the thread is only a clock around them.
     relay = Outbox::Relay.new(
       Anywaye::Outbox.publisher(
         connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
@@ -48,8 +40,6 @@ class Outbox::RelayTest < ActiveSupport::TestCase
     assert_predicate @relay, :running?
     assert_equal "outbox-relay", @relay.instance_variable_get(:@thread).name
 
-    # The fixed poll, observed rather than slept on: the row is written and the
-    # loop picks it up without anybody telling it to.
     wait_until("a started loop publishes a committed row") { @broker.delivered.any? }
     wait_until("and marks it from the ack") { OutboxEvent.sole.reload.published_at.present? }
 
@@ -90,9 +80,6 @@ class Outbox::RelayTest < ActiveSupport::TestCase
   end
 
   test "a full batch does not wait out the interval" do
-    # A pass that moved something is a pass that may have more waiting, so the
-    # loop goes around again immediately. Two customers, one batch, and the
-    # second row must not sit for the interval.
     2.times do |index|
       create_customer(
         owner_id: format("11111111-1111-4111-8111-11111111111%d", index),
@@ -109,10 +96,6 @@ class Outbox::RelayTest < ActiveSupport::TestCase
   end
 
   test "a pass that cannot claim is retried rather than fatal" do
-    # The database blipping is an outage, not a bug: the loop logs the class and
-    # keeps going, because the next pass may find the row still claimable. A
-    # publisher that fails once and then delegates is the case, and the thread
-    # surviving to publish is the assertion.
     create_customer
     real = Anywaye::Outbox.publisher(
       connection: Anywaye::Outbox::ActiveRecordConnection.for(ActiveRecord::Base),
@@ -140,11 +123,6 @@ class Outbox::RelayTest < ActiveSupport::TestCase
 
   private
 
-    # Waits for a condition without a sleep in the assertion: the loop under test
-    # runs on its own thread and its own clock, so the spec waits on the
-    # *observable* outcome with a bounded deadline rather than sleeping a
-    # guessed duration and hoping. A deadline is not a sleep here — it is the
-    # difference between "the row arrived" and "the row arrived in time".
     def wait_until(message = nil, deadline: 10)
       deadline_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) + deadline
       until yield

@@ -1,29 +1,6 @@
 require "test_helper"
 
-# The allowlist, asserted on directly.
-#
-# `CanaryTest` proves no caller-supplied content reaches an exportable span. This
-# file proves the ALLOWLIST is the thing doing the work, and the two are not the
-# same claim: a canary test is satisfied by a service that exports nothing, and an
-# allowlist test is satisfied by a service that never calls `record/2`. Both are
-# needed, and each says which failure it catches.
-#
-# The pattern is the fleet's, promoted: the realistic way billing's redaction
-# boundary fails is not an attacker. It is a well-meaning engineer in six months
-# adding `span.set_attribute("customer.email", customer.email)` because it would
-# help debug a subscription, in the one service in the fleet whose rows carry a
-# customer's email, a processor id and a price in minor units. So the LIST itself is
-# the assertion, and the words it may not contain are written down.
 class ObservabilityAllowlistTest < ActiveSupport::TestCase
-  # Words that name content rather than shape. A span attribute named for one of
-  # them is a span attribute somebody will eventually fill with the thing it names,
-  # and the allowlist is the only thing standing between that intention and a
-  # searchable, retained, widely-readable store.
-  #
-  # `customer` and `account` are here even though billing's own vocabulary is full
-  # of them, because the argument is about the ATTRIBUTE NAME, not the domain: a
-  # `customer.id` on a span is a tenant key on a measurement, and that is
-  # unbounded cardinality under a different name.
   FORBIDDEN_WORDS = %w[
     prompt message content text body header query params parameter payload
     email subject recipient recipient_id customer user account tenant owner
@@ -53,10 +30,6 @@ class ObservabilityAllowlistTest < ActiveSupport::TestCase
   end
 
   test "every allowed name is a semantic convention this service can actually set" do
-    # The positive direction, and it is here because the negative direction above
-    # would pass against an empty list: a boundary that allows nothing exports
-    # nothing, which is indistinguishable from a boundary that refuses everything
-    # until somebody tries to record something.
     assert_equal %w[http.request.method http.response.status_code http.route error.type].sort,
                  Kit::Telemetry::ALLOWED_SPAN_ATTRIBUTES.sort
   end
@@ -80,10 +53,6 @@ class ObservabilityAllowlistTest < ActiveSupport::TestCase
   end
 
   test "a symbol key is recorded when its NAME is allowed, and dropped when it is not" do
-    # The two directions in one test, because a matcher that only handled strings
-    # would refuse every symbol and pass the second half silently: nothing in
-    # production writes a symbol key today, so a test that only asserted the drop
-    # would be satisfied by a recorder that dropped everything.
     span = FakeSpan.new
 
     Kit::Telemetry.record(span, { "http.request.method": "GET", customer_email: "someone@example.com" })
@@ -92,9 +61,6 @@ class ObservabilityAllowlistTest < ActiveSupport::TestCase
   end
 
   test "a nil value is dropped even when the name is allowed" do
-    # `error.type` is nil on every non-5xx request, and a nil attribute is a key
-    # present with no value — which a metric exporter turns into a series with an
-    # empty label rather than no series at all.
     span = FakeSpan.new
 
     Kit::Telemetry.record(span, { "error.type" => nil })
@@ -111,10 +77,6 @@ class ObservabilityAllowlistTest < ActiveSupport::TestCase
   end
 
   test "a value that is a whole customer record is refused by the NAME, not by its shape" do
-    # The refusal has to be by name. A check on the value's class would be a
-    # second, weaker rule that a `to_s` defeats, and it would have to be
-    # maintained as carefully as the name list — which is how a boundary grows two
-    # halves and one of them rots.
     span = FakeSpan.new
     customer = Struct.new(:email, :processor_customer_id, keyword_init: true).new(
       email: "someone@example.com", processor_customer_id: "cus_123"
@@ -150,16 +112,10 @@ class ObservabilityAllowlistTest < ActiveSupport::TestCase
   end
 
   test "error_type returns nil for a value it does not recognise" do
-    # nil rather than a guess: the span still carries the status, so the failure is
-    # visible. What it will not carry is a new label for every exception class the
-    # standard library happens to have.
     assert_nil Kit::Telemetry.error_type(nil, :something_new)
     assert_nil Kit::Telemetry.error_type("not even an exception", :unhandled)
   end
 
-  # A span that records what it was told, and nothing else. The real SDK's Span is
-  # used everywhere else; this exists so the DROPS above assert on the argument
-  # `record/2` computed rather than on what the SDK decided to keep.
   class FakeSpan
     attr_reader :attributes
 

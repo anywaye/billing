@@ -44,9 +44,6 @@ module V1
       plan = Plan.new(plan_params)
       failures = assign_price(plan, params[:price])
 
-      # `plan.save` first, deliberately: it is what populates the model's own
-      # errors, and short-circuiting on the price failure first would report one
-      # problem to a client who sent three.
       if plan.save && failures.empty?
         render json: plan, status: :created, location: "/v1/plans/#{plan.id}"
         remember_response(plan.as_json)
@@ -58,8 +55,6 @@ module V1
     def update
       plan = plan_record
       plan.assign_attributes(plan_params)
-      # A PATCH that does not mention a price must not touch one, so the price
-      # is only read when the key is present at all.
       failures = params.key?(:price) ? assign_price(plan, params[:price]) : []
 
       if plan.save && failures.empty?
@@ -70,9 +65,6 @@ module V1
     end
 
     private
-      # The two columns a price is stored in. The client never sends either — it
-      # sends `price` — so this is how one amount problem is reported once, under
-      # the name the caller used.
       PRICE_COLUMNS = %i[amount_cents currency].freeze
 
       def plan_record
@@ -90,23 +82,14 @@ module V1
         money, error = MoneyParams.parse(price)
         return [ ProblemResponses::Failure.new(field: "price", code: "invalid_format", message: "price #{error}") ] if error
 
-        # The only path by which an amount reaches this model. `price=` refuses
-        # anything that is not a Billing::Money, so a plan can never hold a bare integer
-        # that has lost its currency.
         plan.price = money
         []
       end
 
       def render_price_failure(plan, param_failures)
         if param_failures.any?
-          # The price was refused before it became an amount, so the two columns
-          # it would have been stored in are simply empty. Reporting them as well
-          # would say the same thing a second time under two other names.
           render_validation_failure(plan, param_failures, except: PRICE_COLUMNS)
         else
-          # The price became an amount, and the model is refusing *that* — a
-          # negative one, a currency that survived normalisation but not the
-          # shape. It is still a problem with the price the client sent.
           render_validation_failure(plan, rename: PRICE_COLUMNS.to_h { |column| [ column, "price" ] })
         end
       end

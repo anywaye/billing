@@ -18,7 +18,6 @@ class ObservabilityTelemetryTest < ActiveSupport::TestCase
     TestSupport::TestSpanExporter.clear!
   end
 
-  # --- the contract ---------------------------------------------------------
 
   test "BILLING_OTEL_ENDPOINT is the only variable, and it defaults to kit's collector" do
     assert_equal "BILLING_OTEL_ENDPOINT", Kit::Telemetry::ENDPOINT_VARIABLE,

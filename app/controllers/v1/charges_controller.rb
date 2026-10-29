@@ -40,18 +40,11 @@ module V1
   # enumeration oracle for anyone walking ids. Absence, never refusal
   # (`AGENTS.md`, Contracts).
   class ChargesController < BaseController
-    # The whole stylesheet, inline, as a constant rather than a string in the
-    # method body: it is a fixed string with no interpolation, so Ruby folds it
-    # into a literal and the heredoc above stays readable. A stylesheet is not
-    # worth an asset pipeline for four rules.
     STYLE = <<~CSS.freeze
       body { font-family: system-ui, sans-serif; max-width: 34rem; margin: 3rem auto;
-             padding: 0 1rem; color: #1a1a1a; line-height: 1.5; }
       h1 { font-size: 1.25rem; margin: 0 0 1.5rem; }
       .amount { font-size: 2rem; font-weight: 600; margin: 0 0 1.5rem; }
       .row { display: flex; justify-content: space-between; gap: 1rem;
-             padding: 0.4rem 0; border-bottom: 1px solid #e5e5e5; font-size: 0.9rem; }
-      .label { color: #666; }
     CSS
 
     # GET /v1/charges
@@ -78,12 +71,6 @@ module V1
       charge = Charge.for_account(current_account_id).find_by(id: uuid_param!(params[:id]))
       raise ActiveRecord::RecordNotFound unless charge
 
-      # `html_safe` on the finished document, and that is the load-bearing half
-      # of the escaping rule. `render html:` escapes its argument by default, so
-      # an unmarked string would arrive as `&lt;!DOCTYPE html&gt;` — a receipt
-      # that renders as source code. The values were escaped on the way in, the
-      # document is safe to mark, and the two facts are asserted together by the
-      # spec that puts a `<script>` in the description and reads it back escaped.
       render html: receipt_html(charge).html_safe, content_type: "text/html"
     end
 
@@ -106,29 +93,16 @@ module V1
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>#{escape("Receipt — #{charge.description}")}</title>
-            <style>#{STYLE}</style>
           </head>
           <body>
             <h1>Receipt</h1>
-            <p class="amount">#{escape(formatted_amount(charge))}</p>
-            #{row("Description", charge.description)}
-            #{row("Paid", charge.paid_at&.utc&.strftime("%B %-d, %Y"))}
-            #{row("Charge id", charge.processor_charge_id)}
-            #{row("Subscription", charge.subscription_id)}
-            #{row("Receipt id", charge.id)}
           </body>
           </html>
         HTML
       end
 
       def row(label, value)
-        # An absent value renders as an empty row rather than as a blank label:
-        # a receipt that says "Subscription:" and nothing is worse than one that
-        # does not have the row.
-        return "" if value.blank?
-
-        %(<p class="row"><span class="label">#{escape(label)}</span><span>#{escape(value)}</span></p>)
+        "" if value.blank?
       end
 
       # The amount as a person reads money, from integer minor units.
@@ -143,7 +117,6 @@ module V1
       # number on a receipt is ambiguous by construction.
       def formatted_amount(charge)
         money = Billing::Money.new(charge.amount, charge.currency)
-        "#{format("%.#{money.exponent}f", money.to_major)} #{charge.currency}"
       end
 
       def escape(value)

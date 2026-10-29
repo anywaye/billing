@@ -15,24 +15,13 @@
 # service has already made will retry it until Stripe gives up, and the retry
 # accomplishes nothing.
 class ProcessorWebhook < ApplicationRecord
-  # Bound on the recorded message. The class and the processor event id are what
-  # a human needs to find the row; the tail of a stack-trace-shaped message is
-  # not, and an unbounded text column in a table that grows by one row per
-  # delivery is a liability.
   MAX_ERROR_LENGTH = 1_000
 
-  # A processor this build does not speak. Adding one is a decision: the signing
-  # scheme, the payload shape and the event mapping all change together.
   PROCESSORS = %w[stripe].freeze
 
   IGNORED_PREFIX = "ignored:"
   FAILED_PREFIX = "failed:"
 
-  # `type` here is the processor's event type, not an STI discriminator. Rails
-  # reserves the name for inheritance, and without this every `find` on the table
-  # tries to resolve `customer.subscription.updated` to a class and raises
-  # SubclassNotFound — which is how a table storing someone else's type strings
-  # breaks a perfectly ordinary query.
   self.inheritance_column = nil
 
   validates :processor, presence: true, inclusion: { in: PROCESSORS }

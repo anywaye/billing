@@ -18,9 +18,6 @@ class CreateAskTokensTables < ActiveRecord::Migration[7.0]
       t.jsonb :metadata, null: false, default: {}
       t.bigint :balance, null: false
       t.datetime :expires_at
-      # Billing detail the ActiveRecord store lifts out of :metadata when
-      # present. Columns exist so ledgers can be summed and grouped (model
-      # spend, margin) without JSON casts.
       t.string :model_id
       t.string :provider
       t.bigint :input_tokens
@@ -28,8 +25,6 @@ class CreateAskTokensTables < ActiveRecord::Migration[7.0]
       t.bigint :cached_tokens
       t.decimal :llm_cost_usd, precision: 12, scale: 8
       t.decimal :multiplier, precision: 6, scale: 4, default: 1.0, null: false
-      t.string :cost_kind          # llm, messaging, voice, storage
-      t.string :unit_kind          # tokens, messages, minutes
       t.bigint :units
       t.datetime :created_at, null: false
     end

@@ -24,16 +24,8 @@ class CreateCustomers < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    # One customer per owner per processor. The processor is in the key because
-    # the same owner can legitimately hold a customer at two processors — a
-    # migration between them must not collide.
     add_index :customers, %i[owner_type owner_id processor], unique: true
 
-    # The database refuses a processor this service does not know, so a row
-    # written by something that skips the model is still a row the model would
-    # have accepted. The list is written out here rather than read from
-    # `Customer::PROCESSORS`: a migration has to keep meaning what it meant the
-    # day it ran, even after the model moves on.
     add_check_constraint :customers, "processor IN ('stripe')", name: "customers_processor_known"
   end
 end

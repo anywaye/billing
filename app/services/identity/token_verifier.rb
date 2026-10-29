@@ -54,43 +54,14 @@ module Identity
   # a caller learns by trying, so the 401 body is one fixed sentence and the
   # specific reason goes to the log with the trace id.
   class TokenVerifier
-    # core allows RS256 and ES256. RS256 only, and pinned here rather than read
-    # from the token: widening it is a one-line change, and doing it before
-    # identity publishes ES256 keys would widen the attack surface for nothing.
-    # `guard`'s verifier made the same call for the same reason.
     ALGORITHM = "RS256"
 
-    # What identity publishes at `{issuer}/.well-known/jwks.json`. Fixed by the
-    # OIDC discovery specification and by guard, which hardcodes the same path.
     JWKS_PATH = "/.well-known/jwks.json"
 
-    # How long a fetched key set is reused before it is fetched again. Five
-    # minutes, which is guard's number: long enough that the hot path makes no
-    # outbound call, short enough that a rotation is picked up without a restart.
     CACHE_TTL = 5.minutes
 
-    # One fetch's ceiling. A verifier with no timeout is a request that can hang
-    # for as long as identity takes to answer, which is a way to spend this
-    # process's workers without sending any traffic.
     FETCH_TIMEOUT = 5.seconds
 
-    # core's registered claims, all of them.
-    #
-    # **`account_id` is deliberately NOT in this list, and the reason is which
-    # message the operator gets.** The gem refuses a missing required claim with
-    # `JWT::MissingRequiredClaim`, which names the claim and nothing else — and for
-    # `account_id` that message is actively misleading, because the claim is not
-    # missing by accident: `identity` deliberately does not issue one, and sends
-    # `accounts` (an array) instead. An operator reading
-    # "token refused: JWT::MissingRequiredClaim" goes looking for a malformed token
-    # rather than for a cross-repository disagreement they can actually fix, which
-    # is `Principal::NO_ACCOUNT`'s whole job. So the tenancy claim is enforced in
-    # the one place that can explain it, and the outcome is the same refusal.
-    #
-    # It is enforced, not dropped. `Principal.build` requires a uuid there, and a
-    # token without one is refused rather than treated as "no account", because "no
-    # account" and "an account I could not read" must not both be answers to the
-    # same request.
     REQUIRED_CLAIMS = %w[iss aud sub exp iat jti].freeze
 
     # The class-level handle, so a deployment configures one verifier and a spec
@@ -267,9 +238,6 @@ module Identity
         key = JWT::JWK.import(entry).public_key
         key.is_a?(OpenSSL::PKey::RSA) ? { kid: entry["kid"], key: key } : nil
       rescue StandardError
-        # One key billing cannot import is not the key set being down. Dropping it
-        # means a token naming it is refused as an unknown key, which is the same
-        # answer a set without it would give.
         nil
       end
 

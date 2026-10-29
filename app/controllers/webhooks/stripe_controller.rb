@@ -42,26 +42,10 @@ module Webhooks
     # secret verified this" is a conclusion of ours, not a parse failure.
     class UnverifiedSignature < Webhooks::Error; end
 
-    # Stripe's own default, and the window in which a captured request stays
-    # replayable. Overridable because a deployment may legitimately receive a
-    # request later than Stripe sent it — but the check is always performed
-    # against the timestamp Stripe signed, never a number this service invented.
     DEFAULT_TOLERANCE = 300
 
     def create
       payload = verified_payload
-      # The account the event belongs to, and the request's own transaction —
-      # because the database half of the boundary needs an identity before the
-      # first row is read, and this request has no token to read one from. The
-      # resolution presents an id the payload carried (see
-      # `Webhooks::AccountResolution`); a payload that names no customer this
-      # service knows resolves to nil, and the ingestion then reads nothing and
-      # records the delivery as `unknown_customer`, which is what it did for a
-      # dashboard-created customer before any of this existed.
-      #
-      # AFTER `verified_payload`, never before: an unverified body is not an event
-      # and must not be interpreted — not even well enough to present one of its
-      # ids to the database.
       Tenancy.with_resolved_account(Webhooks::AccountResolution.new(payload)) do
         Webhooks::Ingestion.new(
           processor: :stripe,
@@ -80,22 +64,7 @@ module Webhooks
     private
       def verified_payload
         event = verify_signature
-        # Parsed from the verified bytes, not from the gem's event object: the
-        # stored payload is then the body Stripe signed rather than a round trip
-        # through a third-party object model. `id` and `type` come from the
-        # verified event, so a payload cannot disagree with the signature that
-        # covered it about which event it is.
         payload = JSON.parse(raw_body)
-        # Not an object, so not an event — and this has to be decided here rather
-        # than by whatever the gem does with it. `Stripe::Webhook.construct_event`
-        # builds a `Stripe::Event` out of the parsed body, and an array, a bare
-        # number, a string, a boolean or `null` reach that call as something it
-        # has no accessor for, so it raises `TypeError` or `NoMethodError` rather
-        # than the `SignatureVerificationError` the loop above rescues. Uncaught,
-        # that is a 500 on an endpoint whose own status table says a 5xx never is
-        # an answer, because a 5xx teaches a processor to retry a decision that
-        # cannot change. `{}` passes here and is refused one line below for having
-        # no event id, which is the same 400 with the same detail.
         raise MalformedEvent, "verified body is not a JSON object" unless payload.is_a?(Hash)
 
         payload = payload.merge("id" => event.id, "type" => event.type)
@@ -109,18 +78,6 @@ module Webhooks
       def verify_signature
         raise SignaturesUnconfigured, "no STRIPE_WEBHOOK_SECRET is configured" if signing_secrets.empty?
 
-        # Every configured secret is tried and the first that verifies wins, the
-        # way the reference processor does it. A body that verifies under none of
-        # them — or under a stale timestamp, which is what the tolerance window
-        # exists for — is a rejected signature and a 400.
-        #
-        # The exception list is this method's and not `create`'s, because this is
-        # where the gem is called and this is what it raises. `StandardError` is
-        # last on purpose: it catches the gem's own shape assumptions on a body it
-        # verified, and it is scoped to the verification call so it cannot swallow
-        # anything from the ingestion layer below. The loop's own
-        # `SignatureVerificationError` stays first and stays a `next`, so a secret
-        # that simply does not match is a candidate failure and not an error.
         signing_secrets.each do |candidate|
           begin
             return Stripe::Webhook.construct_event(raw_body, signature, candidate, tolerance: tolerance)

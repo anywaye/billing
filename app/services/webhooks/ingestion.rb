@@ -62,9 +62,6 @@ module Webhooks
   # this layer already records. Parking it as `failed:` would put a row in front of
   # a human at 3am for an event that is published and correct.
   class Ingestion
-    # Recorded when a delivery lost the race to publish its own event. A
-    # decision, in the vocabulary `processor_webhooks.error` already uses, not a
-    # failure: the event exists, written by the request that won.
     DUPLICATE_REASON = "duplicate_delivery".freeze
 
     def initialize(processor:, event_id:, type:, payload:)
@@ -96,15 +93,6 @@ module Webhooks
       end
 
       def emit(webhook, handler)
-        # One transaction for the event and the marking. Either a consumer sees
-        # `billing.payment.succeeded` and the row is finished, or neither exists
-        # and the next delivery redoes the work from the stored payload.
-        #
-        # The handler is *inside* the transaction, and that is load-bearing now
-        # that a handler can also write domain state: a subscription event applies
-        # to the subscriptions table and the row it writes commits or rolls back
-        # with the event and the receipt. `Webhooks::Ingestion` itself is unchanged
-        # by that; the ordering is what was already here.
         ProcessorWebhook.transaction do
           emission = handler.call(payload, event_time)
           OutboxEvent.publish!(
@@ -118,65 +106,8 @@ module Webhooks
       rescue Ignored => e
         webhook.ignore!(e.reason)
       rescue ActiveRecord::RecordNotUnique => e
-        # A concurrent duplicate delivery, caught wherever the constraint fired.
-        #
-        # Two deliveries of one event id both read `handled?` as false, both
-        # dispatch, and one loses the insert. By the time the loser is here the
-        # winner has **committed** — the constraint is what made it wait — so the
-        # event is durably published and this delivery's own work rolled back with
-        # its transaction.
-        #
-        # **Two different routes can lose this race**, which is why the rescue is
-        # on the exception class and not on a particular constraint:
-        #
-        #   * `outbox_events_processor_event_id_idx` for the payment and the
-        #     updated/deleted subscription events, whose payloads carry
-        #     `processor_event_id`.
-        #   * the `subscriptions` table for `customer.subscription.created`, whose
-        #     `billing.subscription.started` payload **deliberately does not**
-        #     carry `processor_event_id` (the lifecycle's start payload is
-        #     `core_payload` plus `started_at`, and `lifecycle_test.rb` asserts the
-        #     key's absence). The duplicate `INSERT` into `subscriptions` is
-        #     refused before the outbox is reached.
-        #
-        # That second route was **measured, not assumed**, and the measurement
-        # corrected an assumption worth recording: it is not one constraint. The
-        # model carries a uniqueness validation on `processor_subscription_id`
-        # *and* the table has a unique index over the same column, and two racing
-        # threads can be refused by either. Over 60 barrelled duplicate creations
-        # on this branch the split was 57 refused by the index and **3 by the
-        # validation**, which is why the branch below exists and why this comment
-        # does not name a single index. Dropping *every* index on `subscriptions`
-        # and re-running the same two deliveries reopens it (two subscription
-        # rows, two `billing.subscription.started` events), so the property does
-        # rest on constraints — just on more than one, none of which is
-        # individually sufficient. `concurrent_delivery_test.rb` tests both routes.
-        #
-        # A decision, not a failure, and the vocabulary says so: the event exists,
-        # written by a request no longer in flight, and this delivery has nothing
-        # left to do. Answering anything but 200 would tell the processor to
-        # redeliver, and the redelivery would race again. Parking it as `failed:`
-        # would put a row in front of a human for an event that is published and
-        # correct.
-        #
-        # **A unique violation is classified by what it refused, not by its
-        # class.** Measured on this stack (2026-10-16): a *second* live
-        # subscription for an account that already held one on the same plan is
-        # refused by `subscriptions_live_account_plan_idx` — the customer paid,
-        # the invoice's charge was processed, and this branch recorded the
-        # subscription as `ignored:duplicate_delivery`, which is a lie: no earlier
-        # delivery stated this fact. So the constraint's effect is re-read after
-        # the rollback: a duplicate is the same fact already stored (the outbox
-        # row for this event id, or the subscription this event names), and
-        # anything else a constraint refuses is parked for a human.
         duplicate_delivery? ? webhook.ignore!(DUPLICATE_REASON) : park(webhook, e)
       rescue ActiveRecord::RecordInvalid => e
-        # A uniqueness failure and a unique-index violation are **one fact** told
-        # two ways, and which of the two a losing thread hears is a scheduling
-        # accident. Classified by the *error*, not by the exception class,
-        # because a `RecordInvalid` with no uniqueness error in it is a bug in
-        # this service and belongs in front of a human — see the test beside the
-        # parking branch, which is the control for exactly that.
         uniqueness_race?(e) ? webhook.ignore!(DUPLICATE_REASON) : park(webhook, e)
       rescue StandardError => e
         park(webhook, e)
@@ -201,8 +132,6 @@ module Webhooks
       # the plan — is a second real fact this service declined to store, and it
       # parks.
       def duplicate_delivery?
-        # The index over this expression is `outbox_events_processor_event_id_idx`
-        # — the outbox table has no column of its own for it.
         return true if OutboxEvent.where("data ->> 'processor_event_id' = ?", @event_id).exists?
         return false unless @type.to_s.start_with?("customer.subscription.")
 

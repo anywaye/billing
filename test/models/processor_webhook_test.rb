@@ -1,9 +1,5 @@
 require "test_helper"
 
-# The inbound webhook record. Two things are asserted here that nothing else
-# can assert for us: a processor's event id is stored exactly once (a replay is
-# ordinary operation, not an error), and the row records *why* it reached a
-# terminal state so a stuck event is diagnosable from the table alone.
 class ProcessorWebhookTest < ActiveSupport::TestCase
   PAYLOAD = { "id" => "evt_1", "type" => "ping", "data" => { "object" => {} } }.freeze
 
@@ -46,11 +42,6 @@ class ProcessorWebhookTest < ActiveSupport::TestCase
     assert_equal 2, ProcessorWebhook.count
   end
 
-  # A concurrent delivery of the same event id is the one case find_or_create_by!
-  # does not cover on its own: the unique index rejects the second insert and
-  # the loser has to come back with the winner's row. Forcing the conflict proves
-  # the retry exists; losing the race to a real second connection would prove the
-  # same thing non-deterministically.
   test "a unique index conflict returns the row the winner stored" do
     stored = ProcessorWebhook.ingest(processor: :stripe, event_id: "evt_1", type: "ping", payload: PAYLOAD)
 
@@ -88,10 +79,6 @@ class ProcessorWebhookTest < ActiveSupport::TestCase
     assert_not webhook.valid?
   end
 
-  # The model refusing a value is a courtesy to the caller. The database refusing
-  # it is what makes the table's contents mean what the model says they mean, so
-  # a row written by something that skips the model is still a row the model
-  # would have accepted.
   test "the database refuses a processor the model would refuse" do
     ProcessorWebhook.create!(processor: :stripe, stripe_event_id: "evt_1", type: "ping", payload: PAYLOAD)
     rogue = ProcessorWebhook.new(processor: "adyen", stripe_event_id: "evt_2", type: "ping", payload: PAYLOAD)
@@ -149,11 +136,6 @@ class ProcessorWebhookTest < ActiveSupport::TestCase
     assert webhook.error.start_with?("failed:Billing::Money::InvalidAmountError: ")
   end
 
-  # A column named `type` is single-table inheritance on any Active Record model.
-  # This table stores the processor's own type strings, so without this every
-  # `find` tries to resolve `customer.subscription.updated` to a class and raises
-  # SubclassNotFound — which is how a table storing someone else's type strings
-  # breaks a perfectly ordinary query.
   test "the processor's own type is not read as an STI discriminator" do
     webhook = ProcessorWebhook.ingest(processor: :stripe, event_id: "evt_1", type: "customer.subscription.updated", payload: PAYLOAD)
 
@@ -161,9 +143,6 @@ class ProcessorWebhookTest < ActiveSupport::TestCase
   end
 
   private
-    # Stands in for two deliveries racing: the unique index rejects the loser's
-    # insert. minitest 6 dropped `Object#stub`, so this uses the stub registry
-    # ActiveSupport already ships, the same way `with_lease_connection` does.
     def with_unique_index_conflict
       simple_stubs.stub_object(ProcessorWebhook, :find_or_create_by!) do |*|
         raise ActiveRecord::RecordNotUnique, "duplicate key value violates unique constraint"

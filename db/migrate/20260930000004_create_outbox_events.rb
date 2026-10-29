@@ -24,14 +24,9 @@
 class CreateOutboxEvents < ActiveRecord::Migration[8.1]
   def change
     create_table :outbox_events, id: :uuid do |t|
-      # The envelope's `id`, generated before the insert and reused on every
-      # retry, so a republish is the same id and a consumer's dedupe key dedupes.
       t.string :event_type, null: false
       t.string :source, null: false
       t.string :subject, null: false
-      # `time` is when the state change happened — not when the row was inserted
-      # and not when it is published. A row that sat unpublished for an hour
-      # still reports the original time.
       t.column :time, :timestamptz, null: false
       t.jsonb :data, null: false
       t.column :published_at, :timestamptz
@@ -39,14 +34,8 @@ class CreateOutboxEvents < ActiveRecord::Migration[8.1]
       t.column :created_at, :timestamptz, null: false
     end
 
-    # The publisher's only query, and the index core names for it. Partial,
-    # because published rows are spent: indexing them would grow the index with
-    # every event this service has ever published, forever, to serve a query
-    # that filters them all out.
     add_index :outbox_events, :created_at, where: "published_at IS NULL", name: "outbox_events_unpublished_idx"
 
-    # Per-entity ordering is the one ordering core guarantees, so this is the one
-    # index the guarantee needs behind it.
     add_index :outbox_events, %i[subject created_at], name: "outbox_events_subject_created_at_idx"
   end
 end

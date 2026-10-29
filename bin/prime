@@ -1,29 +1,4 @@
 #!/usr/bin/env bash
-#
-# Prime this worktree. Run it after `git clone`, `git worktree add`, or
-# `git pull --rebase`, and it is what CI runs.
-#
-#   bin/prime            # bundle, prepare the database, lint, then the suite
-#   bin/prime --fast     # bundle and the database only
-#
-# WHAT IT PROMISES
-#   Exit 0: dependencies resolve, the database is prepared, the linter is
-#   clean, and every test passes. Anything else: nonzero, with the failing step
-#   named. `set -euo pipefail` is the whole mechanism — no error handling to
-#   forget.
-#
-# STRICTNESS NOTES
-#   - No `mise install` here. mise.toml pins the interpreter; this script fails
-#     loudly (127) with instructions instead of installing a toolchain behind
-#     your back. The same 127 is what a WRONG interpreter gets: `.ruby-version`
-#     is read and compared, so macOS's system Ruby cannot answer and have the
-#     run die four lines later naming a gem instead of the toolchain.
-#   - `bundle install`, never `bundle update`: a prime that moves the lockfile
-#     can make two worktrees disagree about the same commit.
-#   - Rubocop runs before the tests: a formatting offense should cost a second,
-#     not a full suite run.
-#   - `db:prepare` before the tests so a first run on a clean checkout does not
-#     fail on a missing database.
 
 set -euo pipefail
 
@@ -49,22 +24,6 @@ require() {
   fi
 }
 
-# The pin, and the interpreter that answered, are two different facts and only
-# one of them is a question.
-#
-# `require ruby` above proves *an* interpreter is on PATH. On any Mac that is
-# satisfied by the system Ruby in /usr/bin, and the run then dies four lines
-# later with `Could not find 'bundler' (4.0.18) ... (Gem::GemNotFoundException)`
-# — a gem error naming a gem, four steps away from the toolchain that is wrong.
-# Measured on this machine, with /usr/bin first on PATH: that is the whole
-# output, and nowhere in it is the 4.0.1 in .ruby-version. A developer reads it
-# as a lockfile problem and installs a gem.
-#
-# So the pin is read from `.ruby-version` — the same file mise, ruby/setup-ruby
-# and the `pins` CI job read, and the reason there is no second copy of the
-# number here — and anything else is refused here, with the number named, before
-# a gem is touched. Same exit code as a missing interpreter (127), because a
-# wrong interpreter is a missing interpreter.
 require_pinned_ruby() {
   local pin_file running
   pin_file="$(cd -- "$(dirname -- "$0")" && pwd)/../.ruby-version"
@@ -91,8 +50,6 @@ step() {
   printf '\n== %s\n' "$1"
 }
 
-# Never fails the prime. The toolchain checks below are the gate; a banner must
-# not be able to turn a green prime red.
 version_of() {
   "$@" --version 2>/dev/null | head -n 1 || true
 }
@@ -101,12 +58,6 @@ require ruby
 require bundle
 require_pinned_ruby
 
-# The pin, and not `ruby --version`'s whole first line. Those agree by
-# construction here — the check above just refused to continue unless they do —
-# and the version string carries a build date and a platform that differ per
-# machine, so printing it would print a fact no assertion is about. `gate.yml`'s
-# `toolchain` proof matches this line whole, and it is the line that disappears
-# if the pin check is deleted.
 step "ruby $PINNED_RUBY (pinned by .ruby-version)"
 
 step "bundle install"
@@ -143,29 +94,4 @@ fi
 step "rails test"
 bundle exec rails test
 
-# Through `bundle exec`, and this is a FIX rather than a preference.
-#
-# Every command above is `bundle exec <thing>`, and this one was the only bare
-# `bin/rails`. `bin/rails` reaches its gems through `require "bundler/setup"`,
-# which resolves against the INTERPRETER's GEM_HOME, while `bundle exec` uses
-# bundler's own resolution — and on a machine where bundler installs a new gem
-# version into its own `libexec/gems`, the two disagree. The observable
-# consequence is not a warning: `gate.yml` declares a proof that this line reads
-# `== prime ok (rails <X.Y.Z>)`, so an empty version string made the gate FAIL
-# with `gate.proof-missing` while `mix test`-equivalent output above it was green.
-#
-# Measured, on the machine the observability packet was written on, adding
-# `opentelemetry-exporter-otlp 0.37.0`:
-#
-#     $ bin/rails --version
-#     Could not find opentelemetry-exporter-otlp-0.37.0, opentelemetry-common-0.25.2,
-#     google-protobuf-4.36.2 in locally installed gems (Bundler::GemNotFound)
-#
-# `version_of` swallows that (`2>/dev/null … || true`), so the gate printed
-# `== prime ok (rails )` and the proof did not match. The gate caught it; this is
-# what it caught.
-#
-# `bundle exec bin/rails --version` is also more correct in principle: it reports
-# the Rails that `bundle exec rails test` above it actually ran, rather than a
-# Rails resolved by a different route that may not be the same one.
 step "prime ok (rails $(version_of bundle exec bin/rails))"

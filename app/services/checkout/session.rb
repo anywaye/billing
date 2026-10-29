@@ -55,46 +55,13 @@ module Checkout
   # that can fail. `test/services/checkout/session_test.rb` asserts the
   # subscription did not move, rather than asserting that it moved back.
   class Session
-    # The one processor this checkout goes through, and the one call it makes
-    # of it. See the class comment on the processor boundary.
     PROCESSOR = Processor::FakeClient::PROCESSOR
 
-    # The reasons an outcome can be a failure. A closed list, for the reason every
-    # closed list in this repository is closed: a reason somebody can read is a
-    # reason a test can assert, and an unbounded one is a string that grows a
-    # second answer whenever a new case is noticed.
-    #
-    #   * `plan_not_on_sale`       — the plan is withdrawn, or has no price id at
-    #                                 the processor. There is nothing to subscribe
-    #                                 to, and inventing a price for it here would
-    #                                 be this service deciding an amount, which
-    #                                 `AGENTS.md` (Billing::Money) forbids outright.
-    #   * `customer_not_an_account` — a `User`-owned customer. Exactly the rule
-    #                                 `Subscription::BILLABLE_OWNER_TYPE` already
-    #                                 enforces on the row, checked here so the
-    #                                 processor is never asked on behalf of a
-    #                                 customer that could not hold the result.
-    #   * `processor_refused`      — the processor declined, or the call raised.
-    #   * `subscription_refused`    — the processor said yes and this service could
-    #                                 not record it. The reason is the lifecycle's
-    #                                 own, verbatim, because this service must not
-    #                                 flatten "the account does not match" and
-    #                                 "canceled is terminal" into one word.
     NOT_ON_SALE = "plan_not_on_sale".freeze
     NOT_AN_ACCOUNT = "customer_not_an_account".freeze
     PROCESSOR_REFUSED = "processor_refused".freeze
     SUBSCRIPTION_REFUSED = "subscription_refused".freeze
 
-    # What a checkout did. A value object, so a handler cannot observe a
-    # half-finished checkout: there is no object here that is neither complete
-    # nor failed, and no object that is complete but has no subscription.
-    #
-    # `processor_subscription` is kept alongside `subscription` rather than
-    # thrown away because they are two different records of two different
-    # parties: the fake's value is the processor's answer, and this service's
-    # `Subscription` is its own. The delivery path reconciles them by
-    # `processor_subscription_id`, and a checkout that reported only one of
-    # them would hide which side moved.
     Outcome = Data.define(:state, :reason, :subscription, :processor_subscription) do
       def completed?
         state == :completed
@@ -186,11 +153,6 @@ module Checkout
         {
           price_id: plan.processor_price_id,
           quantity: quantity,
-          # The fake's price book: it answers an upcoming-invoice projection
-          # from the plan this checkout bought, which is the only price it
-          # knows. A real processor is not sent either fact — this door talks to
-          # the fake alone — and `AGENTS.md` (Billing::Money)'s rule is about what is
-          # sent to a processor, which this is not.
           price: plan.price,
           interval: plan.interval
         }.merge(trial_kwargs)
@@ -220,19 +182,6 @@ module Checkout
       def recorded(subscription)
         applied = nil
 
-        # **One transaction for the row and the event.** This is the rule
-        # `Webhooks::Ingestion#emit` already holds — the outbox row and the change
-        # it describes commit together or not at all — and a checkout that wrote the
-        # subscription outside it would open the window that rule exists to close:
-        # a database that says the subscription is `active` and an outbox with no
-        # `billing.subscription.started` for it, which is an account paying for
-        # something no downstream consumer was ever told about.
-        #
-        # `OutboxEvent.publish!` is called directly rather than through
-        # `Webhooks::Ingestion`, because there is no delivery to ingest: there is no
-        # `processor_webhooks` row and nothing to mark handled. It is the same
-        # writer, which is the property that matters — there is exactly one outbox
-        # and one envelope builder (`AGENTS.md`, Events).
         Subscription.transaction do
           applied = Subscriptions::Lifecycle.new(
             data: delivery(subscription),
@@ -256,15 +205,6 @@ module Checkout
       rescue Subscriptions::Refused => refusal
         failed(SUBSCRIPTION_REFUSED, reason_detail: refusal.reason, processor_subscription: subscription)
       rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
-        # **The index, not the machine.** `subscriptions_live_account_plan_idx` is a
-        # partial unique index over `(account_id, plan_id)` while the subscription is
-        # live, so a second checkout of the same plan for the same account is
-        # refused by PostgreSQL and arrives here as `RecordNotUnique` — a
-        # `Subscriptions::Refused` with a name, not an exception the domain chose to
-        # raise. This is the same shape `AGENTS.md` (Webhooks in) records for the
-        # outbox index: either a validation or an index may win the race, so the
-        # caller is written against the **outcome** and not against a named
-        # constraint.
         failed(SUBSCRIPTION_REFUSED, reason_detail: "already_subscribed", processor_subscription: subscription)
       end
 

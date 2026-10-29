@@ -44,20 +44,10 @@
 module AuthenticatesPrincipal
   extend ActiveSupport::Concern
 
-  # RFC 7235's registered scheme. `Bearer` case-insensitively, per the
-  # specification: the scheme is compared ASCII-case-insensitively, and a proxy or
-  # a client library that lowercases it is not an attacker.
   BEARER = /\ABearer[ \t]+(?<token>\S+)\z/i.freeze
 
-  # One fixed sentence for every refused token. Which of the four things was wrong
-  # — signature, expiry, issuer, audience — is not something a caller learns by
-  # trying, and `detail` on a problem document is the one field that could carry
-  # it. The specific reason goes to the log with the trace id.
   UNAUTHORIZED_DETAIL = "This request needs a bearer token issued by this platform's identity service."
 
-  # This service cannot verify anybody right now. Also one sentence: an operator
-  # reads the log, not the body, and the body saying which environment variable is
-  # missing would be telling an unauthenticated caller about this deployment.
   UNAVAILABLE_DETAIL = "This service cannot verify a caller right now."
 
   included do

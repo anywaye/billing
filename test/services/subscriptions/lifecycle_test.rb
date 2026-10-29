@@ -1,29 +1,6 @@
 require "test_helper"
 
-# The lifecycle: the one place a subscription's state changes.
-#
-# Everything about a subscription is decided by the processor, so this is where a
-# verified webhook becomes a row, and where the row and the event are written in
-# one transaction. Four properties are asserted here, and they are the packet:
-#
-#   * **A start creates exactly one row, and it is live.** Nothing is born
-#     canceled.
-#   * **A replay changes nothing.** The same event twice, and the same state twice
-#     under two different event ids, both leave the row and the outbox identical.
-#   * **An illegal transition is refused and recorded, not applied.** A canceled
-#     subscription is never revived, whatever arrives and in whatever order.
-#   * **An out-of-order delivery cannot corrupt state.** A deletion that arrives
-#     before its creation, and an update that arrives before its creation, are
-#     both handled rather than papered over.
-#
-# The events are written in the same transaction as the row, so a delivery that
-# dies mid-way leaves neither. That is asserted here by rolling the transaction
-# back at the emission, and the row is checked to be gone with it.
 class Subscriptions::LifecycleTest < ActiveSupport::TestCase
-  # The two accounts the cross-account cases compare. The same `1111…`/`2222…`
-  # pair `test/support/two_accounts.rb` uses, written out rather than referenced so
-  # this file does not depend on a module whose other members are the tenant
-  # specs' business — and so a reader sees the two uuids rather than a name.
   OTHER_ACCOUNT = "22222222-2222-4222-8222-222222222222".freeze
 
   setup do
@@ -32,20 +9,12 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     @plan = create_plan(price: 1900, price_id: "price_1PZQaBcDeFgHiJkLmNoPqR2")
   end
 
-  # The three events this lifecycle can emit. Written out rather than derived, so a
-  # rename in the lifecycle fails here instead of silently changing what these specs
-  # assert they are about.
   SUBSCRIPTION_EVENTS = %w[
     billing.subscription.started
     billing.subscription.updated
     billing.subscription.canceled
   ].freeze
 
-  # Only this service's *subscription* events.
-  #
-  # The setup creates a customer and a plan, and both publish their own events, so
-  # `events.sole` would be asserting about a customer. Every assertion in this
-  # file that is about the lifecycle filters to the three types above.
   def events
     OutboxEvent.where(event_type: SUBSCRIPTION_EVENTS)
   end
@@ -54,7 +23,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     events.order(:created_at, :id).pluck(:event_type)
   end
 
-  # --- starting ---------------------------------------------------------------
 
   test "a subscription starting creates one row" do
     apply("customer.subscription.created")
@@ -82,13 +50,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "sub_1PZQaBcDeFgHiJkLmNoPqR1", Subscription.sole.processor_subscription_id
   end
 
-  # The link the two processor round trips need: `…/upcoming_invoice` and
-  # `…/payment_method` both send `customers.processor_customer_id`, and a
-  # customer created through `/v1` has none — the Checkout session creates the
-  # customer at the processor, and this delivery is the first that learns what
-  # the processor calls it. Measured on this stack (2026-10-16): without this
-  # write, both actions sent a nil customer to Stripe for a subscription Stripe
-  # itself holds.
   test "a subscription starting records the processor's id for a customer that had none" do
     body = JSON.parse(stripe_fixture("customer.subscription.created"))
     body.dig("data", "object")["metadata"] = { "anywaye_customer_id" => @customer.id }
@@ -143,19 +104,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "ignored:unknown_plan", record.error
   end
 
-  # ## A delivery may not move a subscription to another account
-  #
-  # `apply` writes `account_id: customer.owner_id` and, before billing-13, never
-  # compared it to the account already on the row. A second delivery naming a
-  # different customer therefore reassigned a live subscription between accounts
-  # and published the move as `billing.subscription.updated`.
-  #
-  # **The model could not catch it, and that is the reason the guard belongs in
-  # the one place that writes.** `Subscription#account_is_the_customers_owner`
-  # enforces "a subscription's account is its customer's" — and after a
-  # reassignment that is *true*, because the new account genuinely belongs to the
-  # new customer. The rule has no opinion about the account **changing**, so the
-  # write was internally consistent and cross-tenant at the same time.
   test "a delivery naming a customer on another account is recorded and refused" do
     setup_subscription(status: "active")
     other = create_customer(account_id: OTHER_ACCOUNT)
@@ -182,17 +130,9 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
 
     apply("customer.subscription.updated", customer: other)
 
-    # Silence is half the fix. A refusal that still emitted would be a
-    # reassignment to every consumer downstream, whatever the row says.
     assert_equal before, events.pluck(:event_type)
   end
 
-  # The guard reads `existed && !same_account?(subscription)`, and the `existed`
-  # half is load-bearing rather than defensive. A **creation** has no account to
-  # disagree with — which is the whole of the deletion-arriving-before-its-creation
-  # rule, where a delivery whose row does not exist still creates a `canceled` row
-  # because it is the only statement about that subscription that has arrived. An
-  # unconditional comparison would have refused that delivery and dropped it.
   test "a first delivery is not an account mismatch, because there is no account yet to disagree with" do
     other = create_customer(account_id: OTHER_ACCOUNT)
 
@@ -203,10 +143,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
       "a subscription created for a customer is billed to that customer's own account"
   end
 
-  # The other direction, and the one that matters for not breaking the service: an
-  # ordinary update names the account the row is already on. Refusing that would
-  # stop the lifecycle working for every subscriber, and it is the failure mode a
-  # comparison like this invites.
   test "a delivery naming the account the row is already on is applied, not refused" do
     setup_subscription(status: "active")
 
@@ -217,9 +153,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
       "the same account arriving again must not be mistaken for a cross-account delivery"
   end
 
-  # A status this service does not model is refused rather than coerced. A row that
-  # said `active` for a subscription the processor calls `incomplete` would grant
-  # entitlements nobody paid for, and the refusal is a row somebody can find.
   test "a status this service does not model is recorded and refused" do
     record = apply("customer.subscription.created", status: "incomplete")
 
@@ -227,7 +160,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "failed:ArgumentError: unknown target status \"incomplete\"", record.error
   end
 
-  # --- the events -------------------------------------------------------------
 
   test "a start emits billing.subscription.started" do
     apply("customer.subscription.created")
@@ -273,29 +205,18 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "USD", events.sole.data.fetch("currency")
   end
 
-  # The recipient fact, and the reason a consumer can mail a subscription change
-  # with no billing client and no billing tables: the address is on the envelope,
-  # because there is nowhere else it can be read from. The customer is resolved
-  # for the payload already, so the field costs the builder no query it was not
-  # already making.
   test "a start's payload carries the customer's billing email" do
     apply("customer.subscription.created")
 
     assert_equal "billing@example.com", events.sole.data.fetch("email")
   end
 
-  # The plan's name beside its id: a mail about a subscription change has to say
-  # which plan, and `plan_id` is a uuid no consumer can render into words.
   test "a start's payload carries the plan's name beside its id" do
     apply("customer.subscription.created")
 
     assert_equal @plan.name, events.sole.data.fetch("plan_name")
   end
 
-  # Absent, never null: an event that promises a mail it cannot address is
-  # worse than one that carries no address at all, and a consumer refuses the
-  # latter by design. A customer created through `/v1` has no email until the
-  # client sets one, so this is a state the row can honestly be in.
   test "a subscription event for a customer with no address carries no email" do
     @customer.update!(email: nil)
     apply("customer.subscription.created")
@@ -303,18 +224,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     refute_includes events.sole.data.keys, "email"
   end
 
-  # The payload's exact key set, pinned rather than described. core's schema is
-  # closed with `additionalProperties: false` and does not name most of these
-  # fields — that disagreement is recorded in `PENDING_PAYLOAD_ALIGNMENT` in
-  # `test/contract/`, which holds the payload against core's schema in both
-  # directions. What this test holds is the other half: that the payload carries
-  # exactly the fields this service's builder writes, so a field added to the
-  # builder fails here rather than shipping unannounced.
-  #
-  # The processor's own provenance is deliberately *not* here: it is on the
-  # delivery row, where a human looking at a subscription can find it, and
-  # putting it in the payload would make core's schema reject the event written
-  # against it.
   test "a start's payload carries exactly the fields the builder writes" do
     apply("customer.subscription.created")
 
@@ -358,12 +267,7 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_nil events.sole.data.fetch("trial_ends_at")
   end
 
-  # --- replay -----------------------------------------------------------------
 
-  # The single most important test in the packet. Stripe retries on any non-2xx
-  # and promises nothing about ordering, so a delivery arriving twice must leave
-  # the row and the outbox byte-identical: a second envelope id for one
-  # subscription is a fact a consumer cannot tell from a second subscription.
   test "the same delivery twice leaves one row and one event" do
     apply("customer.subscription.created")
     apply("customer.subscription.created")
@@ -388,9 +292,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal before, events.sole.attributes
   end
 
-  # The other form of replay: not the same event id, but the same fact. A
-  # processor that retries with a fresh event id for an unchanged subscription must
-  # not produce a second `billing.subscription.updated` either.
   test "a second event reporting the state we already hold changes nothing" do
     apply("customer.subscription.created")
     before = Subscription.sole.attributes
@@ -410,7 +311,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_predicate record, :handled?
   end
 
-  # --- updating ---------------------------------------------------------------
 
   test "an update changes the row it names" do
     apply("customer.subscription.created")
@@ -433,18 +333,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "evt_1PZQaBcDeFgHiJkLmNoPqR2", events.order(:created_at, :id).last.data.fetch("processor_event_id")
   end
 
-  # A delivery's id and the body it carries are **one value**, because
-  # `stripe_controller.rb` hands `Ingestion` `event_id: payload["id"]`. A helper
-  # that could deliver under an id the body does not carry is arranging a state
-  # Stripe never sends — and the outbox's unique index over the payload's
-  # `processor_event_id` refuses it, which is how this was found: the loop in
-  # "every live status may be canceled" was quietly delivering four *different*
-  # event ids while every emitted payload named the same one.
-  #
-  # Asserted on the **update** only. A start's payload carries no
-  # `processor_event_id` at all, deliberately — see the test above and
-  # `concurrent_delivery_test.rb` — and asserting it here would be asserting a
-  # second, different thing.
   test "an emitted update names the id its delivery was ingested under" do
     apply("customer.subscription.created", event_id: "evt_provenance_start")
     apply("customer.subscription.updated", event_id: "evt_provenance_update", quantity: 3)
@@ -462,10 +350,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal team.id, events.order(:created_at, :id).last.data.fetch("plan_id")
   end
 
-  # The recipient fact and the plan's name are on the update too, not just the
-  # start: a plan change is the subscription event a consumer is most likely to
-  # mail about, and the address and the plan's name are what the mail's body
-  # needs. Both come from the same builder as the start's.
   test "an update's payload carries the customer's email and the plan's name" do
     apply("customer.subscription.created")
     team = create_plan(price: 4900, price_id: "price_1PZQaBcDeFgHiJkLmNoPqR4")
@@ -517,8 +401,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "ignored:no_subscription_to_update", record.error
   end
 
-  # Arrears and recovery. A `past_due` subscription that is paid becomes `active`,
-  # and refusing that would strand a customer who has paid.
   RECOVERY_CASES = {
     "past_due recovers to active" => { from: "past_due", to: "active" },
     "unpaid recovers to active" => { from: "unpaid", to: "active" },
@@ -536,7 +418,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     end
   end
 
-  # --- cancelling -------------------------------------------------------------
 
   test "a cancellation ends the subscription" do
     apply("customer.subscription.created")
@@ -559,9 +440,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal [ "billing.subscription.started", "billing.subscription.canceled" ], event_types
   end
 
-  # A cancellation confirmation is mailed to the same address a receipt is, and
-  # it names the plan being left — the same two fields, from the same builder,
-  # on the third event type.
   test "a canceled payload carries the customer's email and the plan's name" do
     apply("customer.subscription.created")
     apply("customer.subscription.deleted")
@@ -571,9 +449,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal @plan.name, data.fetch("plan_name")
   end
 
-  # Cancellation *taking effect* is what is published, not cancellation being
-  # requested. `cancel_at_period_end: true` on a still-active subscription is an
-  # update, because nothing has ended yet.
   test "cancelling at period end is an update, not a cancellation" do
     apply("customer.subscription.created")
     apply("customer.subscription.updated", cancel_at_period_end: true)
@@ -602,7 +477,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     end
   end
 
-  # --- the illegal transitions ------------------------------------------------
 
   test "a canceled subscription is never made active again" do
     apply("customer.subscription.created")
@@ -642,13 +516,7 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     end
   end
 
-  # --- out-of-order delivery --------------------------------------------------
 
-  # A deletion before its creation. The deletion is the only statement about the
-  # subscription that has arrived, and dropping it would leave an active
-  # subscription for something the processor says is gone — which is exactly the
-  # state that grants entitlements nobody is paying for. So it is kept, as a
-  # canceled row, and the creation that follows is the refused one.
   test "a deletion arriving before its creation is accepted" do
     record = apply("customer.subscription.deleted")
 
@@ -692,8 +560,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "ignored:unknown_plan", record.error
   end
 
-  # An update before its creation. A subscription is not born by being updated, so
-  # the update is refused and the creation that follows starts it normally.
   test "an update arriving before its creation does not create the subscription" do
     record = apply("customer.subscription.updated", quantity: 3)
 
@@ -718,35 +584,7 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal Time.utc(2026, 11, 14, 4, 0, 0), canceled.time
   end
 
-  # --- monotonic delivery order ----------------------------------------------
-  #
-  # The rule this service guarantees about a *sequence* of deliveries, as opposed
-  # to the state machine's rule about a *pair*.
-  #
-  # The state machine's whole job is that `canceled` is terminal, and that covers
-  # the one case where this service knows the order for certain: a deletion that
-  # overtook its own creation. Every other pair of statuses is legal, and legal is
-  # not the same as current.
-  #
-  # So the row records the processor's own timestamp for the delivery that last
-  # wrote it — `last_processor_event_at`, written in the same statement as the
-  # state so the two cannot disagree — and a delivery that *predates* it is
-  # refused. Without that, a `customer.subscription.updated` the processor retried
-  # an hour late lands on a row it has already moved past, and the row moves back:
-  # a `past_due` subscription whose charge failed becomes `active` again, which
-  # grants entitlements for a subscription nobody is paying for. That is the one
-  # outcome the lifecycle exists to make impossible, and `last_processor_event_at`
-  # was added to prevent it and never consulted.
-  #
-  # **Strictly older.** A delivery carrying the *same* processor timestamp is not
-  # stale: the processor's timestamps are epoch seconds, so two genuinely
-  # different events routinely share one and refusing those would drop real
-  # deliveries. With no ordering information between them, last-write-wins is the
-  # honest answer, and `no_change_to_record` already absorbs the repeats.
 
-  NEWER = 1_791_432_000 # the committed `customer.subscription.updated` fixture's created
-  OLDER = 1_790_740_900 # one minute after the `created` fixture, i.e. before NEWER
-  EARLIEST = 1_790_740_800 # the committed `customer.subscription.created` fixture's created
 
   test "a delivery older than the one that last wrote the row is refused" do
     apply("customer.subscription.created", created: EARLIEST, event_id: "evt_order_start")
@@ -764,9 +602,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "past_due", Subscription.sole.status
   end
 
-  # The other half of the same defect: the ordering record itself used to rewind,
-  # so after one stale delivery the service could no longer say which delivery was
-  # newest, and every later comparison was against the wrong baseline.
   test "a refused stale delivery leaves the ordering record where the newer delivery put it" do
     apply("customer.subscription.created", created: EARLIEST, event_id: "evt_order_start")
     apply("customer.subscription.updated", event_id: "evt_order_past_due", created: NEWER, status: "past_due")
@@ -783,10 +618,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal [ "billing.subscription.started", "billing.subscription.updated" ], event_types
   end
 
-  # A stale delivery must not undo a *cancellation intent* either.
-  # `cancel_at_period_end` is the flag that decides whether a customer is still
-  # going to be billed, and a late retry carrying the pre-cancellation value would
-  # tell every downstream consumer the cancellation had been called off.
   test "a refused stale delivery does not clear a cancellation the newer delivery recorded" do
     apply("customer.subscription.created", created: EARLIEST, event_id: "evt_order_start")
     apply("customer.subscription.updated", event_id: "evt_order_cancelling", created: NEWER,
@@ -797,7 +628,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal true, Subscription.sole.cancel_at_period_end
   end
 
-  # The negative control, and the reason the comparison is `<` rather than `<=`.
   test "a delivery at the same processor timestamp is not stale" do
     apply("customer.subscription.created", created: NEWER, event_id: "evt_order_same_a")
     record = apply("customer.subscription.updated", event_id: "evt_order_same_b", created: NEWER, quantity: 7)
@@ -807,9 +637,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal [ "billing.subscription.started", "billing.subscription.updated" ], event_types
   end
 
-  # A first delivery has nothing to be stale against, so the rule cannot refuse the
-  # deletion that arrives before its own creation — the case the state machine's
-  # terminal rule already handles.
   test "a first delivery is never stale" do
     record = apply("customer.subscription.deleted", created: EARLIEST, event_id: "evt_order_first_deleted")
 
@@ -817,11 +644,7 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal "canceled", Subscription.sole.status
   end
 
-  # --- the transaction --------------------------------------------------------
 
-  # The event and the row are one commit. A process that died between two
-  # transactions would leave a row that looks started with no event, or an event
-  # for a subscription that does not exist.
   test "a failure to emit leaves no row behind" do
     with_refused_emission { apply("customer.subscription.created") }
 
@@ -852,10 +675,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_equal 1, ProcessorWebhook.count
   end
 
-  # A crash, as opposed to a recorded failure. The marking is what a process death
-  # loses, and `fail!` cannot record anything on a row it cannot write — so the
-  # exception escapes and the row keeps a null `processed_at`, which is the one
-  # state a later delivery must not trust.
   test "a delivery that died before its receipt was written leaves no row" do
     with_refused_marking do
       assert_raises(ActiveRecord::StatementInvalid) { apply("customer.subscription.created") }
@@ -875,8 +694,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
     assert_nil record.error
   end
 
-  # The other half: an unfinished delivery is redone rather than trusted, and the
-  # retry produces exactly one row and one event rather than a second of each.
   test "a delivery whose receipt never landed is processed again and emits once" do
     with_refused_marking do
       assert_raises(ActiveRecord::StatementInvalid) { apply("customer.subscription.created") }
@@ -890,14 +707,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
   end
 
   private
-    # Each delivery gets its own instant.
-    #
-    # The suite's clock is frozen, so two outbox rows written by one test would have
-    # the same `created_at` and their order would fall to the uuid tiebreaker, which
-    # is random. "Started, then updated" is the fact under test in several cases
-    # here, so the clock moves forward a second per delivery. The event's own `time`
-    # is the processor's timestamp and is unaffected — which is the point of it
-    # being the processor's.
     def apply(fixture, overrides = {})
       travel_to(frozen_now + next_delivery) { ingest(fixture, overrides) }
     end
@@ -917,25 +726,12 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
       ).call
     end
 
-    # The committed fixture, with the fields a case needs changed. Editing the
-    # fixture on disk would change it for every other test that reads it, and a
-    # fixture nobody looked at is how a subscription lifecycle starts lying.
     def payload_for(fixture, overrides = {})
       body = JSON.parse(stripe_fixture(fixture))
       subscription = body.dig("data", "object")
 
-      # The processor's own clock, which `Webhooks::Ingestion` reads once and hands
-      # to the lifecycle as the event time. A case about ordering needs to move it
-      # independently of this suite's frozen clock, which is what `apply` moves.
       body["created"] = overrides[:created] if overrides.key?(:created)
 
-      # The delivery's id travels *in* the body, because that is how it arrives:
-      # `stripe_controller.rb` hands `Ingestion` `event_id: payload["id"]`, and
-      # `Webhooks::StripeEvents.provenance` reads that same field to stamp the
-      # emitted event. A case naming a different event id without moving the body's
-      # published an event that claimed to be the fixture's — and a test delivering
-      # two of them produced two rows the outbox's unique index refuses as one
-      # event. Which is exactly what it did, until this line existed.
       body["id"] = overrides[:event_id] if overrides.key?(:event_id)
 
       if (status = overrides[:status])
@@ -965,10 +761,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
       end
 
       if (customer = overrides[:customer])
-        # **Both** halves of the customer reference, because
-        # `Lifecycle#customer` consults both and consults the anywaye one first. A
-        # body naming the other account's `cus_` while its metadata still named
-        # this account's row would resolve here, and the case would prove nothing.
         subscription["customer"] = customer.processor_customer_id
         subscription["metadata"] = { "anywaye_customer_id" => customer.id }
       end
@@ -986,13 +778,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
       )
     end
 
-    # **A distinct `cus_` per customer.** The first one keeps the committed
-    # fixture's id, because every spec here ingests a subscription fixture that
-    # carries it and the lifecycle resolves the customer through it. The
-    # cross-account cases build a second customer, and before billing-13 this
-    # helper handed it the same id — an F2 collision, which the new unique index
-    # turned into a `RecordInvalid` in the middle of the test rather than at the
-    # assertion that was about it.
     def create_customer(account_id: "11111111-1111-4111-8111-111111111111")
       @customers_created = (@customers_created || 0) + 1
       fixture_id = "cus_R1pQKz9xLp2mN4vB6yH8jL0"
@@ -1002,10 +787,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
         owner_id: account_id,
         processor: "stripe",
         processor_customer_id: @customers_created == 1 ? fixture_id : "cus_FAKEother#{format('%016d', @customers_created)}",
-        # The recipient fact the subscription events carry. Every customer in
-        # this file has one, because the payload tests assert the field — and a
-        # customer without an address is the edge case, arranged where the test
-        # is about it rather than in the helper that serves the other ninety.
         email: "billing@example.com"
       )
     end
@@ -1021,10 +802,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
       )
     end
 
-    # The emission is the last thing that happens inside the transaction, so
-    # refusing it is the closest reachable thing to a process dying after the row
-    # was written and before the event was. If they were two transactions, the row
-    # would survive this.
     REFUSE_TO_EMIT = ->(_event) { raise ActiveRecord::StatementInvalid, "delivery lost while emitting" }
 
     def with_refused_emission
@@ -1034,10 +811,6 @@ class Subscriptions::LifecycleTest < ActiveSupport::TestCase
       OutboxEvent.skip_callback(:create, :before, REFUSE_TO_EMIT)
     end
 
-    # A write that cannot happen. Refusing the marking is how this suite reaches the
-    # state a process death leaves: the row is stored, nothing records that it was
-    # finished, and the exception escapes because the rescue cannot record a failure
-    # on a row it cannot write.
     REFUSE_TO_MARK = ->(_record) { raise ActiveRecord::StatementInvalid, "connection lost while writing" }
 
     def with_refused_marking

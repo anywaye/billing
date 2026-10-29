@@ -21,9 +21,6 @@ module Webhooks
   # at the write, from inside a webhook, and answered 200 — an outage nobody sees
   # until a processor's dashboard does.
   module StripeEvents
-    # The processor this build speaks. Not a parameter: a normalizer that takes an
-    # arbitrary payload is one that will eventually be handed a payload whose
-    # signature was never checked.
     PROCESSOR = "stripe"
 
     # A signed event whose shape we cannot use. Raised, not returned, so the
@@ -31,20 +28,12 @@ module Webhooks
     # whatever fields happened to be present.
     class UnprocessableEvent < Error; end
 
-    # Reasons a received type produced no event. `ping` is Stripe's own
-    # connectivity check: real, signed, and not a business fact. Its row is kept
-    # — "the processor is talking to us and we are not acting on it" is worth
-    # being able to query — but it must never reach the outbox.
     IGNORED_REASONS = { "ping" => "connectivity_check" }.freeze
 
-    # The reason for a type that is simply not in the registry. Distinct from a
-    # deliberate ignore so that "we chose to skip this" and "nobody has written a
-    # mapping for this yet" stay tellable apart in the table.
     UNHANDLED = "unhandled_event_type"
 
     CHECKOUT_TYPE = "checkout.session.completed"
 
-    # Processor event type to anywaye event type. Most are a fixed mapping.
     EVENT_TYPES = {
       "customer.subscription.created" => "billing.subscription.started",
       "customer.subscription.updated" => "billing.subscription.updated",
@@ -88,11 +77,6 @@ module Webhooks
       Time.at(value).utc.iso8601
     end
 
-    # The processor's own `created` is *not* in the normalized hash, and that is
-    # deliberate. `Webhooks::Ingestion` computes it once and hands the same instant
-    # to the handler and to the outbox row, so the event's `time` and the payload's
-    # `started_at` cannot be two readings of one field. A third copy here would be
-    # a third reading.
 
     # A money amount on the wire. `Billing::Money#to_h` is the platform's crossing shape,
     # so the normalized payload uses it verbatim rather than a key invented here
@@ -119,11 +103,6 @@ module Webhooks
         "kind" => "subscription",
         "subscription_id" => subscription["id"],
         "customer_id" => subscription["customer"],
-        # The link back to a anywaye customer, carried in the subscription's metadata
-        # when the subscription was bought through our Checkout session. It is absent
-        # for a subscription created directly in the processor's dashboard, and the
-        # delivery is then recorded as `unknown_customer` rather than matched to
-        # whoever happens to share an id.
         "anywaye_customer_id" => subscription.dig("metadata", "anywaye_customer_id"),
         "status" => subscription["status"],
         "quantity" => item["quantity"],
@@ -134,8 +113,6 @@ module Webhooks
         "cancel_at_period_end" => subscription["cancel_at_period_end"],
         "canceled_at" => time_of(subscription["canceled_at"]),
         "trial" => subscription["trial_start"].present?,
-        # The trial's end in the shape core's payload schema wants it: a date-time,
-        # or null while trialing with no end date.
         "trial_ends_at" => subscription["trial_start"].present? ? time_of(subscription["trial_end"]) : nil
       )
     end
@@ -161,13 +138,6 @@ module Webhooks
       provenance(payload).merge(
         "kind" => "payment",
         "customer_id" => invoice["customer"],
-        # The link back to the anywaye customer, from wherever the shape of the
-        # day carries it. The first checkout's `invoice.paid` arrives **before**
-        # `customer.subscription.created` — measured on this stack, 2026-10-16 —
-        # so there is no subscription row yet to resolve the customer through,
-        # and a customer created through `/v1` has no `processor_customer_id`
-        # either. The Checkout session put this metadata on the subscription,
-        # and reading it is the difference between a receipt and none.
         "anywaye_customer_id" => anywaye_customer_of(invoice),
         "subscription_id" => invoice["subscription"] || invoice.dig("parent", "subscription_details", "subscription"),
         "invoice_id" => invoice["id"],
@@ -244,8 +214,6 @@ module Webhooks
     end
     private_class_method :payment_checkout
 
-    # The registry and the normalizers are built from one table, so a type cannot
-    # be normalizable but un-emittable, or vice versa.
     NORMALIZERS = {
       Subscriptions::Lifecycle::CREATED => method(:subscription_of),
       Subscriptions::Lifecycle::UPDATED => method(:subscription_of),
@@ -255,18 +223,6 @@ module Webhooks
       CHECKOUT_TYPE => method(:checkout_session_of)
     }.freeze
 
-    # Two kinds of handler, and the difference is what the emission *is*.
-    #
-    # A subscription event applies to a row in this service, so the event type and
-    # the subject are decided by what happened to that row and are not known until
-    # it has been written. `Subscriptions::Lifecycle` is therefore the handler: it
-    # writes the row and returns the emission for the change, inside the caller's
-    # transaction. Its refusals are `Subscriptions::Refused`, which is translated
-    # here into `Webhooks::Ignored` — the vocabulary the ingestion layer already
-    # records on a delivery row and answers 200.
-    #
-    # A payment event has no row, so its type and subject come from the normalized
-    # payload and the handler is a mapping and nothing more.
     HANDLERS = NORMALIZERS.keys.to_h do |type|
       handler = if Subscriptions::Lifecycle::TYPES.include?(type)
         ->(payload, event_time) { subscription_emission(type, payload, event_time) }
@@ -282,10 +238,6 @@ module Webhooks
 
       Emission.new(event_type: applied.event_type, subject: applied.subject, data: applied.data)
     rescue Subscriptions::Refused => e
-      # A decision this service has made, recorded with its reason and answered 200.
-      # Not a failure: an unknown customer, a plan we do not have, a delivery that
-      # arrived before the one it depends on and a repeat of a state we already hold
-      # are all conclusions, and a retry reaches the identical one.
       raise Ignored, e.reason
     end
 

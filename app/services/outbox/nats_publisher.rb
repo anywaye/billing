@@ -40,15 +40,8 @@ module Outbox
   # *is* refused at boot is a URL that does not parse: that is a deployment
   # that believes it has a bus and does not.
   class NatsPublisher
-    # Bounds the initial connection. Identity's `DefaultNATSConnectTimeout`: a
-    # broker that is slow to answer, not one that is absent.
     CONNECT_TIMEOUT = 5
 
-    # Bounds one publish's wait for the ack. Identity's
-    # `DefaultPublishTimeout`. A full batch against a fully silent broker
-    # therefore drains in at most 100 × 10s, loudly, with every row left
-    # claimable — which is why the worst case is written down as a constant
-    # rather than discovered in an incident.
     PUBLISH_TIMEOUT = 10
 
     # @param url [String] the broker, as `NATS_URL`.
@@ -138,9 +131,6 @@ module Outbox
       def connect
         ::NATS.connect(@url.to_s, connect_timeout: @connect_timeout)
       rescue ::NATS::IO::ConnectError, ::NATS::IO::NoServersError => error
-        # Not raised past here: the caller (the shared gem's publisher) records
-        # the row as failed, and the next pass tries again. The broker being
-        # down is an outage to log, not a reason to stop draining.
         @logger&.warn("outbox: the broker at #{@url.host}:#{@url.port} did not accept a connection (#{error.class})")
         raise
       end

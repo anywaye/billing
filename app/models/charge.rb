@@ -36,18 +36,6 @@ class Charge < ApplicationRecord
   validates :paid_at, presence: true
   validate :currency_is_iso_4217
 
-  # **This account's charges, and nobody else's.**
-  #
-  # `account_id` is a real column, denormalised from the resolved customer or
-  # subscription at recording time, so that a query can be scoped by it
-  # without joining — the same reason `subscriptions.account_id` is
-  # denormalised.
-  #
-  # This is the scope that makes `GET /v1/charges/{id}` safe. Every read on
-  # `/v1` reaches a charge through here, so a uuid naming another account's
-  # row resolves to `nil` and the action answers **404** — the same answer a
-  # uuid naming nothing gets, because a 403 would tell a caller walking ids
-  # which ones exist. Absence, never refusal; see `AuthenticatesPrincipal`.
   scope :for_account, ->(account_id) { where(account_id: account_id) }
 
   # The wire shape. One representation, so a response and a read agree about

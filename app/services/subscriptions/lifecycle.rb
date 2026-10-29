@@ -62,51 +62,10 @@ module Subscriptions
   # the reason, and the endpoint answers 200, because a processor that retries a
   # stale delivery reaches the identical conclusion.
   class Lifecycle
-    # The reason a delivery is refused for arriving out of order. One word, like
-    # the rest of them, because it is recorded on `processor_webhooks.error` where
-    # the next reader is a human with a subscription id and nothing else.
     STALE_REASON = "stale_delivery".freeze
 
-    # The reason a delivery is refused for naming an account the row is not on.
-    #
-    # This is the seventh refusal and the only one about **tenancy** rather than
-    # about the row's own shape. The other six ask "can this delivery be applied
-    # to this subscription?"; this one asks "whose subscription is it?" — and the
-    # answer is not allowed to change.
-    #
-    # ## What it is refusing
-    #
-    # `attributes` writes `account_id: customer.owner_id` onto the row, and before
-    # this rule it did so **without ever comparing it to the account already
-    # there**. So a second delivery naming a different customer moved a live
-    # subscription between accounts, and published the move as
-    # `billing.subscription.updated` carrying the new account. `Subscription#account_is_the_customers_owner`
-    # did not catch it, and could not: that rule is "a subscription's account is
-    # its customer's", which the new account satisfied, and not "a subscription's
-    # account does not move". This is finding F1 in
-    # `REPORT-billing-12-isolation`.
-    #
-    # ## Why the refusal and not a correction
-    #
-    # Moving the subscription back would be this service inventing a fact, and the
-    # status came with the delivery — a `canceled` this service never saw would
-    # revoke entitlements a customer had paid for. A refusal records the decision
-    # on the delivery row and answers 200, because a processor that retries it
-    # reaches the identical conclusion. That is the same argument as
-    # `stale_delivery`, and for the same reason.
-    #
-    # ## Where it sits in the order, and why
-    #
-    # After the state machine, after `no_subscription_to_update` and after
-    # `stale_delivery`, because those are the rules a subscriber is relying on and
-    # none of them should be reported as something incidental. A delivery that is
-    # both out of order *and* cross-account is recorded as the out-of-order one, and
-    # the honest reading of that row is the earlier problem.
     ACCOUNT_REASON = "account_mismatch".freeze
 
-    # The three processor types this lifecycle acts on, and the anywaye event each
-    # of them can become. The same three the outbox and the manifest declare, so a
-    # type cannot be emitted that core's catalog does not list.
     CREATED = "customer.subscription.created".freeze
     UPDATED = "customer.subscription.updated".freeze
     DELETED = "customer.subscription.deleted".freeze
@@ -117,17 +76,11 @@ module Subscriptions
     UPDATED_EVENT = "billing.subscription.updated".freeze
     CANCELED_EVENT = "billing.subscription.canceled".freeze
 
-    # The fields on the row a processor event can set. `last_processor_event_at` is
-    # not one of them: it is this service's ordering bookkeeping and it changes on
-    # every delivery, so counting it would report a change where none happened.
     STATE_ATTRIBUTES = %w[
       account_id customer_id plan_id status current_period_start current_period_end
       cancel_at_period_end canceled_at
     ].freeze
 
-    # What the lifecycle produced: the row it wrote, the type to publish, the
-    # payload, and the time the change happened. A value object so a handler cannot
-    # emit half an event.
     Applied = Data.define(:subscription, :event_type, :data, :event_time) do
       # core's envelope `subject`: the entity the event is about. This service's own
       # subscription id, which is what lets a consumer join `started`, `updated` and
@@ -151,20 +104,10 @@ module Subscriptions
       subscription = Subscription.find_by(processor_subscription_id: processor_subscription_id)
       transition = StateMachine.new(subscription&.status, data.fetch("status"))
 
-      # The machine first, and the reason it gives, because "nothing revives a
-      # canceled subscription" is the rule a subscriber is relying on and it must
-      # not be reported as something incidental.
       raise Refused, transition.reason unless transition.legal?
 
-      # An update is not a creation. We do not know when this subscription started,
-      # so publishing a start off an update would be a guess about a fact a consumer
-      # would then rely on. The `created` that precedes it chronologically still
-      # arrives.
       raise Refused, "no_subscription_to_update" if subscription.nil? && type == UPDATED
 
-      # Then the one rule about arrival order rather than about status. Every pair
-      # the machine allows is a pair the processor may deliver in either order, and
-      # applying the older one last would move the row backwards.
       raise Refused, STALE_REASON if stale?(subscription)
 
       from = subscription&.status
@@ -196,10 +139,6 @@ module Subscriptions
       end
 
       def customer
-        # The reference this service put in the subscription's metadata at Checkout
-        # time, and the processor's own id for the customer. Both are consulted
-        # because a customer created through /v1 has a null `processor_customer_id`
-        # until its first subscription tells us what the processor calls it.
         resolve(
           data["anywaye_customer_id"] && Customer.find_by(id: data["anywaye_customer_id"]),
           Customer.find_by(processor_customer_id: data["customer_id"]),
@@ -225,14 +164,6 @@ module Subscriptions
       def apply(subscription, from, transition)
         existed = !subscription.nil?
 
-        # **Before `assign_attributes`**, because that is the statement which
-        # overwrites the account, and a comparison made afterwards would compare
-        # the new account with itself and always agree.
-        #
-        # Only for a row that already exists. A creation has no account to
-        # disagree with, which is exactly what lets a `deleted` arriving before
-        # its own `created` still create its `canceled` row — a rule that would
-        # break here if the check were unconditional.
         raise Refused, ACCOUNT_REASON if existed && !same_account?(subscription)
 
         subscription ||= Subscription.new
@@ -240,19 +171,8 @@ module Subscriptions
         subscription.assign_attributes(attributes)
         raise Refused, "no_change_to_record" if existed && !changes_anything?(subscription)
 
-        # The processor's own id for the customer, recorded the first time a
-        # subscription event names one. A customer created through `/v1` has
-        # none — the Checkout session creates the customer at the processor and
-        # this is the first delivery that learns what the processor calls it —
-        # and `POST …/upcoming_invoice` and `…/payment_method` both send it, so
-        # without this write the two actions a customer uses most are refused
-        # with a processor error for a customer the processor does know.
         backfill_processor_customer_id
 
-        # The processor's own clock, not this service's. It is the only thing that
-        # can tell a delivery that arrived late from one that arrived now, and it is
-        # written in the same statement as the state so the two cannot disagree about
-        # which event the row reflects.
         subscription.last_processor_event_at = event_time
         subscription.save!
 
@@ -314,16 +234,10 @@ module Subscriptions
           account_id: customer.owner_id,
           customer_id: customer.id,
           plan_id: plan.id,
-          # The processor's own id, and the key every later delivery is resolved by.
-          # It is not in `STATE_ATTRIBUTES`: it is set once, at creation, and never
-          # changes — a subscription that changed processor id would be a different
-          # subscription, and the unique index already says so.
           processor_subscription_id: processor_subscription_id,
           status: data.fetch("status"),
           current_period_start: parse_time(data["current_period_start"]),
           current_period_end: parse_time(data["current_period_end"]),
-          # `== true` rather than the raw value, so a processor that sent the string
-          # "false" leaves the flag off instead of making it truthy.
           cancel_at_period_end: data["cancel_at_period_end"] == true,
           canceled_at: parse_time(data["canceled_at"])
         }
@@ -386,34 +300,13 @@ module Subscriptions
         payload = {
           "subscription_id" => subscription.id,
           "plan_id" => plan.id,
-          # The plan's name beside its id. A mail about a subscription change has
-          # to say which plan, and `plan_id` is a uuid no consumer can render into
-          # words. The name is the plan's own, read from the row this builder has
-          # already resolved, so it costs no query the payload was not already
-          # making — the same reason `currency` is here.
           "plan_name" => plan.name,
           "account_id" => customer.owner_id,
           "status" => subscription.status,
           "currency" => plan.currency
         }
-        # A field the processor did not send is absent rather than defaulted: a
-        # default that silently fills a gap in the weakest input in the system is how
-        # a customer ends up on a quantity nobody chose.
         payload["quantity"] = data["quantity"] if data["quantity"].is_a?(Integer)
-        # core describes `trial_ends_at` as present only while the subscription is
-        # trialing, and that is what it does here — a null when trialing with no end
-        # date, absent otherwise.
         payload["trial_ends_at"] = data["trial_ends_at"] if subscription.status == "trialing"
-        # The recipient fact, and the reason a consumer can mail a subscription
-        # change with no billing client and no billing tables: the address is on
-        # the envelope, because there is nowhere else it can be read from
-        # (REPORT-courier-consumer-invite-01 §2.6). The customer is resolved for
-        # this payload already, so the email costs no query the builder was not
-        # already making. Absent — never null — when the customer has no address
-        # on file: an event that promises a mail it cannot address is worse than
-        # one that carries no address at all, and a consumer refuses the latter
-        # by design. Named `email` to match identity's events, which carry the same
-        # fact for the same reason.
         payload["email"] = customer.email if customer.email.present?
         payload
       end

@@ -27,8 +27,6 @@ class CreateIdempotencyKeys < ActiveRecord::Migration[8.1]
     end
 
     add_index :idempotency_keys, %i[endpoint principal key], unique: true
-    # Retention is 24 hours; this index is what makes pruning a range scan
-    # rather than a table scan.
     add_index :idempotency_keys, :created_at
   end
 end

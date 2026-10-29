@@ -103,9 +103,6 @@ module Processor
           customer: processor_customer_id,
           client_reference_id: customer_reference,
           success_url: success_url,
-          # Stripe renders its own "cancel" link back to the app; sending the
-          # success URL is the honest default when the caller names no other,
-          # because the alternative is whatever Stripe's dashboard default is.
           cancel_url: cancel_url.presence || success_url,
           subscription_data: {
             metadata: { anywaye_customer_id: customer_reference }
@@ -121,18 +118,6 @@ module Processor
       require_configured!
       raise Unpriced, "the new plan has no processor_price_id, so there is nothing to move onto" if price_id.blank?
 
-      # **A plan change is two requests, and the live recording is why.**
-      # Stripe's 2025 API no longer replaces a subscription's items from a
-      # price-id list: `items: [{ price: new }]` with no `id` APPENDS a
-      # second item — measured, the fixture subscription came back holding
-      # both prices — so a naive move would silently bill a customer for two
-      # plans. The item being moved has to be named by ITS OWN id, and that
-      # id is the processor's, read immediately before the move: retrieve the
-      # subscription, take the active item, then update that item's price.
-      #
-      # One intent, two calls, and the class doc's claim is still the true
-      # one — every Stripe call this service makes is inside one of these
-      # five methods.
       perform(:apply_plan_change, processor_subscription_id) do
         item_id = stripe.retrieve_subscription(processor_subscription_id).items.data.first.id
 
@@ -196,17 +181,7 @@ module Processor
     def billing_portal_url(processor_customer_id:, return_url:)
       require_configured!
 
-      # A customer with no id at the processor is not this service's
-      # misconfiguration and not a `503`: it is a customer the processor does not
-      # know, and the processor's own answer for one is a refusal. The guard is
-      # deliberately absent — asking and being refused is the honest path, and
-      # pre-empting it here would invent this service's own error for the
-      # processor's fact.
 
-      # The URL, and only the URL: `create_checkout_session` returns the whole
-      # session and the caller reads `.id` and `.url` off it, so this is the same
-      # shape — the client never invents a wrapper of its own, and the seam that
-      # the specs inject returns the processor's own object.
       perform(:billing_portal, processor_customer_id) do
         stripe.billing_portal_url(
           customer: processor_customer_id,

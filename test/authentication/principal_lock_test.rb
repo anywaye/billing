@@ -1,44 +1,6 @@
 require "test_helper"
 
-# THE LOCK. `/v1` cannot be reached without a valid identity token, and everything
-# that is not `/v1` still can.
-#
-# # What this file is, and why the assertions are shaped this way
-#
-# The brief's own failure mode is "a billing API with auth that degrades open", so
-# every refusal here is asserted in **both** directions that matter:
-#
-#   1. **Every `/v1` operation is refused without a token** — and the list comes
-#      from `config/routes.rb`, not from a table written here. A test that named
-#      the fourteen paths in this file would pass while a route added tomorrow went
-#      out unauthenticated, which is the one thing this file exists to prevent.
-#   2. **Every operation that is NOT a client operation still works with no token**
-#      — the probes (an orchestrator has no credential) and the Stripe webhook (its
-#      sender is a processor, and core's conventions say inbound webhooks are
-#      signed, never JWT-authenticated). Also derived from the router.
-#
-# The direction that finds things is the first one. That is deliberate and it is
-# why it reads the route table.
-#
-# # Why the two locks are 401 and 503, and not one of them
-#
-#   * **No token, or a token that is wrong** — the caller's problem, and a 401 is
-#     the answer that tells them so. One fixed body for all of it: which of
-#     signature / expiry / issuer / audience was wrong is not something a caller
-#     learns by trying.
-#   * **No identity configured, or identity unreachable** — *our* problem, and a
-#     401 would tell a caller holding a perfectly good token to go and rotate it.
-#     This is the same reasoning the webhook uses for a missing signing secret.
-#
-# So the two are asserted separately, and **the 503 assertions are the ones that
-# prove the lock fails closed**: a deployment that has not configured identity
-# refuses every request rather than serving every request.
 class PrincipalLockTest < ActionDispatch::IntegrationTest
-  # Every `/v1` operation the router serves, as `[method, path]`, read from the
-  # routes rather than written here. `/v1/webhooks/stripe` is excluded **by the
-  # router's own controller**, not by a prefix filter: `Webhooks::BaseController`
-  # is not a `V1::` controller and does not inherit the concern, which is the
-  # structural fact this file is checking.
   CLIENT_OPERATIONS = lambda {
     Rails.application.routes.routes.flat_map { |route|
       path = route.path.spec.to_s.sub("(.:format)", "")
@@ -49,10 +11,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     }.uniq
   }
 
-  # Probes and Rails' own health route. An uptime monitor and an orchestrator have
-  # no credential and must not be refused: a probe that answers 401 is a probe that
-  # reports the service as down and restarts it, which is strictly worse than
-  # serving traffic with no traces.
   UNAUTHENTICATED_SURFACE = [
     [ "GET", "/healthz" ],
     [ "GET", "/readyz" ],
@@ -64,7 +22,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     travel_to(frozen_now)
   end
 
-  # --- direction one: every /v1 operation is locked ---------------------------
 
   test "every /v1 operation is refused with no token, and the list is the router's own" do
     assert_equal 24, CLIENT_OPERATIONS.call.size,
@@ -83,9 +40,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
   end
 
   test "the lock is 401 with no token, not 503" do
-    # Pinned separately from the loop above because the loop tolerates either status
-    # and this is the claim that with a *working* identity a missing token is the
-    # caller's problem. A 503 here would mean the request never reached the verifier.
     without_token!
     get "/v1/plans"
 
@@ -98,10 +52,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
       "field that could carry it."
   end
 
-  # Each of these is a refusal that used to be a 200 on an API that holds payment
-  # records. They are named one at a time because "the lock works" is a claim a
-  # reader takes on trust and "GET /v1/customers/:id refuses an anonymous caller" is
-  # a fact.
   {
     "reading any customer by its uuid" => [ "GET", ->(t) { "/v1/customers/#{t.customer.id}" } ],
     "paging every customer" => [ "GET", ->(_t) { "/v1/customers" } ],
@@ -113,14 +63,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     "reading any subscription's entitlements" => [ "GET", ->(t) { "/v1/subscriptions/#{t.subscription.id}/entitlements" } ],
     "reading the catalogue" => [ "GET", ->(_t) { "/v1/plans" } ],
     "writing the catalogue" => [ "POST", ->(_t) { "/v1/plans" } ],
-    # The two operations the tenancy declaration names as entry points and that the
-    # table above did not carry. `PATCH /v1/customers/:id` is the only customer
-    # write, and it is a cross-tenant write's only route in; a receipt is the only
-    # `/v1` response that is not JSON. Both are already covered by the
-    # router-derived loop above — but a named refusal is a fact and a loop is a
-    # claim, and `tenancy.yml`'s `no-identity` arm points at the assertion below.
-    # Adding a row moves it, so the declaration's line numbers are measured after
-    # this insertion rather than before it.
     "patching a customer" => [ "PATCH", ->(t) { "/v1/customers/#{t.customer.id}" } ],
     "reading a receipt" => [ "GET", ->(t) { "/v1/charges/#{t.charge.id}" } ]
   }.each do |what, (method, path)|
@@ -134,7 +76,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # --- direction two: everything else still works with no token ---------------
 
   UNAUTHENTICATED_SURFACE.each do |method, path|
     test "#{method} #{path} is reachable with no token" do
@@ -161,9 +102,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
   end
 
   test "the Stripe webhook verifies by signature with no token, and an unsigned one is refused" do
-    # The half that matters: the webhook is not merely *reachable* without a token,
-    # it still authenticates. A webhook that answered 200 to anything would be a
-    # door that a `Bearer` check had merely been added to.
     without_token!
     payload = stripe_fixture("ping")
 
@@ -177,7 +115,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
       "webhook's authentication and a token check is not a substitute for it."
   end
 
-  # --- the refusals that are ours are 503 -------------------------------------
 
   test "no identity configured locks /v1 with a 503, not a 401 and not a 200" do
     without_token!
@@ -200,10 +137,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # The one that says "locked", not merely "refused". A *valid* token with no
-  # identity to check it against must be a 503: answering 401 would tell a caller
-  # holding a good credential to go and rotate it, and answering 200 is the failure
-  # this whole packet exists to remove.
   test "a valid token is still refused when there is no identity configured" do
     TestSupport::TestIdentity.with_no_configuration do
       get "/v1/customers"
@@ -250,7 +183,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # --- the refusals that are the caller's are 401 -----------------------------
 
   test "a bad token is a 401" do
     with_raw_token("not-a-jwt")
@@ -313,9 +245,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
   end
 
   test "a request carrying two credentials is refused rather than picking one" do
-    # Rack joins repeated headers with a comma, so this arrives as one string with a
-    # comma in it. Which of two credentials to honour is a question with no safe
-    # default, and "the first one" is an authentication bypass with a parser in front.
     with_authorization_header(
       "Bearer #{TestSupport::TestIdentity.token}, Bearer #{TestSupport::TestIdentity.token}"
     )
@@ -335,7 +264,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
       "request. Every query on /v1 is scoped by this claim."
   end
 
-  # --- nothing reaches the database before the caller is known -----------------
 
   test "a refused request reads no customer and writes nothing" do
     without_token!
@@ -358,7 +286,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
     assert_equal 1, json_body.fetch("data").size
   end
 
-  # --- the refusals are problem+json, like every other non-2xx ----------------
 
   test "both locks are problem+json with a trace id, like every other non-2xx here" do
     without_token!
@@ -372,16 +299,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
   end
 
   private
-    # The rows the path lambdas above need, built lazily and memoized.
-    #
-    # Built **inside the test** rather than in the class body, because the table is
-    # evaluated as the class is defined and a row created there would be created
-    # outside any test's transaction — visible to the other seven parallel workers
-    # and rolled back by nobody.
-    #
-    # `charge` is here because "reading a receipt" is one of the named refusals:
-    # the receipt route is the only `/v1` operation whose success response is not
-    # JSON, and it is the one the tenancy declaration names as an entry point.
     def fixtures_for(what)
       @fixtures ||= {}
       @fixtures[what] ||= Struct.new(:customer, :subscription, :charge).new(
@@ -399,10 +316,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
       end
     end
 
-    # A row that exists, so "the lock refused it" is a claim about a request that
-    # could otherwise have succeeded. Two of them: one for the read assertions and
-    # one for the subscription endpoints, and they belong to the *authenticated*
-    # account so that a request which did get through would find them.
     def customer
       @customer ||= Customer.create!(
         owner_type: "Account", owner_id: TestSupport::TestIdentity::Account,
@@ -425,9 +338,6 @@ class PrincipalLockTest < ActionDispatch::IntegrationTest
       )
     end
 
-    # A receipt for the caller's own account, so "the lock refused it" is a claim
-    # about a request that could otherwise have succeeded. `account_id` is the
-    # same account the token names, which is what `Charge.for_account` scopes on.
     def charge
       @charge ||= Charge.create!(
         account_id: TestSupport::TestIdentity::Account, customer: customer,

@@ -1,23 +1,5 @@
 require "test_helper"
 
-# What actually leaves this service, asserted rather than assumed.
-#
-# Every event type billing publishes is seeded through its real emission path —
-# two model callbacks and five signed webhook fixtures — drained once against a
-# broker double, and the delivered documents are read as a consumer would read
-# them. Three properties, and the third is the one this packet is answerable for:
-#
-#   1. **The inventory.** The set of types that reach the bus is exactly
-#      `OutboxEvent::TYPES`, each on the subject of its own type. A type that
-#      never leaves is a dead letter; a type that leaves under another subject
-#      is unroutable.
-#   2. **The envelope.** Core's seven attributes and nothing else — the row's
-#      own id, the type, this service as the source.
-#   3. **No money event leaks.** A billing event must not carry a processor
-#      secret, a card, or PII beyond what core's schema names. The payload is
-#      the processor's own text for the description and this service's own rows
-#      for the rest; both are asserted against a forbidden set and an allowed
-#      PII key, because "it looks fine" is not an assertion.
 class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
   setup do
     travel_to(frozen_now)
@@ -47,12 +29,6 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
     )
     result = publisher.run_once
 
-    # One pass, and every row the seed wrote leaves in it: the batch is the
-    # whole table here, which is eight rows for eight types. The number is
-    # derived rather than decorative — `OutboxEvent::TYPES.size` is what the
-    # seed above is asserted to produce, type for type, in the inventory
-    # assertion below. A smaller `claimed` is a row the claim's schedule did not
-    # consider due, which is a real failure and not a green.
     assert_equal OutboxEvent::TYPES.size, result.claimed
     assert_equal OutboxEvent::TYPES.size, result.published
     assert_equal OutboxEvent::TYPES.size, OutboxEvent.count,
@@ -63,8 +39,6 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
     subjects = @broker.delivered.map { |message| message.fetch(:subject) }
     types = envelopes.map { |envelope| envelope.fetch("type") }
 
-    # 1. The inventory: every published type, on its own subject, all of them
-    #    billing's own.
     assert_equal OutboxEvent::TYPES.sort, types.sort,
       "the bus receives exactly the types this service declares"
     assert_equal types, subjects, "the subject is the event type — no mapping table, no rewriting"
@@ -74,7 +48,6 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
       "one delivery per type in this seed"
 
     envelopes.each do |envelope|
-      # 2. The envelope: core's seven attributes, and the row's own id.
       assert_equal Set.new(%w[specversion id type source subject time data]), envelope.keys.to_set
       assert_equal "1.0", envelope.fetch("specversion")
       assert_equal "billing", envelope.fetch("source")
@@ -82,15 +55,12 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
         "the envelope id is the row's uuid and the consumer's dedupe key")
     end
 
-    # 3. No leak. Scanned over the whole delivered document, because a secret in
-    #    any key is a leak regardless of which key it hides in.
     @broker.delivered.each do |message|
       document = message.fetch(:payload)
       assert_forbidden_values_absent(document)
       assert_no_forbidden_key(JSON.parse(document).fetch("data"))
     end
 
-    # And the rows are marked, once, from the ack.
     assert_equal 0, OutboxEvent.unpublished.count
     assert_equal OutboxEvent.count, OutboxEvent.where.not(published_at: nil).count
   end
@@ -114,83 +84,20 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
       )
     end
 
-    # The fixture, delivered as the webhook path delivers it: through ingestion,
-    # with the body's own event id. This is the real writer for these five types.
-    #
-    # ## The seed, measured — this is why the number is eight
-    #
-    # Seeded here and counted against `outbox_events` on this branch, per step:
-    #
-    #   `Customer.create!`                    1 row   billing.customer.created
-    #   `Plan.create!`                        1 row   billing.plan.created
-    #   fixture invoice.paid                  1 row   billing.payment.succeeded
-    #   fixture invoice.payment_failed        1 row   billing.payment.failed
-    #   fixture customer.subscription.created 1 row   billing.subscription.started
-    #   fixture customer.subscription.updated 1 row   billing.subscription.updated
-    #   fixture customer.subscription.deleted 1 row   billing.subscription.canceled
-    #   `@plan.update!`                       1 row   billing.plan.updated
-    #
-    # Eight rows, eight distinct types, and the set is exactly
-    # `OutboxEvent::TYPES`. **The seed was the wrong half, not the assertion**:
-    # with three fixtures it wrote five rows — a `customer.subscription.created`
-    # whose customer does not exist writes *nothing*, measured at 2 rows with no
-    # customer seeded at all — so the eight was right and the seed was
-    # under-covering. It is the five fixtures plus the two callbacks that reach
-    # all eight, and `assert_equal OutboxEvent::TYPES.sort, types.sort` below is
-    # what keeps them there: a fixture deleted, or a handler that stops writing,
-    # fails that comparison **by name** rather than quietly claiming a smaller
-    # number. No count is changed here to match a number this file already
-    # expected.
-    #
-    # ## Why all eight are due in one pass
-    #
-    # The claim's schedule is `created_at + backoff <= now`, against the clock
-    # the publisher was built with, so **a row written ahead of that clock is
-    # invisible to the pass**. Measured directly: one row stamped eight days in
-    # the future beside two rows at the instant gives 2 rows in the table and
-    # `claimed == 1` — a silent under-claim, not a failure. `travel_to` in
-    # `setup` is therefore load-bearing rather than tidiness, and every write in
-    # this seed happens while it is in effect, so every row is due.
-    #
-    # The fixtures' own `created` fields are in the future relative to the
-    # suite's frozen instant, and that is deliberate and harmless: they land in
-    # the outbox row's `time` — the processor's instant, per AGENTS.md — and not
-    # in its `created_at`. Distinguishing the two columns is the difference
-    # between a pass that claims eight and one that claims five.
-    #
-    # All at the suite's frozen instant for a second reason too: the assertions
-    # below are over sets, not sequences, so a row ordering is not being proved
-    # and does not need distinct instants.
     def deliver_fixture(name)
       body = JSON.parse(stripe_fixture(name))
       Webhooks::Ingestion.new(processor: :stripe, event_id: body["id"], type: body["type"], payload: body).call
     end
 
-    # Values that must never appear in a document this service puts on the bus.
-    # The signing secret is the suite's own credential for nothing; the prefixes
-    # are the processor's key shapes; the numbers are card tests.
     FORBIDDEN_VALUES = [
       "sk_live_", "sk_test_", "pk_live_", "whsec_",
       "4242424242424242", "4000000000000002", "5555555555554444"
     ].freeze
 
-    # Keys that must never appear, under any payload, in any nesting. An id is
-    # not a secret; these names are.
     FORBIDDEN_KEY = /secret|card|cvc|cvv|api[_-]?key|private|password|token/i
 
-    # The one key that may hold PII, and the reason is core's: the money-event
-    # schemas name `email` because a consumer cannot look it up anywhere else.
     ALLOWED_PII_KEYS = %w[email].freeze
 
-    # Keys that the PII scan's shape catches and that are **not** PII, named so
-    # the closed set below can be read rather than guessed. Measured over the
-    # whole eight-type seed, not over three of it: `name` on the plan events and
-    # `plan_name` on the subscription events are the platform catalogue's own
-    # display text, and `owner` is a type-and-uuid pair — an opaque reference
-    # to a tenant, not a person. A plan's name is the one field here that comes
-    # from whoever writes the catalogue, so it is bounded by the display-text
-    # rule the receipt page already holds to: escaped on the way out, never a
-    # person's name.
     NON_PII_NAME_KEYS = %w[name plan_name owner].freeze
 
     def assert_forbidden_values_absent(document)
@@ -215,29 +122,6 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
       end
     end
 
-    # Every key anywhere in every payload that could hold PII is one core names,
-    # or one of the display texts named above. **Over the whole bus**: the seed
-    # is the first test's, because a claim about "every payload" proven over
-    # three of eight types is a claim about three types. Measured on this
-    # branch, per type:
-    #
-    #   billing.customer.created     email, owner
-    #   billing.plan.created         name
-    #   billing.plan.updated         name
-    #   billing.payment.succeeded    email
-    #   billing.payment.failed       email
-    #   billing.subscription.started email, plan_name
-    #   billing.subscription.updated email, plan_name
-    #   billing.subscription.canceled email, plan_name
-    #
-    # The first revision of this file seeded only `invoice.paid` and read a
-    # three-row delivered list, so `plan_name` never appeared and the set below
-    # was short by one. **The set is measured, not negotiated** — and the pass
-    # is asserted to have carried all eight rows, because a closed set over a
-    # short list is the shape of the failure that started this packet: an empty
-    # or half-delivered bus satisfies every "no forbidden key" assertion while
-    # checking nothing, and the `KeyError` on `:payload` it finally raised was a
-    # symptom of the list being shorter than the reader assumed.
     test "the only PII a payload carries is the email core names" do
       seed_customer_and_plan
       deliver_fixture("invoice.paid")
@@ -255,8 +139,6 @@ class Outbox::PublishedPayloadsTest < ActiveSupport::TestCase
       )
       publisher.run_once
 
-      # The bus carried all eight, so the closed set below is over the whole
-      # surface rather than over whatever reached it.
       assert_equal OutboxEvent::TYPES.size, @broker.delivered.size,
         "the pass delivered every type this service publishes, so the PII scan " \
         "below is over the whole bus and not over a short list"

@@ -25,46 +25,13 @@
 # raises ArgumentError the moment an unknown value is assigned, and at an HTTP
 # boundary that is a 500 for something the caller got wrong.
 class Subscription < ApplicationRecord
-  # The statuses this service stores. Chosen from what the processor actually
-  # sends for a flat plan bought through Checkout:
-  #
-  #   trialing   — in a trial, has not charged yet
-  #   active     — billing normally
-  #   past_due   — a charge failed, the grace period is running
-  #   unpaid     — collection was given up on; the processor will cancel it
-  #   canceled   — over
-  #
-  # The processor also has `incomplete`, `incomplete_expired` and `paused`, and
-  # this list is closed on purpose. A status outside it is *refused* by the
-  # lifecycle with the delivery recorded, rather than coerced into one of these
-  # five: a row that says `active` for a subscription the processor calls
-  # `incomplete` grants entitlements nobody has paid for, and the refusal is a
-  # row somebody can find. The other direction is harmless — a status this
-  # service does not model is not one it can have learned. Recorded as a
-  # decision in anywaye.yml.
   STATUSES = %w[trialing active past_due canceled unpaid].freeze
 
-  # Everything that is not over. `canceled` is the only terminal status, and that
-  # single fact is what the live-uniqueness index and the state machine are both
-  # built on.
   LIVE_STATUSES = (STATUSES - %w[canceled]).freeze
   TERMINAL_STATUSES = %w[canceled].freeze
 
-  # The statuses a caller can still ask the processor to do something about:
-  # cancelling one, or moving it to another plan.
-  #
-  # `unpaid` is excluded from both, and the reason is the same: the processor has
-  # stopped collecting and is about to cancel the subscription itself, so there is
-  # nothing left to ask. It is still `LIVE` — it still grants entitlements, because
-  # the grace period is a product decision and not this service's to take away.
-  #
-  # One set rather than two because the two actions have the same boundary, and two
-  # sets would be two lists to keep in step.
   ACTIONABLE_STATUSES = %w[trialing active past_due].freeze
 
-  # The owner types a subscription can be billed to. A `User`-owned customer
-  # cannot hold one: which account a user belongs to is identity's fact and no
-  # event carrying it is in this build's `consumes`.
   BILLABLE_OWNER_TYPE = "Account"
 
   belongs_to :customer
@@ -79,18 +46,6 @@ class Subscription < ApplicationRecord
   scope :live, -> { where.not(status: TERMINAL_STATUSES) }
   scope :canceled, -> { where(status: TERMINAL_STATUSES) }
 
-  # **This account's subscriptions, and nobody else's.**
-  #
-  # `account_id` is a real column and is denormalised from the customer's owner
-  # precisely so that a query can be scoped by it without joining — see
-  # `account_is_the_customers_owner` for why it cannot drift, and
-  # `subscriptions_live_account_plan_idx` for the uniqueness it is keyed on.
-  #
-  # This is the scope that makes `POST /v1/subscriptions/{id}/cancel` safe. Every
-  # read on `/v1` reaches a subscription through here, so a uuid naming another
-  # account's row resolves to `nil` and the action answers **404** — the same answer
-  # a uuid naming nothing gets, because a 403 would tell a caller walking ids which
-  # ones exist. Absence, never refusal; see `AuthenticatesPrincipal`.
   scope :for_account, ->(account_id) { where(account_id: account_id) }
 
   def canceled?
@@ -135,12 +90,6 @@ class Subscription < ApplicationRecord
   end
 
   private
-    # There is no `account_id` shape validation, deliberately. The column is
-    # `uuid`, so Active Record casts anything that is not one to nil before a
-    # validation ever sees it, and the presence validation is what reports it. A
-    # shape check here would be unreachable code that reads as if it were doing
-    # something. (`Customer` has such a check and it is equally unreachable —
-    # noted, not changed: it is not this packet's model to refactor.)
 
     # The account is the customer's owner, frozen here at creation. Denormalising
     # it is what lets `billing.subscription.started` carry `account_id` — a

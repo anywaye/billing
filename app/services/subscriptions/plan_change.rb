@@ -37,15 +37,9 @@ module Subscriptions
   #     twelve to compare it with an annual one is computing money that nobody
   #     asked for, in a currency of our own invention.
   class PlanChange
-    # The two timings. `:immediately` for an upgrade, `:period_end` for
-    # everything else — including a change to the same price, which is not an
-    # upgrade and so does not get an immediate proration.
     IMMEDIATELY = :immediately
     PERIOD_END = :period_end
 
-    # What the processor is asked to do with the difference. `always_invoice`
-    # bills it now; `none` carries nothing forward. The amount is the processor's
-    # in both cases.
     ALWAYS_INVOICE = "always_invoice".freeze
     NO_PRORATION = "none".freeze
 
@@ -107,9 +101,6 @@ module Subscriptions
       # across currencies, which is why the currency is checked before the
       # comparison rather than by rescuing the comparison's own failure.
       def ensure_comparable!
-        # Billing::Money's own error, not a second one that says the same thing: a caller
-        # refusing to compare two amounts wants to catch one class whichever
-        # comparison it came from.
         if from.price.currency != to.price.currency
           raise Billing::Money::CurrencyMismatchError,
             "cannot compare #{from.price} with #{to.price}: different currencies are not interchangeable"
