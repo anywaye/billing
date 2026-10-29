@@ -18,7 +18,7 @@ gem "thruster", require: false
 gem "image_processing", "~> 1.2"
 
 
-gem "stripe", "~> 19.6"
+gem "stripe", "~> 20.0"
 gem "sentry-ruby", "~> 5.24"
 gem "sentry-rails", "~> 5.24"
 
