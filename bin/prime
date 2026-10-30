@@ -94,4 +94,9 @@ fi
 step "rails test"
 bundle exec rails test
 
+step "commentlint (no non-allowlisted comments)"
+if [ -f ../platform/scripts/commentlint.py ]; then
+  python3 ../platform/scripts/commentlint.py . || exit 1
+fi
+
 step "prime ok (rails $(version_of bundle exec bin/rails))"

@@ -1,14 +1,5 @@
 require "test_helper"
 
-# The contract, the resource and the wiring, asserted directly.
-#
-# These are the claims that are cheap to state and expensive to lose: which
-# endpoint billing exports to, what the resource says, that the route table is the
-# ROUTER's own, that a root span is sampled, and that the whole thing installed at
-# all. Each of them has a failure mode where the service looks configured and
-# exports nothing, which is why `TestSpans.rendered!` raises on an empty export
-# rather than returning "" — three separate exporter-contract bugs did exactly
-# that while this repository's telemetry was being written.
 class ObservabilityTelemetryTest < ActiveSupport::TestCase
   setup do
     TestSupport::TestSpanExporter.clear!
@@ -44,13 +35,6 @@ class ObservabilityTelemetryTest < ActiveSupport::TestCase
     assert_equal "http://elsewhere:4318/v1/traces", set
   end
 
-  # The endpoint must name the traces resource, not the collector's base. The
-  # gem uses a handed-in endpoint VERBATIM (`prepare_endpoint` joins
-  # `v1/traces` onto its own default and nothing else), so a base address
-  # builds a request with an empty path and every export raises inside
-  # `span.on_finish` — measured on the whole stack, 2026-10-16: one error per
-  # request and zero spans exported, invisible to this suite because the test
-  # environment installs the in-process exporter.
   test "the endpoint is the traces resource URL, which is the shape the exporter can use" do
     assert_equal "/v1/traces", URI(Kit::Telemetry::DEFAULT_ENDPOINT).path
 

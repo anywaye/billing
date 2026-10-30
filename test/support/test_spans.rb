@@ -15,15 +15,6 @@ module TestSupport
       finished_spans(name: Kit::Telemetry::REQUEST_SPAN_NAME)
     end
 
-    # `rendered!/0` and not `rendered/0`, and the raise is the whole point.
-    #
-    # A redaction test asserts the ABSENCE of a string from everything billing
-    # exported. A boundary that exports nothing satisfies that assertion
-    # completely, in about a millisecond, having proved nothing at all — and that
-    # is not hypothetical: three separate bugs did exactly this while this
-    # repository's telemetry was being written (see `TestSpanExporter`). So the
-    # one function every canary test reads RAISES when the export is empty, and
-    # every absence assertion is therefore also a presence one.
     def rendered!(name: Kit::Telemetry::REQUEST_SPAN_NAME)
       spans = finished_spans(name: name)
       if spans.empty?
