@@ -41,9 +41,6 @@ module Kit
       value = lookup.call(Kit::Telemetry::ENDPOINT_VARIABLE).to_s
       if value.empty?
         value = lookup.call("OTEL_EXPORTER_OTLP_ENDPOINT").to_s
-        # The OTLP/HTTP exporter uses the endpoint verbatim (prepare_endpoint
-        # only joins v1/traces onto the gem's own default), so a base address
-        # must gain the signal path here or every export 404s.
         value = "#{value}/v1/traces" unless value.empty? || value.end_with?("/v1/traces")
       end
       value.empty? ? Kit::Telemetry::DEFAULT_ENDPOINT : value

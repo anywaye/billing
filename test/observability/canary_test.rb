@@ -143,12 +143,6 @@ class ObservabilityCanaryTest < ActionDispatch::IntegrationTest
 
   private
 
-  # The presence assertion, in every test above.
-  #
-  # `rendered!/0` raises when the export is empty, so this is simultaneously "the
-  # canary is absent" and "something was exported". A test that only ever asserted
-  # absence would be satisfied by a billing that records nothing, which is the
-  # failure three separate bugs produced while this was being written.
   def assert_no_canary
     exported = TestSupport::TestSpans.rendered!
 

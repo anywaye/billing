@@ -88,13 +88,6 @@ class RequestTelemetry
       raise
     end
   ensure
-    # `SimpleSpanProcessor` exports synchronously on `finish`, which can block
-    # the request thread for the exporter's full timeout when the collector is
-    # slow or unreachable — and that delay keeps the response from leaving the
-    # socket. In tests the exporter is in-process and instant, so finishing
-    # synchronously keeps the span visible to the assertions. In production the
-    # finish runs on a background thread so the export never blocks the
-    # response.
     finish_span(span) if Rails.env.test?
     Thread.new { finish_span(span) } unless Rails.env.test?
   end

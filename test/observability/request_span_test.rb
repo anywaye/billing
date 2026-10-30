@@ -141,9 +141,6 @@ class ObservabilityRequestSpanTest < ActionDispatch::IntegrationTest
   test "a raised exception's MESSAGE and STACKTRACE are not on the span" do
     raising_request!(message: "no such customer: #{CANARY}@example.com")
 
-    # `rendered!` FIRST, so an empty export raises here rather than making the
-    # assertions below vacuous. A boundary that recorded nothing would satisfy
-    # "no exception event" perfectly.
     rendered = TestSupport::TestSpans.rendered!
     span = TestSupport::TestSpans.request_spans.first
 

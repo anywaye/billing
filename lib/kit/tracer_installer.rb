@@ -20,20 +20,6 @@ module Kit
 
       exporter = Kit::Exporter.build(exporter_name, lookup)
 
-      # The SIMPLE processor, and the reason is the same as it is in courier and
-      # identity: the batch processor exports on a timer, so a test would have to
-      # wait for somebody else's interval — which is a sleep, and a sleep is a
-      # guess that is wrong on the machine where it matters. `SimpleSpanProcessor`
-      # exports on span end, so a span is in the exporter by the time the response
-      # has been returned.
-      #
-      # Its own doc warns against production use, and that warning is real: it
-      # exports synchronously on the request thread. That is the deliberate trade
-      # in a service whose request volume is a Stripe webhook and a handful of
-      # reads — and the OTLP exporter has no retry queue and a short timeout, so a
-      # collector that is down costs a failed export rather than a slow request.
-      # A service that outgrew it would move to `BatchSpanProcessor` with a
-      # bounded queue, and the switch is one line in this file.
       processor = OpenTelemetry::SDK::Trace::Export::SimpleSpanProcessor.new(exporter)
 
       provider = OpenTelemetry::SDK::Trace::TracerProvider.new(
