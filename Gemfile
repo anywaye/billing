@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "rails", "~> 8.1.3", ">= 8.1.3.1"
+gem "rails", "~> 8.1.4"
 gem "pg", "~> 1.1"
 gem "puma", ">= 5.0"
 
@@ -19,8 +19,8 @@ gem "image_processing", "~> 1.2"
 
 
 gem "stripe", "~> 19.6"
-gem "sentry-ruby", "~> 5.24"
-gem "sentry-rails", "~> 5.24"
+gem "sentry-ruby", "~> 7.2"
+gem "sentry-rails", "~> 7.2"
 
 
 gem "anywaye", path: "vendor/anywaye"
