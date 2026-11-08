@@ -83,7 +83,7 @@ module V1
       # letting it through would mean `owner_type` could be rewritten by a
       # request that only meant to change an email address.
       def customer_params
-        params.permit(:processor, :processor_customer_id, :email, metadata: {})
+        params.permit(:processor, :processor_customer_id, :email, :application_key, metadata: {})
       end
 
       # What `create` builds, which is `customer_params` **plus** the owner the

@@ -51,6 +51,7 @@ class Customer < ApplicationRecord
       "processor_customer_id" => processor_customer_id,
       "email" => email,
       "metadata" => metadata,
+      "application_key" => application_key,
       "created_at" => created_at&.utc&.iso8601,
       "updated_at" => updated_at&.utc&.iso8601
     }
