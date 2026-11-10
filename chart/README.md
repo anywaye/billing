@@ -67,6 +67,22 @@ schema, and it is also what installs the account boundary
 (`lib/tasks/tenancy_substrate.rake` enhances it). It is idempotent, so
 running it on every deploy is correct.
 
+### Automatic migrations (the `billing-owner-secrets` option)
+
+The chart ships a pre-install/pre-upgrade Job that runs the same
+`/rails/bin/migrate` before the new pod starts. It reads the secret named by
+`migrationSecretName` (default: `secretName`). Create that secret once with
+the OWNER DSN so the Job can create tables the `_app` role cannot:
+
+    kubectl create secret generic billing-owner-secrets \
+      --from-literal=DATABASE_URL="postgres://billing:<owner-password>@<host>:<port>/billing?sslmode=require"
+
+`deploy/argocd-application.yaml` sets `migrationSecretName:
+billing-owner-secrets`, so every subsequent deploy migrates automatically.
+Without that secret the Job falls back to `billing-secrets`, whose `_app`
+role cannot create tables — the manual `kubectl run` above remains the
+fallback.
+
 ## Reaching the service
 
 The chart installs no Ingress until a values commit says so:

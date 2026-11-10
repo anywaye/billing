@@ -11,6 +11,12 @@ spec:
     repoURL: oci://ghcr.io/anywaye/charts/billing
     chart: billing
     targetRevision: 0.1.7
+    helm:
+      values: |
+        # Migrations run as the owner role; the runtime uses the _app role.
+        # Create billing-owner-secrets once with DATABASE_URL set to the owner
+        # connection string (see chart/README.md).
+        migrationSecretName: billing-owner-secrets
   destination:
     server: https://kubernetes.default.svc
     namespace: billing
