@@ -19,7 +19,7 @@
 # exists so that what runs is exactly what the values commit said.
 # Set it at release time; the default is the chart's own version.
 image:
-  digest: "sha256:a36341f95abd5db956eddfd5ad5b0003b141ff3907670213ec4dc8a7d5c1bde9"
+  digest: "sha256:dee69c45298897db88fc1c8bbb639025fe44e15273c0b4074b7c27a534c3721d"
   repository: ghcr.io/anywaye/billing
   tag: "0.1.2"
   pullPolicy: IfNotPresent
