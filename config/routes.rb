@@ -36,6 +36,13 @@ Rails.application.routes.draw do
     post "token_wallet/adjust", to: "token_wallets#adjust"
   end
 
+  scope "/v1/service", module: :service do
+    get "token_wallets/:owner_key", to: "token_wallets#show"
+    post "token_wallets/:owner_key/grant", to: "token_wallets#grant"
+    post "token_wallets/:owner_key/deduct", to: "token_wallets#deduct"
+    post "token_wallets/:owner_key/adjust", to: "token_wallets#adjust"
+  end
+
   post "v1/webhooks/stripe", to: "webhooks/stripe#create", as: :stripe_webhook
 
   match "/404", to: "errors#not_found", via: :all, as: :not_found_page
