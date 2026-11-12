@@ -71,11 +71,13 @@ running it on every deploy is correct.
 
 The chart ships a pre-install/pre-upgrade Job that runs the same
 `/rails/bin/migrate` before the new pod starts. It reads the secret named by
-`migrationSecretName` (default: `secretName`). Create that secret once with
-the OWNER DSN so the Job can create tables the `_app` role cannot:
+`migrationSecretName` (default: `secretName`). That secret carries the OWNER
+DSN so the Job can create tables the `_app` role cannot.
 
-    kubectl create secret generic billing-owner-secrets \
-      --from-literal=DATABASE_URL="postgres://billing:<owner-password>@<host>:<port>/billing?sslmode=require"
+The secret is SOPS-managed like every other service secret. Edit
+`deploy/owner-secret.yaml` with the owner DSN and re-encrypt it:
+
+    sops deploy/owner-secret.yaml
 
 `deploy/argocd-application.yaml` sets `migrationSecretName:
 billing-owner-secrets`, so every subsequent deploy migrates automatically.
