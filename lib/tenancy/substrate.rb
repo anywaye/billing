@@ -75,6 +75,7 @@ module Tenancy
     def require_roles!(connection)
       missing = [ OWNER_ROLE, APP_ROLE ].reject do |role|
         connection.select_value(<<~SQL)
+          select 1 from pg_roles where rolname = #{connection.quote(role)} and rolcanlogin
         SQL
       end
       return if missing.empty?
