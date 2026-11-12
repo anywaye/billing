@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: oci://ghcr.io/anywaye/charts/billing
     chart: billing
-    targetRevision: 0.1.7
+    targetRevision: 0.1.8
     helm:
       values: |
         # Migrations run as the owner role; the runtime uses the _app role.

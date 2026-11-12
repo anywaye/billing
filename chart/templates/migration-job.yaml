@@ -21,7 +21,14 @@ spec:
         - name: {{ .Values.imagePullSecrets }}
       containers:
         - name: migrate
+          {{- if .Values.image.digest }}
+          {{- if not (regexMatch `^sha256:[0-9a-f]{64}$` .Values.image.digest) }}
+          {{- fail (printf "chart: image.digest is %q, not sha256:<64 hex>." .Values.image.digest) }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          {{- else }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/rails/bin/migrate"]
           envFrom:
