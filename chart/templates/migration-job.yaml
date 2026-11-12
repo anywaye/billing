@@ -32,8 +32,12 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/rails/bin/migrate"]
           envFrom:
-            # The owner role can create tables; the runtime DATABASE_URL points
-            # at the _app role, which cannot. A separate secret keeps the owner
-            # credential out of the pod that serves requests.
+            # Boot-time environment (SECRET_KEY_BASE, etc.) comes from the
+            # runtime secret; the owner secret is layered last so its
+            # DATABASE_URL overrides the _app credential for migrations.
             - secretRef:
-                name: {{ .Values.migrationSecretName | default .Values.secretName | default "billing-secrets" }}
+                name: {{ .Values.secretName | default "billing-secrets" }}
+            {{- if and .Values.migrationSecretName (ne .Values.migrationSecretName .Values.secretName) }}
+            - secretRef:
+                name: {{ .Values.migrationSecretName }}
+            {{- end }}
